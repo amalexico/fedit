@@ -67,3 +67,7 @@ especially `insertafter`/`insertbefore` which eliminate line-number drift entire
 ## License
 
 MIT
+
+---
+
+Built by [Amalex Software](https://amalexhandler.com) — makers of [Amalex Handler](https://amalexhandler.com), a self-hosted file transfer and sync platform.
