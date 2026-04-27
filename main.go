@@ -12,7 +12,7 @@ import (
 
 func main() {
 file := flag.String("file", "", "Path to the file")
-op := flag.String("op", "", "Operation: insert, delete, replace, show, write, map, find, insertafter, insertbefore")
+op := flag.String("op", "", "Operation: insert, delete, replace, replaceall, show, write, map, find, insertafter, insertbefore")
 line := flag.Int("line", 0, "Line number (1-based)")
 endLine := flag.Int("end", 0, "End line for delete/replace range (inclusive)")
 text := flag.String("text", "", "Text to insert/replace (use \\n for newlines, \\t for tabs)")
@@ -35,6 +35,7 @@ fmt.Fprintln(os.Stderr, "  map           Show structure map (-lang go|html|sql)"
 fmt.Fprintln(os.Stderr, "  find          Find lines containing -match text, print line numbers")
 fmt.Fprintln(os.Stderr, "  insertafter   Find -match text, insert -textfile content AFTER matched line")
 fmt.Fprintln(os.Stderr, "  insertbefore  Find -match text, insert -textfile content BEFORE matched line")
+fmt.Fprintln(os.Stderr, "  replaceall    Replace ALL occurrences of -match text with -text")
 fmt.Fprintln(os.Stderr, "")
 fmt.Fprintln(os.Stderr, "Match flags (for find/insertafter/insertbefore):")
 fmt.Fprintln(os.Stderr, "  -match TEXT   Substring to search for (required)")
@@ -97,6 +98,17 @@ doInsertMatch(lines, *file, *match, *nth, newText, false)
 case "insertbefore":
 newText := resolveText(*text, *textFile)
 doInsertMatch(lines, *file, *match, *nth, newText, true)
+case "replaceall":
+if *match == "" {
+fmt.Fprintln(os.Stderr, "replaceall requires -match (text to find)")
+os.Exit(1)
+}
+replacement := *text
+if *textFile != "" {
+rLines := resolveText("", *textFile)
+replacement = strings.Join(rLines, "\n")
+}
+doReplaceAll(lines, *file, *match, replacement)
 default:
 fmt.Fprintf(os.Stderr, "Unknown operation: %s\n", *op)
 os.Exit(1)
@@ -358,6 +370,28 @@ os.Exit(1)
 }
 fmt.Fprintf(os.Stderr, "Replaced lines %d-%d with %d line(s) (%d total now)\n",
 start, end, len(newLines), len(result))
+}
+func doReplaceAll(lines []string, path, search, replacement string) {
+if search == "" {
+fmt.Fprintln(os.Stderr, "replaceall requires -match (text to find)")
+os.Exit(1)
+}
+count := 0
+for i, line := range lines {
+if strings.Contains(line, search) {
+lines[i] = strings.ReplaceAll(line, search, replacement)
+count++
+}
+}
+if count == 0 {
+fmt.Fprintf(os.Stderr, "No lines contain: %s\n", search)
+os.Exit(1)
+}
+if err := writeLines(path, lines); err != nil {
+fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
+os.Exit(1)
+}
+fmt.Fprintf(os.Stderr, "Replaced '%s' on %d line(s) (%d total)\n", search, count, len(lines))
 }
 
 // ════════════════════════════════════════════════════════════
