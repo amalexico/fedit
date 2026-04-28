@@ -314,6 +314,65 @@ $f = "C:\tools\fedit.exe"
 
 ---
 
+## MCP Server Mode
+
+fedit includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server, so AI coding assistants can use fedit as a tool for precise file edits.
+
+```bash
+fedit mcp
+```
+
+This starts a JSON-RPC 2.0 server on stdin/stdout. The server exposes all 10 editing operations as MCP tools:
+
+| Tool | Description |
+|------|-------------|
+| `fedit_show` | Display file contents (full or line range) |
+| `fedit_insert` | Insert content after a line number |
+| `fedit_delete` | Delete one or more lines |
+| `fedit_replace` | Replace a line range with new content |
+| `fedit_replaceall` | Global find-and-replace across a file |
+| `fedit_write` | Create or overwrite a file |
+| `fedit_map` | Structural overview (17 languages) |
+| `fedit_find` | Find lines matching a substring |
+| `fedit_insertafter` | Insert after a matching line |
+| `fedit_insertbefore` | Insert before a matching line |
+
+### Configuring with Claude Desktop
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "fedit": {
+      "command": "fedit",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+### Configuring with Cursor
+
+Add to `.cursor/mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "fedit": {
+      "command": "fedit",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+### Why MCP?
+
+Without fedit, LLMs rewrite entire files — burning tokens and introducing drift. With fedit as an MCP tool, the model calls `fedit_map` to see structure, `fedit_find` to locate targets, and `fedit_replace` or `fedit_insertafter` to make surgical edits. Every mutation returns stats (line delta, elapsed time) so the model can verify its work.
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE)

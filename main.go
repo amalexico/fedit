@@ -8,9 +8,15 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func main() {
+	if len(os.Args) >= 2 && os.Args[1] == "mcp" {
+		runMCP()
+		return
+	}
+
 	file := flag.String("file", "", "Path to the file")
 	op := flag.String("op", "", "Operation: insert, delete, replace, replaceall, show, write, map, find, insertafter, insertbefore")
 	line := flag.Int("line", 0, "Line number (1-based)")
@@ -78,6 +84,9 @@ func main() {
 		*endLine = *line
 	}
 
+	linesBefore := len(lines)
+	startTime := time.Now()
+
 	switch *op {
 	case "show":
 		doShow(lines, *line, *endLine)
@@ -141,6 +150,34 @@ func main() {
 				center = 1
 			}
 			showVerify(*file, center)
+
+			// Operation stats
+			elapsed := time.Since(startTime)
+			var elapsedStr string
+			if elapsed < time.Millisecond {
+				elapsedStr = "<1ms"
+			} else {
+				elapsedStr = elapsed.Round(time.Millisecond).String()
+			}
+			linesAfter := 0
+			if afterLines, err := readLines(*file); err == nil {
+				linesAfter = len(afterLines)
+			}
+			delta := linesAfter - linesBefore
+			fmt.Fprintf(os.Stderr, "\n=== STATS ===\n")
+			fmt.Fprintf(os.Stderr, "  op:      %s\n", *op)
+			fmt.Fprintf(os.Stderr, "  file:    %s\n", *file)
+			if *match != "" {
+				fmt.Fprintf(os.Stderr, "  match:   %q\n", *match)
+			}
+			if delta > 0 {
+				fmt.Fprintf(os.Stderr, "  lines:   +%d (%d -> %d)\n", delta, linesBefore, linesAfter)
+			} else if delta < 0 {
+				fmt.Fprintf(os.Stderr, "  lines:   %d (%d -> %d)\n", delta, linesBefore, linesAfter)
+			} else {
+				fmt.Fprintf(os.Stderr, "  lines:   0 (unchanged, %d total)\n", linesBefore)
+			}
+			fmt.Fprintf(os.Stderr, "  elapsed: %s\n", elapsedStr)
 		}
 	}
 }
