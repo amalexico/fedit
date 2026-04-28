@@ -1,3 +1,0 @@
-line one HI world
-line two HI world
-line three goodbye
