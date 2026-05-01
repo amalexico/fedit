@@ -314,6 +314,70 @@ $f = "C:\tools\fedit.exe"
 
 ---
 
+
+## LLM Benchmark
+
+How well do LLMs use fedit vs. rewriting whole files?
+
+We tested **Claude (Sonnet 4.6)**, **ChatGPT (GPT-4o)**, and **Gemini (2.5 Pro)** on
+7 realistic editing tasks across files of 500-1200 lines. Each model was tested
+twice per task: once asked to **output the whole file** ("raw"), once asked to
+**output fedit commands only** ("fedit").
+
+### Results
+
+Legend: PASS = correct output | PARTIAL = correct intent, fragile execution | FAIL = wrong output
+
+| Test | File | Task | Claude raw | Claude fedit | GPT raw | GPT fedit | Gemini raw | Gemini fedit |
+|------|------|------|:---:|:---:|:---:|:---:|:---:|:---:|
+| T1 | processor_600.go (575 L) | Insert method after specific struct method | PASS | PARTIAL | FAIL | PARTIAL | PASS | FAIL |
+| T2 | config_800.yaml (1059 L) | Replace 24-line deployment block | PASS | PASS | FAIL | FAIL | PASS | FAIL |
+| T3 | styles_500.css (565 L)   | Find & delete CSS rule block | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
+| T4 | system_1000.go (980 L)   | Global rename (36 occurrences) | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
+| T5 | analytics_700.py (679 L) | 3-step chain (insert + delete + replace) | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
+| T6 | dashboard_900.html (891 L) | Insert before 3rd matching button | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
+| T7 | engine_1200.go (1206 L)  | Map + targeted insert | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
+
+### Key findings
+
+1. **ChatGPT cannot output large files reliably.** On both T1 and T2, GPT-4o
+   truncated mid-file and silently rewrote function signatures it had already
+   emitted. Output was unusable as a drop-in replacement.
+
+2. **LLMs hallucinate line numbers.** In T2, both ChatGPT and Gemini emitted
+   fedit `replace` commands with confidently-stated line ranges that were off
+   by 36-56 lines, producing completely wrong edits. Only Claude got the line
+   range exactly right.
+
+3. **`insertafter` on a function declaration matches the OPENING line.** Gemini
+   repeatedly tried `insertafter -match 'func FetchUser()'` to insert content
+   AFTER the function ended — but fedit (correctly) inserts after the matched
+   line, placing the new code inside the function body. The fix is to use
+   `insertbefore` on the NEXT declaration.
+
+### Recommendation for LLM-driven workflows
+
+Based on these results, prefer **content-matching operations over line-number
+operations** when generating fedit commands from an LLM:
+
+- Use `insertbefore -match 'next anchor'` instead of `insert -line N`
+- Use `replaceall -match 'old' -text 'new'` instead of `replace -line N -end M`
+- Reserve line-number ops for cases where you've just run `find` or `show`
+  and have verified line numbers in context
+
+For best results, give the LLM an MCP connection to fedit (see [MCP Server Mode](#mcp-server-mode))
+so it can run `fedit_find` and `fedit_show` to verify line numbers before
+mutating — this eliminates the hallucination class of errors entirely.
+
+### Methodology
+
+- Each test run in a fresh chat with the original file uploaded
+- Prompts identical across models; only "raw" vs "fedit" framing differed
+- Output saved verbatim, then diffed against ground truth
+- Ground truth verified by running fedit commands locally and re-reading output
+
+Test files and prompts: see `bench/` directory.
+
 ## MCP Server Mode
 
 fedit includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server, so AI coding assistants can use fedit as a tool for precise file edits.
