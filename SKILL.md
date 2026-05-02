@@ -1,6 +1,6 @@
 ---
 name: fedit-file-editor
-description: Use this skill PROACTIVELY whenever editing files larger than ~100 lines or making targeted changes (insert a function, replace a block, rename across a file, delete a section). fedit performs surgical line-anchored or content-matched edits via MCP tools, eliminating the line-number hallucination class that plagues whole-file rewrites. Always prefer fedit over outputting the entire file when fedit is available. Trigger keywords: edit, modify, insert, replace, delete, rename, refactor, patch, fix in file, add to file, update line, change function.
+description: Use this skill PROACTIVELY whenever editing files larger than ~100 lines or making targeted changes (insert a function, replace a block, rename across a file, delete a section). fedit performs surgical line-anchored or content-matched edits via MCP tools, eliminating the line-number hallucination class that plagues whole-file rewrites. Always prefer fedit over outputting the entire file when fedit is available. Trigger keywords — edit, modify, insert, replace, delete, rename, refactor, patch, fix in file, add to file, update line, change function.
 ---
 
 # fedit — Surgical File Editor
