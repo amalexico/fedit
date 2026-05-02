@@ -9,8 +9,6 @@ Built for sysadmins, DevOps engineers, and anyone who scripts config changes.
 ![fedit demo](demo.gif)
 
 ```
-
-![fedit demo](demo.gif)
 go install github.com/amalexico/fedit@latest
 ```
 
