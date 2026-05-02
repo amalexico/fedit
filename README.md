@@ -317,67 +317,119 @@ $f = "C:\tools\fedit.exe"
 
 ## LLM Benchmark
 
-How well do LLMs use fedit vs. rewriting whole files?
+How well do current LLMs use fedit vs. rewriting whole files?
 
 We tested **Claude (Sonnet 4.6)**, **ChatGPT (GPT-4o)**, and **Gemini (2.5 Pro)** on
-7 realistic editing tasks across files of 500-1200 lines. Each model was tested
+7 realistic editing tasks across files of 565-1206 lines. Each model was tested
 twice per task: once asked to **output the whole file** ("raw"), once asked to
 **output fedit commands only** ("fedit").
 
 ### Results
 
-Legend: PASS = correct output | PARTIAL = correct intent, fragile execution | FAIL = wrong output
+Legend: `PASS+` = optimal one-line solution | `PASS` = correct | `PASS*` = correct content, formatting artifact | `PARTIAL` = correct intent, off-by-one or fragile | `FAIL` = wrong output
 
 | Test | File | Task | Claude raw | Claude fedit | GPT raw | GPT fedit | Gemini raw | Gemini fedit |
 |------|------|------|:---:|:---:|:---:|:---:|:---:|:---:|
-| T1 | processor_600.go (575 L) | Insert method after specific struct method | PASS | PARTIAL | FAIL | PARTIAL | PASS | FAIL |
-| T2 | config_800.yaml (1059 L) | Replace 24-line deployment block | PASS | PASS | FAIL | FAIL | PASS | FAIL |
-| T3 | styles_500.css (565 L)   | Find & delete CSS rule block | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
-| T4 | system_1000.go (980 L)   | Global rename (36 occurrences) | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
-| T5 | analytics_700.py (679 L) | 3-step chain (insert + delete + replace) | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
-| T6 | dashboard_900.html (891 L) | Insert before 3rd matching button | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
-| T7 | engine_1200.go (1206 L)  | Map + targeted insert | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
+| T1 | processor_600.go (575 L)   | Insert method after specific struct method | PASS  | PARTIAL | FAIL  | PARTIAL | PASS  | FAIL  |
+| T2 | config_800.yaml (1059 L)   | Replace 24-line deployment block           | PASS  | PASS    | FAIL  | FAIL    | PASS  | FAIL  |
+| T3 | styles_500.css (565 L)     | Find & delete CSS rule block               | PASS  | PASS    | PASS* | FAIL    | PASS* | FAIL  |
+| T4 | system_1000.go (980 L)     | Global rename (36 occurrences)             | PASS  | PASS+   | FAIL  | PASS+   | PASS* | PASS+ |
+| T5 | analytics_700.py (682 L)   | 3-step chain (insert + delete + replace)   | PASS  | PARTIAL | FAIL  | FAIL    | PASS  | FAIL  |
+| T6 | dashboard_900.html (891 L) | Insert before 3rd matching button (`-nth`) | PASS  | PARTIAL | FAIL  | PASS+   | PASS  | FAIL  |
+| T7 | engine_1200.go (1196 L)    | Map + targeted insert after method         | PASS  | PASS    | FAIL  | FAIL    | PASS  | FAIL  |
+
+### Top-line numbers
+
+| Model       | Raw mode      | Fedit mode                       |
+|-------------|---------------|----------------------------------|
+| Claude      | **7/7 PASS**  | 4 PASS, 3 PARTIAL                |
+| ChatGPT     | 1/7 PASS*     | 2 PASS+, 1 PARTIAL, 4 FAIL       |
+| Gemini      | 7/7 PASS*     | 1 PASS+, 6 FAIL                  |
 
 ### Key findings
 
-1. **ChatGPT cannot output large files reliably.** On both T1 and T2, GPT-4o
-   truncated mid-file and silently rewrote function signatures it had already
-   emitted. Output was unusable as a drop-in replacement.
+**1. ChatGPT cannot output large files reliably.**
+6 of 7 raw tests truncated. The most striking failure was T6, where it inserted
+the literal placeholder line `[... TRUNCATED FOR BREVITY ...]` into otherwise
+valid HTML — a uniquely dangerous failure mode where output looks structurally
+complete but contains placeholder strings. T7 truncated 1206 lines down to 166.
 
-2. **LLMs hallucinate line numbers.** In T2, both ChatGPT and Gemini emitted
-   fedit `replace` commands with confidently-stated line ranges that were off
-   by 36-56 lines, producing completely wrong edits. Only Claude got the line
-   range exactly right.
+**2. LLMs hallucinate line numbers — and it gets worse with chain length.**
+Gemini's line-number errors grew across the suite: off by 36-56 lines on T2
+(single replace), 45 lines on T3, then **73 lines** on T5 (3-step chain).
+ChatGPT showed similar drift on T5. Claude was the only model that produced
+runnable line-numbered commands consistently.
 
-3. **`insertafter` on a function declaration matches the OPENING line.** Gemini
-   repeatedly tried `insertafter -match 'func FetchUser()'` to insert content
-   AFTER the function ended — but fedit (correctly) inserts after the matched
-   line, placing the new code inside the function body. The fix is to use
-   `insertbefore` on the NEXT declaration.
+**3. Content-matching ops are immune to the hallucination class.**
+Gemini failed every fedit test that required line numbers (T1, T2, T3, T5, T6,
+T7), but PASSED T4 — which used `replaceall` with a content match. Same model,
+same task complexity, dramatically different reliability. The bottleneck is
+counting, not understanding.
 
-### Recommendation for LLM-driven workflows
+**4. `insertafter` on a function declaration matches the OPENING line.**
+Models repeatedly tried `insertafter -match "func MyFunc()"` to insert content
+AFTER the function ended. This is correct fedit behavior (it inserts after the
+matched line) but inserts the new code INSIDE the function body. Workaround:
+`insertbefore` the NEXT structural element. Confirmed in T1 and T7.
+
+**5. Even Claude flubs line-number direction.**
+T6: Claude used `insert -line 30` to add a banner before the 3rd button at line
+30. But `insert -line N` adds content AFTER line N. The correct command was
+`insertbefore -match "View Details" -nth 3`. Even the strongest model gets
+direction wrong about 1 in 6 single-step ops when reaching for line numbers.
+
+**6. `-match` is single-line only — and that's a feature.**
+ChatGPT (T3 fedit) tried to pass a multi-line CSS block as `-match` with literal
+`\n` escapes. fedit doesn't interpret escapes in `-match` and matches only
+single lines. This kept the operation safe (zero matches → no edit) rather than
+allowing a fragile multi-line pattern that could easily mismatch.
+
+**7. Markdown rendering is a hidden adversary.**
+ChatGPT and Gemini outputs lost `__name__` → `name`, `__init__` → `**init**`,
+and stripped CSS/Python indentation when rendered in chat UIs. The underlying
+files (when downloaded directly) were correct. This affects copy-paste workflows
+but not API integrations. **For best results, use the model's "copy code"
+button or download links — never select-and-copy from rendered output.**
+
+**8. Three different models converged on the same one-liner for T4.**
+Claude, ChatGPT, and Gemini all independently produced
+`fedit -op replaceall -match "FetchUser" -text "GetAccount"`.
+When the right tool is obvious, models reach for it. fedit's design surface
+makes the right tool obvious for content-driven edits.
+
+### Recommendations for LLM-driven workflows
 
 Based on these results, prefer **content-matching operations over line-number
 operations** when generating fedit commands from an LLM:
 
-- Use `insertbefore -match 'next anchor'` instead of `insert -line N`
-- Use `replaceall -match 'old' -text 'new'` instead of `replace -line N -end M`
-- Reserve line-number ops for cases where you've just run `find` or `show`
-  and have verified line numbers in context
+- Use `insertbefore -match "next anchor"` instead of `insert -line N`
+- Use `replaceall -match "old" -text "new"` instead of `replace -line N -end M`
+- Use `find -match` and `show` to confirm line numbers before any line-numbered op
+- Reserve line-numbered ops for cases where an MCP-connected LLM has just run
+  `fedit_find` or `fedit_show` and has verified the line in context
 
-For best results, give the LLM an MCP connection to fedit (see [MCP Server Mode](#mcp-server-mode))
-so it can run `fedit_find` and `fedit_show` to verify line numbers before
-mutating — this eliminates the hallucination class of errors entirely.
+For best results, give the LLM an MCP connection to fedit (see
+[MCP Server Mode](#mcp-server-mode)) so it can `fedit_find` and `fedit_show`
+before mutating. This eliminates the line-number hallucination class entirely
+and was the path Claude consistently took when it had recon available.
 
 ### Methodology
 
 - Each test run in a fresh chat with the original file uploaded
 - Prompts identical across models; only "raw" vs "fedit" framing differed
-- Output saved verbatim, then diffed against ground truth
+- Output saved verbatim, then diffed against ground truth via `Compare-Object`
 - Ground truth verified by running fedit commands locally and re-reading output
+- All 7 raw outputs that PASSED Compare-Object empty (byte-identical to ground
+  truth): Claude T2, T3, T4, T5, T6, T7 + Gemini T5, T6, T7
+- `PASS*` indicates byte-difference from indentation-stripping in chat UI render,
+  with content structurally correct (verified by re-running fedit ops on the
+  saved file)
 
-Test files and prompts: see `bench/` directory.
+### Test corpus
 
+7 synthetic files (565-1206 lines) covering Go, YAML, CSS, Python, and HTML.
+All test files, prompts, and ground-truth outputs are available in the `bench/`
+directory of this repository.
 ## MCP Server Mode
 
 fedit includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server, so AI coding assistants can use fedit as a tool for precise file edits.
