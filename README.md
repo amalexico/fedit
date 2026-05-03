@@ -491,6 +491,71 @@ Without fedit, LLMs rewrite entire files — burning tokens and introducing drif
 
 ---
 
+
+## FAQ
+
+### Do I need fedit if my team has a solid PR review process?
+
+Probably not for human-driven edits where you review every diff. fedit shines in two specific cases:
+
+1. **Whole-file rewrites in long configs.** When an LLM regenerates a 600-line `values.yaml` to change one key, the diff is technically reviewable but practically nobody scrolls to line 412 to confirm nothing else moved. fedit makes the diff exactly N lines for an N-line change.
+
+2. **Agent loops without a human in the middle.** If you run agents semi-autonomously (issue → branch → PR opened, you review at the end), giving the agent surgical tools (`fedit_replace`, `fedit_insertafter`) instead of "rewrite the whole file" measurably reduces review surface area.
+
+If your workflow already catches these, the CLI is overkill. The MCP server may still be useful as an agent primitive.
+
+### Does fedit support Terraform / HCL?
+
+Not yet in `map` (the structural overview op). HCL is the next language on the roadmap precisely because heredoc and dynamic block syntax is where naive line-counting falls apart and you need real structural awareness.
+
+That said, the line/match-based ops (`insertafter`, `replaceall`, `replace -line N -end M`, `find`) work on **any** text file regardless of `map` support. You can use fedit on `.tf` files today — you just won't get the structural overview from `map`.
+
+### Does fedit preserve comments and formatting?
+
+Yes, by design. fedit does not parse-and-reformat — it operates on raw text bytes at line granularity.
+
+If you `replace -line 47 -end 49`, lines 1–46 and 50–EOF are untouched byte-for-byte: comments, trailing whitespace, mixed indentation, BOM markers, all preserved exactly. This is the main reason fedit is line-addressable instead of AST-based: AST round-trips lose too much (trailing commas, comment positioning, key ordering, blank-line spacing).
+
+This matters most for nginx configs (inline comments documenting *why* a directive exists), Ansible playbooks (YAML anchors and merge keys), and any file where a human formatting choice carries semantic weight.
+
+### Is the MCP server Claude-specific or Cursor-specific?
+
+Neither — it targets the open MCP spec. Plain JSON-RPC 2.0 over stdin/stdout against the public Model Context Protocol schema. No vendor-specific bits.
+
+Tested with Claude Desktop; should work with any compliant MCP client (Cursor, Continue, Cline, custom integrations). Tool definitions and JSON Schema live in `mcp.go` if you want to inspect the surface area before wiring it up.
+
+### What if the target string appears multiple times in the file?
+
+Use the `-nth N` flag:
+
+- `-nth 1` (default) — first match
+- `-nth 2` — second match
+- `-nth -1` — last match
+- Any positive integer picks that occurrence
+
+Example targeting the third `http.Redirect` call:
+
+```bash
+fedit -file router.go -op insertbefore -match "http.Redirect" -nth 3 -textfile patch.txt -v
+```
+
+If you are not sure how many matches exist, run `find` first — it lists every match with context so you can disambiguate before mutating:
+
+```bash
+fedit -file router.go -op find -match "http.Redirect"
+```
+
+### Does chaining commands cause line-number drift?
+
+No. Each fedit invocation reads the file fresh, so line numbers always reflect the current state on disk. You can chain operations safely with `;` (PowerShell) or `&&` (bash):
+
+```bash
+fedit -op replaceall -file f.conf -match "old.com" -text "new.com" -v ; fedit -op replace -file f.conf -line 42 -end 42 -text "fixed" -v
+```
+
+The tradeoff is one disk read per operation, which is negligible for editing workflows.
+
+If you want drift-immunity by design, prefer content-based targeting (`insertafter` / `insertbefore` / `replaceall` with `-match`) over line numbers — those resolve the target on each invocation regardless of what previous ops did.
 ## License
 
 MIT — see [LICENSE](LICENSE)
