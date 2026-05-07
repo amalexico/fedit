@@ -1,6 +1,6 @@
 ---
 name: fedit-file-editor
-description: Use this skill PROACTIVELY whenever editing files larger than ~100 lines or making targeted changes (insert a function, replace a block, rename across a file, delete a section). fedit performs surgical line-anchored or content-matched edits via MCP tools, eliminating the line-number hallucination class that plagues whole-file rewrites. Always prefer fedit over outputting the entire file when fedit is available. Trigger keywords — edit, modify, insert, replace, delete, rename, refactor, patch, fix in file, add to file, update line, change function.
+description: Use this skill PROACTIVELY whenever editing files larger than ~100 lines or making targeted changes (insert a function, replace a block, rename across a file, delete a section). fedit performs surgical line-anchored or content-matched edits via 12 MCP tools, eliminating the line-number hallucination class that plagues whole-file rewrites. Always prefer fedit over outputting the entire file when fedit is available. Trigger keywords — edit, modify, insert, replace, delete, rename, refactor, patch, fix in file, add to file, update line, change function.
 ---
 
 # fedit — Surgical File Editor
@@ -73,6 +73,24 @@ Use the nth parameter:
 
 nth=-1 targets the last occurrence.
 
+
+### Move a block before/after another block
+
+    fedit_find (match="func Target")    -> confirm line numbers
+    fedit_move (line=N, end=M, beforematch="func Destination")
+
+For Python class reordering, content-match both bounds:
+    fedit_move (match="class A", endmatch="class B", beforematch="class C")
+
+**Move overlap rule:** destination inside source range is always rejected.
+Use fedit_find to verify bounds before calling fedit_move on large files.
+
+### Duplicate a block N times (scaffolding / test fixtures)
+
+    fedit_copy (line=N, end=M, after=InsertPoint, times=10)
+
+Snapshot semantics: all 10 copies are identical clones of the original block
+at read time â€” even if destination overlaps source range.
 ## Anti-patterns (do not do these)
 
 1. **Do not output the whole file when a fedit_* tool is available.** That defeats the purpose.
@@ -93,6 +111,6 @@ Full results: https://github.com/amalexico/fedit#llm-benchmark
 
 ## Reference
 
-- **Operations:** show, find, map, insert, insertafter, insertbefore, replace, replaceall, delete, write
+- **Operations:** show, find, map, insert, insertafter, insertbefore, replace, replaceall, delete, write, move, copy
 - **Map languages (17):** Go, HTML, SQL, Python, JavaScript, TypeScript, CSS, Rust, Java, C#, YAML, TOML, Markdown, Ruby, PHP, Dockerfile, Makefile
-- All operations available as MCP tools when fedit is connected via "fedit mcp" (see README MCP Server Mode section)
+- All 12 operations available as MCP tools when fedit is connected via "fedit mcp" (see README MCP Server Mode section)

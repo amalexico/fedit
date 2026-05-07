@@ -94,7 +94,7 @@ func runMCP() {
 			mcpSendResult(req.ID, mcpInitResult{
 				ProtocolVersion: "2024-11-05",
 				Capabilities:    mcpCaps{Tools: map[string]any{}},
-				ServerInfo:      mcpServerInfo{Name: "fedit", Version: "1.1.0"},
+				ServerInfo:      mcpServerInfo{Name: "fedit", Version: "1.2.0"},
 			})
 		case "notifications/initialized":
 		// no response needed
@@ -138,7 +138,9 @@ func mcpToolDefs() []mcpToolDef {
 		{Name: "fedit_find", Description: "Find all lines matching a substring.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Substring to search for"},"nth":{"type":"integer","description":"Which occurrence (default 1, -1 for last)"}},"required":["file","match"]}`)},
 		{Name: "fedit_insertafter", Description: "Insert content after a line matching a substring.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Substring to match"},"text":{"type":"string","description":"Content to insert (use \\n for newlines)"},"nth":{"type":"integer","description":"Which occurrence (default 1, -1 for last)"}},"required":["file","match","text"]}`)},
 		{Name: "fedit_insertbefore", Description: "Insert content before a line matching a substring.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Substring to match"},"text":{"type":"string","description":"Content to insert (use \\n for newlines)"},"nth":{"type":"integer","description":"Which occurrence (default 1, -1 for last)"}},"required":["file","match","text"]}`)},
-	}
+		{Name: "fedit_move", Description: "Move a line range to a new position in the same file. Atomic. Overlap (destination inside source) is rejected. -times N: cut once, paste N times.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer","description":"Source start line (1-based)"},"end":{"type":"integer","description":"Source end line (inclusive)"},"match":{"type":"string","description":"Source start: first line containing this text"},"endmatch":{"type":"string","description":"Source end: first line at/after start containing this text"},"after":{"type":"integer","description":"Destination: insert after line N (0=beginning)"},"before":{"type":"integer","description":"Destination: insert before line N"},"aftermatch":{"type":"string","description":"Destination: insert after first matching line"},"beforematch":{"type":"string","description":"Destination: insert before first matching line"},"times":{"type":"integer","description":"Paste N times (default 1, min 1)"},"nth":{"type":"integer","description":"Which source match occurrence (default 1, -1=last)"}},"required":["file"]}`)},
+		{Name: "fedit_copy", Description: "Copy a line range to a new position in the same file. Atomic. Snapshot semantics: all N copies are clones of the original block even when destination overlaps source.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer","description":"Source start line (1-based)"},"end":{"type":"integer","description":"Source end line (inclusive)"},"match":{"type":"string","description":"Source start: first line containing this text"},"endmatch":{"type":"string","description":"Source end: first line at/after start containing this text"},"after":{"type":"integer","description":"Destination: insert after line N (0=beginning)"},"before":{"type":"integer","description":"Destination: insert before line N"},"aftermatch":{"type":"string","description":"Destination: insert after first matching line"},"beforematch":{"type":"string","description":"Destination: insert before first matching line"},"times":{"type":"integer","description":"Copy N times (default 1, min 1)"},"nth":{"type":"integer","description":"Which source match occurrence (default 1, -1=last)"}},"required":["file"]}`)},
+		}
 }
 
 func mcpExecTool(name string, args map[string]any) mcpCallResult {
@@ -189,7 +191,15 @@ func mcpExecTool(name string, args map[string]any) mcpCallResult {
 		return mcpDoInsertMatch(file, getStr("match"), getInt("nth", 1), getStr("text"), false, start)
 	case "fedit_insertbefore":
 		return mcpDoInsertMatch(file, getStr("match"), getInt("nth", 1), getStr("text"), true, start)
-	default:
+	case "fedit_move":
+		return mcpDoMove(file, getInt("line", 0), getInt("end", 0), getStr("match"), getStr("endmatch"),
+			getInt("after", -1), getInt("before", -1), getStr("aftermatch"), getStr("beforematch"),
+			getInt("nth", 1), getInt("times", 1), start)
+	case "fedit_copy":
+		return mcpDoCopy(file, getInt("line", 0), getInt("end", 0), getStr("match"), getStr("endmatch"),
+			getInt("after", -1), getInt("before", -1), getStr("aftermatch"), getStr("beforematch"),
+			getInt("nth", 1), getInt("times", 1), start)
+		default:
 		return mcpErrorResult(fmt.Sprintf("unknown tool: %s", name))
 	}
 }
@@ -498,5 +508,75 @@ func mcpDoInsertMatch(file, match string, nth int, text string, before bool, sta
 	}
 	msg := fmt.Sprintf("Inserted %d line(s) %s line %d (%d total now)", len(newLines), direction, targetLine, len(result))
 	msg += mcpStats("insert"+direction, file, linesBefore, len(result), match, start)
+	return mcpOK(msg)
+}
+
+func mcpDoMove(file string, lineFlag, endFlag int, matchFlag, endmatchFlag string,
+	afterFlag, beforeFlag int, afterMatchFlag, beforeMatchFlag string,
+	nth, times int, start time.Time) mcpCallResult {
+
+	lines, err := readLines(file)
+	if err != nil {
+		return mcpErrorResult(fmt.Sprintf("Error reading file: %v", err))
+	}
+	srcStart, srcEnd, err := resolveSourceLines(lines, lineFlag, endFlag, matchFlag, endmatchFlag, nth)
+	if err != nil {
+		return mcpErrorResult(fmt.Sprintf("Source error: %v", err))
+	}
+	destAfter, destLine, destDesc, err := resolveDestLine(lines, afterFlag, beforeFlag, afterMatchFlag, beforeMatchFlag)
+	if err != nil {
+		return mcpErrorResult(fmt.Sprintf("Destination error: %v", err))
+	}
+	linesBefore := len(lines)
+	result, _, err := execMove(lines, srcStart, srcEnd, destAfter, destLine, times)
+	if err != nil {
+		return mcpErrorResult(fmt.Sprintf("Move error: %v", err))
+	}
+	if err := writeLines(file, result); err != nil {
+		return mcpErrorResult(fmt.Sprintf("Error writing file: %v", err))
+	}
+	blockSize := srcEnd - srcStart + 1
+	var msg string
+	if times == 1 {
+		msg = fmt.Sprintf("Moved lines %d-%d (%d lines) %s (%d total now)", srcStart, srcEnd, blockSize, destDesc, len(result))
+	} else {
+		msg = fmt.Sprintf("Moved lines %d-%d (%d lines) %s x%d (%d total now)", srcStart, srcEnd, blockSize, destDesc, times, len(result))
+	}
+	msg += mcpStats("move", file, linesBefore, len(result), "", start)
+	return mcpOK(msg)
+}
+
+func mcpDoCopy(file string, lineFlag, endFlag int, matchFlag, endmatchFlag string,
+	afterFlag, beforeFlag int, afterMatchFlag, beforeMatchFlag string,
+	nth, times int, start time.Time) mcpCallResult {
+
+	lines, err := readLines(file)
+	if err != nil {
+		return mcpErrorResult(fmt.Sprintf("Error reading file: %v", err))
+	}
+	srcStart, srcEnd, err := resolveSourceLines(lines, lineFlag, endFlag, matchFlag, endmatchFlag, nth)
+	if err != nil {
+		return mcpErrorResult(fmt.Sprintf("Source error: %v", err))
+	}
+	destAfter, _, destDesc, err := resolveDestLine(lines, afterFlag, beforeFlag, afterMatchFlag, beforeMatchFlag)
+	if err != nil {
+		return mcpErrorResult(fmt.Sprintf("Destination error: %v", err))
+	}
+	linesBefore := len(lines)
+	result, _, err := execCopy(lines, srcStart, srcEnd, destAfter, times)
+	if err != nil {
+		return mcpErrorResult(fmt.Sprintf("Copy error: %v", err))
+	}
+	if err := writeLines(file, result); err != nil {
+		return mcpErrorResult(fmt.Sprintf("Error writing file: %v", err))
+	}
+	blockSize := srcEnd - srcStart + 1
+	var msg string
+	if times == 1 {
+		msg = fmt.Sprintf("Copied lines %d-%d (%d lines) %s (%d total now)", srcStart, srcEnd, blockSize, destDesc, len(result))
+	} else {
+		msg = fmt.Sprintf("Copied lines %d-%d (%d lines) %s x%d (%d total now)", srcStart, srcEnd, blockSize, destDesc, times, len(result))
+	}
+	msg += mcpStats("copy", file, linesBefore, len(result), "", start)
 	return mcpOK(msg)
 }

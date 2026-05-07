@@ -60,6 +60,12 @@ fedit -file config.yaml -op replace -line 42 -end 42 -text "timeout: 60s" -v
 
 # Insert a line after every occurrence of "server {"
 fedit -file nginx.conf -op insertafter -match "server {" -text "    include security.conf;" -v
+
+# Move a function block before another (content-matched, atomic)
+fedit -file main.go -op move -match "func OldHelper(" -end 45 -beforematch "func NewHelper(" -v
+
+# Copy a config block and paste it 3 times at a new location
+fedit -file values.yaml -op copy -line 50 -end 65 -after 200 -times 3 -v
 ```
 
 ---
@@ -151,6 +157,47 @@ fedit -file nginx.conf -op replaceall -match "old.example.com" -text "new.exampl
 
 # Update a version string everywhere
 fedit -file Makefile -op replaceall -match "1.1.0" -text "1.2.0" -v
+
+---
+
+### move â€” Move a line range to a new position
+
+```bash
+# Move lines 100-120 to after line 200 (explicit range)
+fedit -file server.go -op move -line 100 -end 120 -after 200 -v
+
+# Move a function block to before another function (content-matched)
+fedit -file routes.go -op move -match "func OldHelper(" -end 45 -beforematch "func NewHelper(" -v
+
+# Swap two nginx server blocks
+fedit -file nginx.conf -op move -match "server {" -endmatch "# end server 1" -aftermatch "# end server 2" -v
+
+# Cut once, scaffold 3 copies at destination
+fedit -file main.go -op move -line 5 -end 12 -after 100 -times 3 -v
+```
+
+**Rules:**
+- Destination may not overlap the source range â€” fedit reports a precise error with line numbers.
+- `-times N`: cut once, paste N times. Net delta = blockSize Ã— (Nâˆ’1). Default times=1 = zero delta.
+
+---
+
+### copy â€” Copy a line range to a new position
+
+```bash
+# Copy a config block to after a section header
+fedit -file values.yaml -op copy -line 50 -end 65 -aftermatch "# staging" -v
+
+# Duplicate a test fixture 10 times for parameterised tests
+fedit -file fixtures_test.go -op copy -match "func TestCase(" -end 30 -after 200 -times 10 -v
+
+# Reorder Python classes (copy source before target; overlap is allowed)
+fedit -file processor.py -op copy -match "class ModuleProcessor_15" -endmatch "class ModuleProcessor_16" -beforematch "class ModuleProcessor_13" -v
+```
+
+**Rules:**
+- Snapshot semantics: source range is read once before any writes. All N copies are identical clones of the original, even when destination overlaps source.
+- Net delta = blockSize Ã— times.
 ```
 
 ---
@@ -440,7 +487,7 @@ fedit includes a built-in [Model Context Protocol](https://modelcontextprotocol.
 fedit mcp
 ```
 
-This starts a JSON-RPC 2.0 server on stdin/stdout. The server exposes all 10 editing operations as MCP tools:
+This starts a JSON-RPC 2.0 server on stdin/stdout. The server exposes all 12 editing operations as MCP tools:
 
 | Tool | Description |
 |------|-------------|
@@ -454,6 +501,8 @@ This starts a JSON-RPC 2.0 server on stdin/stdout. The server exposes all 10 edi
 | `fedit_find` | Find lines matching a substring |
 | `fedit_insertafter` | Insert after a matching line |
 | `fedit_insertbefore` | Insert before a matching line |
+| `fedit_move` | Move a line range to a new position; destination-overlap rejected |
+| `fedit_copy` | Copy a line range; snapshot semantics, overlap allowed, -times N |
 
 ### Configuring with Claude Desktop
 

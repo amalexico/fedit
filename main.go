@@ -18,7 +18,7 @@ func main() {
 	}
 
 	file := flag.String("file", "", "Path to the file")
-	op := flag.String("op", "", "Operation: insert, delete, replace, replaceall, show, write, map, find, insertafter, insertbefore")
+	op := flag.String("op", "", "Operation: insert, delete, replace, replaceall, show, write, map, find, insertafter, insertbefore, move, copy")
 	line := flag.Int("line", 0, "Line number (1-based)")
 	endLine := flag.Int("end", 0, "End line for delete/replace range (inclusive)")
 	text := flag.String("text", "", "Text to insert/replace (use \\n for newlines, \\t for tabs)")
@@ -27,7 +27,13 @@ func main() {
 	match := flag.String("match", "", "Text to search for (find/insertafter/insertbefore)")
 	nth := flag.Int("nth", 1, "Which occurrence to match (default 1, use -1 for last)")
 	v := flag.Bool("v", false, "Verify: show affected lines after mutation")
-	flag.Parse()
+	endmatch    := flag.String("endmatch", "", "End line bound for move/copy source (content-based)")
+	after       := flag.Int("after", -1, "Destination: insert after line N (0 = beginning of file)")
+	before      := flag.Int("before", -1, "Destination: insert before line N")
+	aftermatch  := flag.String("aftermatch", "", "Destination: insert after first line matching TEXT")
+	beforematch := flag.String("beforematch", "", "Destination: insert before first line matching TEXT")
+	times       := flag.Int("times", 1, "Repeat N times (default 1, min 1; for move: cut once, paste N times)")
+		flag.Parse()
 
 	if *file == "" || *op == "" {
 		fmt.Fprintln(os.Stderr, "Usage: fedit -file PATH -op OPERATION [flags]")
@@ -119,13 +125,17 @@ func main() {
 			replacement = strings.Join(rLines, "\n")
 		}
 		doReplaceAll(lines, *file, *match, replacement)
-	default:
+	case "move":
+		doMoveOp(lines, *file, *line, *endLine, *match, *endmatch, *after, *before, *aftermatch, *beforematch, *nth, *times, linesBefore, startTime, *v)
+	case "copy":
+		doCopyOp(lines, *file, *line, *endLine, *match, *endmatch, *after, *before, *aftermatch, *beforematch, *nth, *times, linesBefore, startTime, *v)
+		default:
 		fmt.Fprintf(os.Stderr, "Unknown operation: %s\n", *op)
 		os.Exit(1)
 	}
 	if *v {
 		switch *op {
-		case "show", "map", "find", "write":
+		case "show", "map", "find", "write", "move", "copy":
 		// read-only ops, no verify
 		default:
 			center := *line
@@ -1634,4 +1644,290 @@ func doMapMakefile(lines []string) {
 		fmt.Println("✓ No duplicate targets")
 	}
 	fmt.Fprintf(os.Stderr, "\n--- %d total lines ---\n", len(lines))
+}
+
+// ════════════════════════════════════════════════════════════
+// MOVE / COPY — block relocation operations (v1.2.0)
+// ════════════════════════════════════════════════════════════
+
+// resolveSourceLines resolves the source range for move/copy.
+// Uses lineFlag/endFlag for explicit ranges, or matchFlag/endmatchFlag for content-based bounds.
+func resolveSourceLines(lines []string, lineFlag, endFlag int, matchFlag, endmatchFlag string, nth int) (srcStart, srcEnd int, err error) {
+	if matchFlag != "" {
+		hits := findMatches(lines, matchFlag)
+		srcStart, err = resolveNth(hits, nth)
+		if err != nil {
+			return 0, 0, fmt.Errorf("source -match %q: %v", matchFlag, err)
+		}
+		if endmatchFlag != "" {
+			ehits := findMatches(lines, endmatchFlag)
+			for _, h := range ehits {
+				if h >= srcStart {
+					srcEnd = h
+					break
+				}
+			}
+			if srcEnd == 0 {
+				return 0, 0, fmt.Errorf("source -endmatch %q: no match at or after line %d", endmatchFlag, srcStart)
+			}
+		} else if endFlag != 0 {
+			srcEnd = endFlag
+		} else {
+			return 0, 0, fmt.Errorf("source -match requires an end bound: use -end N or -endmatch TEXT")
+		}
+		return srcStart, srcEnd, nil
+	}
+	if lineFlag != 0 {
+		srcStart = lineFlag
+		if endFlag != 0 {
+			srcEnd = endFlag
+		} else {
+			srcEnd = lineFlag
+		}
+		return srcStart, srcEnd, nil
+	}
+	return 0, 0, fmt.Errorf("move/copy requires a source: use -line/-end or -match/-endmatch")
+}
+
+// resolveDestLine resolves the insertion point for move/copy.
+// Exactly one of the four destination flags must be set (non-sentinel).
+// afterFlag/beforeFlag use -1 as "not set" sentinel; afterMatchFlag/beforeMatchFlag use "".
+// Returns:
+//   destAfter  — insert after this line index (0 = top of file)
+//   destLine   — human-facing line number used for overlap checks
+//   destDesc   — human-readable description for messages
+func resolveDestLine(lines []string, afterFlag, beforeFlag int, afterMatchFlag, beforeMatchFlag string) (destAfter, destLine int, destDesc string, err error) {
+	specified := 0
+	if afterFlag != -1 {
+		specified++
+	}
+	if beforeFlag != -1 {
+		specified++
+	}
+	if afterMatchFlag != "" {
+		specified++
+	}
+	if beforeMatchFlag != "" {
+		specified++
+	}
+	if specified == 0 {
+		return 0, 0, "", fmt.Errorf("destination required: use -after, -before, -aftermatch, or -beforematch")
+	}
+	if specified > 1 {
+		return 0, 0, "", fmt.Errorf("only one destination allowed: use exactly one of -after, -before, -aftermatch, -beforematch")
+	}
+
+	switch {
+	case afterFlag != -1:
+		if afterFlag < 0 || afterFlag > len(lines) {
+			return 0, 0, "", fmt.Errorf("-after %d out of range (file has %d lines; use 0 for beginning)", afterFlag, len(lines))
+		}
+		return afterFlag, afterFlag, fmt.Sprintf("after line %d", afterFlag), nil
+
+	case beforeFlag != -1:
+		if beforeFlag < 1 || beforeFlag > len(lines) {
+			return 0, 0, "", fmt.Errorf("-before %d out of range (file has %d lines)", beforeFlag, len(lines))
+		}
+		return beforeFlag - 1, beforeFlag, fmt.Sprintf("before line %d", beforeFlag), nil
+
+	case afterMatchFlag != "":
+		hits := findMatches(lines, afterMatchFlag)
+		if len(hits) == 0 {
+			return 0, 0, "", fmt.Errorf("-aftermatch %q: no match found", afterMatchFlag)
+		}
+		ln := hits[0]
+		return ln, ln, fmt.Sprintf("after line %d (%q)", ln, afterMatchFlag), nil
+
+	default: // beforeMatchFlag != ""
+		hits := findMatches(lines, beforeMatchFlag)
+		if len(hits) == 0 {
+			return 0, 0, "", fmt.Errorf("-beforematch %q: no match found", beforeMatchFlag)
+		}
+		ln := hits[0]
+		return ln - 1, ln, fmt.Sprintf("before line %d (%q)", ln, beforeMatchFlag), nil
+	}
+}
+
+// execMove performs the core move logic atomically (pure function, no I/O).
+// Returns the result slice and the 1-based line number of the first pasted line (for verify).
+//
+// Overlap rule: if destLine is inside [srcStart, srcEnd] (inclusive) the operation
+// is rejected with a descriptive error. Boundaries count as overlap.
+//
+// times > 1: source is removed once; N copies are pasted at destination ("cut once, paste N times").
+// Net line delta = blockSize * (times - 1).
+func execMove(lines []string, srcStart, srcEnd, destAfter, destLine, times int) ([]string, int, error) {
+	if times < 1 {
+		return nil, 0, fmt.Errorf("-times must be >= 1 (use delete to remove a block)")
+	}
+	if srcStart < 1 || srcEnd > len(lines) || srcStart > srcEnd {
+		return nil, 0, fmt.Errorf("source range %d-%d invalid (file has %d lines)", srcStart, srcEnd, len(lines))
+	}
+	if destLine >= srcStart && destLine <= srcEnd {
+		return nil, 0, fmt.Errorf("destination line %d is inside source range %d-%d", destLine, srcStart, srcEnd)
+	}
+
+	blockSize := srcEnd - srcStart + 1
+	block := make([]string, blockSize)
+	copy(block, lines[srcStart-1:srcEnd])
+
+	// Build file with source block removed.
+	reduced := make([]string, 0, len(lines)-blockSize)
+	reduced = append(reduced, lines[:srcStart-1]...)
+	reduced = append(reduced, lines[srcEnd:]...)
+
+	// Adjust destination for the removed block.
+	adjustedDest := destAfter
+	if destAfter >= srcStart {
+		// destAfter > srcEnd is guaranteed by the overlap check above.
+		adjustedDest = destAfter - blockSize
+	}
+
+	// Paste N copies.
+	result := make([]string, 0, len(reduced)+blockSize*times)
+	result = append(result, reduced[:adjustedDest]...)
+	for i := 0; i < times; i++ {
+		result = append(result, block...)
+	}
+	result = append(result, reduced[adjustedDest:]...)
+
+	firstDestLine := adjustedDest + 1 // 1-based line where first copy lands
+	return result, firstDestLine, nil
+}
+
+// execCopy performs the core copy logic atomically (pure function, no I/O).
+// Returns the result slice and the 1-based line number of the first copy (for verify).
+//
+// Snapshot semantics: the source block is read ONCE before any writes.
+// All N copies are identical clones of the original block even when the
+// destination overlaps the source range.
+//
+// Net line delta = blockSize * times (original lines are preserved).
+func execCopy(lines []string, srcStart, srcEnd, destAfter, times int) ([]string, int, error) {
+	if times < 1 {
+		return nil, 0, fmt.Errorf("-times must be >= 1")
+	}
+	if srcStart < 1 || srcEnd > len(lines) || srcStart > srcEnd {
+		return nil, 0, fmt.Errorf("source range %d-%d invalid (file has %d lines)", srcStart, srcEnd, len(lines))
+	}
+
+	blockSize := srcEnd - srcStart + 1
+	// Snapshot: read before any modifications.
+	block := make([]string, blockSize)
+	copy(block, lines[srcStart-1:srcEnd])
+
+	// Original lines stay; insert N copies at destAfter.
+	result := make([]string, 0, len(lines)+blockSize*times)
+	result = append(result, lines[:destAfter]...)
+	for i := 0; i < times; i++ {
+		result = append(result, block...)
+	}
+	result = append(result, lines[destAfter:]...)
+
+	firstDestLine := destAfter + 1
+	return result, firstDestLine, nil
+}
+
+func printMoveCopyStats(op, path, destDesc string, srcStart, srcEnd, times, linesBefore, linesAfter int, startTime time.Time) {
+	elapsed := time.Since(startTime)
+	var elapsedStr string
+	if elapsed < time.Millisecond {
+		elapsedStr = "<1ms"
+	} else {
+		elapsedStr = elapsed.Round(time.Millisecond).String()
+	}
+	blockSize := srcEnd - srcStart + 1
+	delta := linesAfter - linesBefore
+	fmt.Fprintf(os.Stderr, "\n=== STATS ===\n")
+	fmt.Fprintf(os.Stderr, "  op:      %s\n", op)
+	fmt.Fprintf(os.Stderr, "  file:    %s\n", path)
+	fmt.Fprintf(os.Stderr, "  src:     lines %d-%d (%d lines)\n", srcStart, srcEnd, blockSize)
+	fmt.Fprintf(os.Stderr, "  dest:    %s\n", destDesc)
+	if times > 1 {
+		fmt.Fprintf(os.Stderr, "  times:   %d\n", times)
+	}
+	if delta > 0 {
+		fmt.Fprintf(os.Stderr, "  lines:   +%d (%d -> %d)\n", delta, linesBefore, linesAfter)
+	} else if delta < 0 {
+		fmt.Fprintf(os.Stderr, "  lines:   %d (%d -> %d)\n", delta, linesBefore, linesAfter)
+	} else {
+		fmt.Fprintf(os.Stderr, "  lines:   0 (unchanged, %d total)\n", linesBefore)
+	}
+	fmt.Fprintf(os.Stderr, "  elapsed: %s\n", elapsedStr)
+}
+
+func doMoveOp(lines []string, path string, lineFlag, endFlag int, matchFlag, endmatchFlag string,
+	afterFlag, beforeFlag int, afterMatchFlag, beforeMatchFlag string,
+	nth, times, linesBefore int, startTime time.Time, verify bool) {
+
+	srcStart, srcEnd, err := resolveSourceLines(lines, lineFlag, endFlag, matchFlag, endmatchFlag, nth)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	destAfter, destLine, destDesc, err := resolveDestLine(lines, afterFlag, beforeFlag, afterMatchFlag, beforeMatchFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	result, firstDest, err := execMove(lines, srcStart, srcEnd, destAfter, destLine, times)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := writeLines(path, result); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
+		os.Exit(1)
+	}
+
+	if times == 1 {
+		fmt.Fprintf(os.Stderr, "Moved lines %d-%d %s (%d total now)\n", srcStart, srcEnd, destDesc, len(result))
+	} else {
+		fmt.Fprintf(os.Stderr, "Moved lines %d-%d %s x%d (%d total now)\n", srcStart, srcEnd, destDesc, times, len(result))
+	}
+
+	if verify {
+		showVerify(path, firstDest)
+		printMoveCopyStats("move", path, destDesc, srcStart, srcEnd, times, linesBefore, len(result), startTime)
+	}
+}
+
+func doCopyOp(lines []string, path string, lineFlag, endFlag int, matchFlag, endmatchFlag string,
+	afterFlag, beforeFlag int, afterMatchFlag, beforeMatchFlag string,
+	nth, times, linesBefore int, startTime time.Time, verify bool) {
+
+	srcStart, srcEnd, err := resolveSourceLines(lines, lineFlag, endFlag, matchFlag, endmatchFlag, nth)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	destAfter, _, destDesc, err := resolveDestLine(lines, afterFlag, beforeFlag, afterMatchFlag, beforeMatchFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	result, firstDest, err := execCopy(lines, srcStart, srcEnd, destAfter, times)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := writeLines(path, result); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
+		os.Exit(1)
+	}
+
+	if times == 1 {
+		fmt.Fprintf(os.Stderr, "Copied lines %d-%d %s (%d total now)\n", srcStart, srcEnd, destDesc, len(result))
+	} else {
+		fmt.Fprintf(os.Stderr, "Copied lines %d-%d %s x%d (%d total now)\n", srcStart, srcEnd, destDesc, times, len(result))
+	}
+
+	if verify {
+		showVerify(path, firstDest)
+		printMoveCopyStats("copy", path, destDesc, srcStart, srcEnd, times, linesBefore, len(result), startTime)
+	}
 }
