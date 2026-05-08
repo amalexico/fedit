@@ -748,7 +748,7 @@ func TestMoveIntegration_ContentMatchSource(t *testing.T) {
 
 func TestMcpDoMove_Basic(t *testing.T) {
 	path := writeTestFile(t, testLines(10))
-	res := mcpDoMove(path, 3, 5, "", "", 8, -1, "", "", 1, 1, time.Now())
+	res := mcpDoMove(path, 3, 5, "", "", 8, -1, "", "", "", "", "", "", 1, 1, time.Now())
 	if res.IsError {
 		t.Errorf("unexpected error: %s", res.Content[0].Text)
 	}
@@ -760,7 +760,7 @@ func TestMcpDoMove_Basic(t *testing.T) {
 
 func TestMcpDoMove_OverlapReturnsError(t *testing.T) {
 	path := writeTestFile(t, testLines(10))
-	res := mcpDoMove(path, 3, 7, "", "", -1, -1, "", "", 1, 1, time.Now())
+	res := mcpDoMove(path, 3, 7, "", "", -1, -1, "", "", "", "", "", "", 1, 1, time.Now())
 	// No destination → should return error
 	if !res.IsError {
 		t.Error("expected error for missing destination")
@@ -770,7 +770,7 @@ func TestMcpDoMove_OverlapReturnsError(t *testing.T) {
 func TestMcpDoMove_OverlapDestInsideSrc(t *testing.T) {
 	path := writeTestFile(t, testLines(10))
 	// src=3-7, dest after line 5 (inside src) → overlap error
-	res := mcpDoMove(path, 3, 7, "", "", 5, -1, "", "", 1, 1, time.Now())
+	res := mcpDoMove(path, 3, 7, "", "", 5, -1, "", "", "", "", "", "", 1, 1, time.Now())
 	if !res.IsError {
 		t.Error("expected error: destination inside source range")
 	}
@@ -781,7 +781,7 @@ func TestMcpDoMove_OverlapDestInsideSrc(t *testing.T) {
 
 func TestMcpDoCopy_Basic(t *testing.T) {
 	path := writeTestFile(t, testLines(10))
-	res := mcpDoCopy(path, 3, 5, "", "", 8, -1, "", "", 1, 1, time.Now())
+	res := mcpDoCopy(path, 3, 5, "", "", 8, -1, "", "", "", "", "", "", 1, 1, time.Now())
 	if res.IsError {
 		t.Errorf("unexpected error: %s", res.Content[0].Text)
 	}
@@ -794,7 +794,7 @@ func TestMcpDoCopy_Basic(t *testing.T) {
 
 func TestMcpDoCopy_TimesN(t *testing.T) {
 	path := writeTestFile(t, testLines(10))
-	res := mcpDoCopy(path, 2, 4, "", "", 9, -1, "", "", 1, 3, time.Now())
+	res := mcpDoCopy(path, 2, 4, "", "", 9, -1, "", "", "", "", "", "", 1, 3, time.Now())
 	if res.IsError {
 		t.Errorf("unexpected error: %s", res.Content[0].Text)
 	}
@@ -808,7 +808,7 @@ func TestMcpDoCopy_TimesN(t *testing.T) {
 func TestMcpDoCopy_OverlapAllowed(t *testing.T) {
 	path := writeTestFile(t, testLines(10))
 	// src=3-7, dest after line 5 (inside src) → must succeed for copy
-	res := mcpDoCopy(path, 3, 7, "", "", 5, -1, "", "", 1, 1, time.Now())
+	res := mcpDoCopy(path, 3, 7, "", "", 5, -1, "", "", "", "", "", "", 1, 1, time.Now())
 	if res.IsError {
 		t.Errorf("copy with overlap should succeed: %s", res.Content[0].Text)
 	}
@@ -818,7 +818,7 @@ func TestMcpDoMove_ContentMatchSource(t *testing.T) {
 	lines := []string{"AAA", "BBB", "CCC", "DDD", "EEE"}
 	path := writeTestFile(t, lines)
 	// Move "BBB" line (via match, end=3) to after "EEE" (after line 5)
-	res := mcpDoMove(path, 0, 0, "BBB", "", 5, -1, "", "", 1, 1, time.Now())
+	res := mcpDoMove(path, 0, 0, "BBB", "", 5, -1, "", "", "", "", "", "", 1, 1, time.Now())
 	if res.IsError {
 		// endmatch missing → should fail with source error (acceptable)
 		if !strings.Contains(res.Content[0].Text, "end bound") {
@@ -831,7 +831,7 @@ func TestMcpDoCopy_BeforeMatch(t *testing.T) {
 	lines := []string{"func A", "body A", "func B", "body B"}
 	path := writeTestFile(t, lines)
 	// Copy lines 1-2 to before "func B"
-	res := mcpDoCopy(path, 1, 2, "", "", -1, -1, "", "func B", 1, 1, time.Now())
+	res := mcpDoCopy(path, 1, 2, "", "", -1, -1, "", "func B", "", "", "", "", 1, 1, time.Now())
 	if res.IsError {
 		t.Errorf("unexpected error: %s", res.Content[0].Text)
 	}
@@ -899,5 +899,392 @@ func TestExecMove_BeforeMatchDestDesc(t *testing.T) {
 	}
 	if !strings.Contains(desc, "before line 3") {
 		t.Errorf("desc = %q, want 'before line 3'", desc)
+	}
+}
+
+// ══════════════════════════════════════════════════════════════
+// v1.2.1 — block resolution tests
+// ══════════════════════════════════════════════════════════════
+
+// ── getPythonBlocks ───────────────────────────────────────────
+
+func TestGetPythonBlocks_Basic(t *testing.T) {
+	src := []string{
+		"class Foo:",
+		"    def method(self):",
+		"        pass",
+		"",
+		"class Bar:",
+		"    pass",
+		"",
+		"def top_func():",
+		"    return 1",
+	}
+	entries := getPythonBlocks(src)
+	if len(entries) != 3 {
+		t.Fatalf("expected 3 entries, got %d: %v", len(entries), entries)
+	}
+	if entries[0].name != "class Foo" || entries[0].start != 1 {
+		t.Errorf("entry 0 = %+v", entries[0])
+	}
+	if entries[1].name != "class Bar" || entries[1].start != 5 {
+		t.Errorf("entry 1 = %+v", entries[1])
+	}
+	if entries[2].name != "def top_func" || entries[2].start != 8 {
+		t.Errorf("entry 2 = %+v", entries[2])
+	}
+	// Foo ends before Bar starts
+	if entries[0].end != 3 {
+		t.Errorf("Foo end = %d, want 3 (last non-blank line before Bar)", entries[0].end)
+	}
+}
+
+func TestGetPythonBlocks_IgnoresNested(t *testing.T) {
+	src := []string{
+		"class Outer:",
+		"    class Inner:",
+		"        pass",
+		"    pass",
+	}
+	entries := getPythonBlocks(src)
+	// Only Outer is top-level
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 top-level entry, got %d", len(entries))
+	}
+	if entries[0].key != "Outer" {
+		t.Errorf("expected Outer, got %q", entries[0].key)
+	}
+}
+
+func TestGetPythonBlocks_EndOfFile(t *testing.T) {
+	src := []string{
+		"class A:",
+		"    pass",
+	}
+	entries := getPythonBlocks(src)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].end != 2 {
+		t.Errorf("end = %d, want 2", entries[0].end)
+	}
+}
+
+func TestGetPythonBlocks_Empty(t *testing.T) {
+	entries := getPythonBlocks([]string{})
+	if len(entries) != 0 {
+		t.Errorf("expected 0 entries for empty input")
+	}
+}
+
+// ── getGoBlocks ───────────────────────────────────────────────
+
+func TestGetGoBlocks_Basic(t *testing.T) {
+	src := []string{
+		"package main",
+		"",
+		"func Alpha() {",
+		"    return",
+		"}",
+		"",
+		"func Beta(x int) string {",
+		"    return \"\"",
+		"}",
+	}
+	entries := getGoBlocks(src)
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d: %v", len(entries), entries)
+	}
+	if entries[0].key != "Alpha" || entries[0].start != 3 || entries[0].end != 5 {
+		t.Errorf("Alpha = %+v", entries[0])
+	}
+	if entries[1].key != "Beta" || entries[1].start != 7 || entries[1].end != 9 {
+		t.Errorf("Beta = %+v", entries[1])
+	}
+}
+
+func TestGetGoBlocks_NestedBraces(t *testing.T) {
+	src := []string{
+		"func Complex() {",
+		"    if true {",
+		"        for i := 0; i < 10; i++ {",
+		"        }",
+		"    }",
+		"}",
+		"func Simple() {}",
+	}
+	entries := getGoBlocks(src)
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
+	}
+	if entries[0].end != 6 {
+		t.Errorf("Complex end = %d, want 6", entries[0].end)
+	}
+	if entries[1].end != 7 {
+		t.Errorf("Simple end = %d, want 7", entries[1].end)
+	}
+}
+
+func TestGetGoBlocks_TypeDecl(t *testing.T) {
+	src := []string{
+		"type Foo struct {",
+		"    X int",
+		"}",
+	}
+	entries := getGoBlocks(src)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].key != "Foo" || entries[0].start != 1 || entries[0].end != 3 {
+		t.Errorf("Foo = %+v", entries[0])
+	}
+}
+
+// ── getJSBlocks ───────────────────────────────────────────────
+
+func TestGetJSBlocks_ClassAndFunction(t *testing.T) {
+	src := []string{
+		"class Renderer {",
+		"    render() {}",
+		"}",
+		"",
+		"function process(data) {",
+		"    return data;",
+		"}",
+	}
+	entries := getJSBlocks(src)
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
+	}
+	if entries[0].key != "Renderer" || entries[0].end != 3 {
+		t.Errorf("Renderer = %+v", entries[0])
+	}
+	if entries[1].key != "process" || entries[1].end != 7 {
+		t.Errorf("process = %+v", entries[1])
+	}
+}
+
+// ── resolveBlock ──────────────────────────────────────────────
+
+func TestResolveBlock_ExactMatch(t *testing.T) {
+	src := []string{
+		"class Alpha:",
+		"    pass",
+		"",
+		"class Beta:",
+		"    pass",
+	}
+	s, e, err := resolveBlock(src, "python", "Alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s != 1 || e != 2 {
+		t.Errorf("Alpha: start=%d end=%d, want 1-2", s, e)
+	}
+}
+
+func TestResolveBlock_FullNameMatch(t *testing.T) {
+	src := []string{
+		"class Alpha:",
+		"    pass",
+	}
+	s, e, err := resolveBlock(src, "python", "class Alpha")
+	if err != nil || s != 1 || e != 2 {
+		t.Errorf("full name match: s=%d e=%d err=%v", s, e, err)
+	}
+}
+
+func TestResolveBlock_NoMatch(t *testing.T) {
+	src := []string{"class Alpha:", "    pass"}
+	_, _, err := resolveBlock(src, "python", "Nonexistent")
+	if err == nil {
+		t.Error("expected error: no match")
+	}
+	if !strings.Contains(err.Error(), "no match found") {
+		t.Errorf("error = %q, want 'no match found'", err.Error())
+	}
+}
+
+func TestResolveBlock_MultipleMatchError(t *testing.T) {
+	src := []string{
+		"class ProcessorA:",
+		"    pass",
+		"class ProcessorB:",
+		"    pass",
+	}
+	_, _, err := resolveBlock(src, "python", "Processor")
+	if err == nil {
+		t.Error("expected error: multiple matches")
+	}
+	if !strings.Contains(err.Error(), "matched 2 blocks") {
+		t.Errorf("error = %q, want 'matched 2 blocks'", err.Error())
+	}
+}
+
+func TestResolveBlock_ErrorListsMatches(t *testing.T) {
+	src := []string{
+		"class FooA:",
+		"    pass",
+		"class FooB:",
+		"    pass",
+		"class FooC:",
+		"    pass",
+	}
+	_, _, err := resolveBlock(src, "python", "Foo")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	// Error should list all three matches
+	if !strings.Contains(err.Error(), "FooA") || !strings.Contains(err.Error(), "FooB") || !strings.Contains(err.Error(), "FooC") {
+		t.Errorf("error missing match details: %v", err)
+	}
+}
+
+func TestResolveBlock_NoLangError(t *testing.T) {
+	_, _, err := resolveBlock(testLines(5), "", "something")
+	if err == nil || !strings.Contains(err.Error(), "-lang") {
+		t.Errorf("expected -lang error, got: %v", err)
+	}
+}
+
+func TestResolveBlock_UnsupportedLang(t *testing.T) {
+	_, _, err := resolveBlock(testLines(5), "cobol", "SECTION")
+	if err == nil {
+		t.Error("expected unsupported lang error")
+	}
+}
+
+// ── integration: move with -block ─────────────────────────────
+
+func TestBlockMove_PythonClassReorder(t *testing.T) {
+	// Simulate: move class B before class A
+	src := []string{
+		"class A:",
+		"    x = 1",
+		"",
+		"class B:",
+		"    y = 2",
+	}
+	// resolveBlock for source "B" → lines 4-5
+	srcStart, srcEnd, err := resolveBlock(src, "python", "B")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if srcStart != 4 || srcEnd != 5 {
+		t.Errorf("B: start=%d end=%d, want 4-5", srcStart, srcEnd)
+	}
+	// resolveBlock for dest "A" → start=1 (beforeblock)
+	destStart, _, err := resolveBlock(src, "python", "A")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// -beforeblock "A" → before line 1 → destAfter=0, destLine=1
+	destAfter := destStart - 1
+	destLine := destStart
+
+	result, _, err := execMove(src, srcStart, srcEnd, destAfter, destLine, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Expected: [class B, y=2, class A, x=1, blank]
+	if result[0] != "class B:" {
+		t.Errorf("result[0] = %q, want 'class B:'", result[0])
+	}
+	if result[2] != "class A:" {
+		t.Errorf("result[2] = %q, want 'class A:'", result[2])
+	}
+}
+
+func TestBlockCopy_GoFuncDuplicate(t *testing.T) {
+	src := []string{
+		"func Alpha() {",
+		"    return",
+		"}",
+		"",
+		"func Beta() {",
+		"    return",
+		"}",
+	}
+	// Copy Alpha (lines 1-3) to after Beta (line 7)
+	srcStart, srcEnd, err := resolveBlock(src, "go", "Alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, destEnd, err := resolveBlock(src, "go", "Beta")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _, err := execCopy(src, srcStart, srcEnd, destEnd, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) != 10 {
+		t.Errorf("expected 10 lines, got %d", len(result))
+	}
+	// Copy of Alpha should appear after Beta's closing brace
+	if result[7] != "func Alpha() {" {
+		t.Errorf("result[7] = %q, want 'func Alpha() {'", result[7])
+	}
+}
+
+func TestBlockMove_OverlapRejected(t *testing.T) {
+	// Attempt to move a block to a destination inside itself → overlap error
+	src := []string{
+		"class Alpha:",
+		"    x = 1",
+		"    y = 2",
+	}
+	srcStart, srcEnd, err := resolveBlock(src, "python", "Alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Try to move to inside the block itself
+	_, _, err = execMove(src, srcStart, srcEnd, srcStart, srcStart, 1)
+	if err == nil {
+		t.Error("expected overlap error")
+	}
+}
+
+func TestBlockCopy_OverlapAllowed(t *testing.T) {
+	src := []string{
+		"class Alpha:",
+		"    x = 1",
+		"",
+		"class Beta:",
+		"    y = 2",
+	}
+	// Copy Alpha into itself (overlap) → snapshot semantics, allowed
+	srcStart, srcEnd, err := resolveBlock(src, "python", "Alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// dest = after line 1 (inside Alpha) — allowed for copy
+	result, _, err := execCopy(src, srcStart, srcEnd, 1, 1)
+	if err != nil {
+		t.Errorf("copy with block overlap should be allowed: %v", err)
+		return
+	}
+	// Line count: original 5 + 2 (Alpha block) = 7
+	if len(result) != 7 {
+		t.Errorf("expected 7 lines, got %d", len(result))
+	}
+}
+
+// ── getTopLevelBlocks router ──────────────────────────────────
+
+func TestGetTopLevelBlocks_Router(t *testing.T) {
+	src := []string{"class A:", "    pass"}
+	for _, lang := range []string{"python", "go", "javascript", "typescript", "rust", "java", "c#", "ruby", "php"} {
+		_, err := getTopLevelBlocks(src, lang)
+		if err != nil {
+			t.Errorf("lang %q returned unexpected error: %v", lang, err)
+		}
+	}
+}
+
+func TestGetTopLevelBlocks_UnsupportedLang(t *testing.T) {
+	_, err := getTopLevelBlocks(testLines(3), "brainfuck")
+	if err == nil {
+		t.Error("expected error for unsupported lang")
 	}
 }

@@ -138,9 +138,9 @@ func mcpToolDefs() []mcpToolDef {
 		{Name: "fedit_find", Description: "Find all lines matching a substring.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Substring to search for"},"nth":{"type":"integer","description":"Which occurrence (default 1, -1 for last)"}},"required":["file","match"]}`)},
 		{Name: "fedit_insertafter", Description: "Insert content after a line matching a substring.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Substring to match"},"text":{"type":"string","description":"Content to insert (use \\n for newlines)"},"nth":{"type":"integer","description":"Which occurrence (default 1, -1 for last)"}},"required":["file","match","text"]}`)},
 		{Name: "fedit_insertbefore", Description: "Insert content before a line matching a substring.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Substring to match"},"text":{"type":"string","description":"Content to insert (use \\n for newlines)"},"nth":{"type":"integer","description":"Which occurrence (default 1, -1 for last)"}},"required":["file","match","text"]}`)},
-		{Name: "fedit_move", Description: "Move a line range to a new position in the same file. Atomic. Overlap (destination inside source) is rejected. -times N: cut once, paste N times.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer","description":"Source start line (1-based)"},"end":{"type":"integer","description":"Source end line (inclusive)"},"match":{"type":"string","description":"Source start: first line containing this text"},"endmatch":{"type":"string","description":"Source end: first line at/after start containing this text"},"after":{"type":"integer","description":"Destination: insert after line N (0=beginning)"},"before":{"type":"integer","description":"Destination: insert before line N"},"aftermatch":{"type":"string","description":"Destination: insert after first matching line"},"beforematch":{"type":"string","description":"Destination: insert before first matching line"},"times":{"type":"integer","description":"Paste N times (default 1, min 1)"},"nth":{"type":"integer","description":"Which source match occurrence (default 1, -1=last)"}},"required":["file"]}`)},
-		{Name: "fedit_copy", Description: "Copy a line range to a new position in the same file. Atomic. Snapshot semantics: all N copies are clones of the original block even when destination overlaps source.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer","description":"Source start line (1-based)"},"end":{"type":"integer","description":"Source end line (inclusive)"},"match":{"type":"string","description":"Source start: first line containing this text"},"endmatch":{"type":"string","description":"Source end: first line at/after start containing this text"},"after":{"type":"integer","description":"Destination: insert after line N (0=beginning)"},"before":{"type":"integer","description":"Destination: insert before line N"},"aftermatch":{"type":"string","description":"Destination: insert after first matching line"},"beforematch":{"type":"string","description":"Destination: insert before first matching line"},"times":{"type":"integer","description":"Copy N times (default 1, min 1)"},"nth":{"type":"integer","description":"Which source match occurrence (default 1, -1=last)"}},"required":["file"]}`)},
-		}
+		{Name: "fedit_move", Description: "Move a line range to a new position. Atomic. Overlap (dest inside src) rejected. -times N: cut once, paste N times. Use -block/-beforeblock/-afterblock with -lang for mapper-aware moves.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer"},"end":{"type":"integer"},"match":{"type":"string"},"endmatch":{"type":"string"},"after":{"type":"integer","description":"Destination after line N (0=beginning)"},"before":{"type":"integer"},"aftermatch":{"type":"string"},"beforematch":{"type":"string"},"block":{"type":"string","description":"Source block name (requires lang)"},"beforeblock":{"type":"string","description":"Dest: before named block (requires lang)"},"afterblock":{"type":"string","description":"Dest: after named block (requires lang)"},"lang":{"type":"string"},"times":{"type":"integer"},"nth":{"type":"integer"}},"required":["file"]}`)},
+		{Name: "fedit_copy", Description: "Copy a line range to a new position. Atomic. Snapshot semantics: all N copies identical even with overlap. Supports -block/-beforeblock/-afterblock with -lang.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer"},"end":{"type":"integer"},"match":{"type":"string"},"endmatch":{"type":"string"},"after":{"type":"integer","description":"Destination after line N (0=beginning)"},"before":{"type":"integer"},"aftermatch":{"type":"string"},"beforematch":{"type":"string"},"block":{"type":"string","description":"Source block name (requires lang)"},"beforeblock":{"type":"string","description":"Dest: before named block (requires lang)"},"afterblock":{"type":"string","description":"Dest: after named block (requires lang)"},"lang":{"type":"string"},"times":{"type":"integer"},"nth":{"type":"integer"}},"required":["file"]}`)},
+	}
 }
 
 func mcpExecTool(name string, args map[string]any) mcpCallResult {
@@ -194,10 +194,12 @@ func mcpExecTool(name string, args map[string]any) mcpCallResult {
 	case "fedit_move":
 		return mcpDoMove(file, getInt("line", 0), getInt("end", 0), getStr("match"), getStr("endmatch"),
 			getInt("after", -1), getInt("before", -1), getStr("aftermatch"), getStr("beforematch"),
+			getStr("block"), getStr("beforeblock"), getStr("afterblock"), getStr("lang"),
 			getInt("nth", 1), getInt("times", 1), start)
 	case "fedit_copy":
 		return mcpDoCopy(file, getInt("line", 0), getInt("end", 0), getStr("match"), getStr("endmatch"),
 			getInt("after", -1), getInt("before", -1), getStr("aftermatch"), getStr("beforematch"),
+			getStr("block"), getStr("beforeblock"), getStr("afterblock"), getStr("lang"),
 			getInt("nth", 1), getInt("times", 1), start)
 		default:
 		return mcpErrorResult(fmt.Sprintf("unknown tool: %s", name))
@@ -513,17 +515,45 @@ func mcpDoInsertMatch(file, match string, nth int, text string, before bool, sta
 
 func mcpDoMove(file string, lineFlag, endFlag int, matchFlag, endmatchFlag string,
 	afterFlag, beforeFlag int, afterMatchFlag, beforeMatchFlag string,
+	blockFlag, beforeBlockFlag, afterBlockFlag, lang string,
 	nth, times int, start time.Time) mcpCallResult {
 
 	lines, err := readLines(file)
 	if err != nil {
 		return mcpErrorResult(fmt.Sprintf("Error reading file: %v", err))
 	}
-	srcStart, srcEnd, err := resolveSourceLines(lines, lineFlag, endFlag, matchFlag, endmatchFlag, nth)
+	srcL, srcE := lineFlag, endFlag
+	srcM, srcEM := matchFlag, endmatchFlag
+	dstA, dstB := afterFlag, beforeFlag
+	dstAM, dstBM := afterMatchFlag, beforeMatchFlag
+
+	if blockFlag != "" {
+		s, e, bErr := resolveBlock(lines, lang, blockFlag)
+		if bErr != nil {
+			return mcpErrorResult(fmt.Sprintf("Source error: %v", bErr))
+		}
+		srcL, srcE, srcM, srcEM = s, e, "", ""
+	}
+	if beforeBlockFlag != "" {
+		bs, _, bErr := resolveBlock(lines, lang, beforeBlockFlag)
+		if bErr != nil {
+			return mcpErrorResult(fmt.Sprintf("Destination error: %v", bErr))
+		}
+		dstB, dstA, dstAM, dstBM = bs, -1, "", ""
+	}
+	if afterBlockFlag != "" {
+		_, be, bErr := resolveBlock(lines, lang, afterBlockFlag)
+		if bErr != nil {
+			return mcpErrorResult(fmt.Sprintf("Destination error: %v", bErr))
+		}
+		dstA, dstB, dstAM, dstBM = be, -1, "", ""
+	}
+
+	srcStart, srcEnd, err := resolveSourceLines(lines, srcL, srcE, srcM, srcEM, nth)
 	if err != nil {
 		return mcpErrorResult(fmt.Sprintf("Source error: %v", err))
 	}
-	destAfter, destLine, destDesc, err := resolveDestLine(lines, afterFlag, beforeFlag, afterMatchFlag, beforeMatchFlag)
+	destAfter, destLine, destDesc, err := resolveDestLine(lines, dstA, dstB, dstAM, dstBM)
 	if err != nil {
 		return mcpErrorResult(fmt.Sprintf("Destination error: %v", err))
 	}
@@ -548,17 +578,45 @@ func mcpDoMove(file string, lineFlag, endFlag int, matchFlag, endmatchFlag strin
 
 func mcpDoCopy(file string, lineFlag, endFlag int, matchFlag, endmatchFlag string,
 	afterFlag, beforeFlag int, afterMatchFlag, beforeMatchFlag string,
+	blockFlag, beforeBlockFlag, afterBlockFlag, lang string,
 	nth, times int, start time.Time) mcpCallResult {
 
 	lines, err := readLines(file)
 	if err != nil {
 		return mcpErrorResult(fmt.Sprintf("Error reading file: %v", err))
 	}
-	srcStart, srcEnd, err := resolveSourceLines(lines, lineFlag, endFlag, matchFlag, endmatchFlag, nth)
+	srcL, srcE := lineFlag, endFlag
+	srcM, srcEM := matchFlag, endmatchFlag
+	dstA, dstB := afterFlag, beforeFlag
+	dstAM, dstBM := afterMatchFlag, beforeMatchFlag
+
+	if blockFlag != "" {
+		s, e, bErr := resolveBlock(lines, lang, blockFlag)
+		if bErr != nil {
+			return mcpErrorResult(fmt.Sprintf("Source error: %v", bErr))
+		}
+		srcL, srcE, srcM, srcEM = s, e, "", ""
+	}
+	if beforeBlockFlag != "" {
+		bs, _, bErr := resolveBlock(lines, lang, beforeBlockFlag)
+		if bErr != nil {
+			return mcpErrorResult(fmt.Sprintf("Destination error: %v", bErr))
+		}
+		dstB, dstA, dstAM, dstBM = bs, -1, "", ""
+	}
+	if afterBlockFlag != "" {
+		_, be, bErr := resolveBlock(lines, lang, afterBlockFlag)
+		if bErr != nil {
+			return mcpErrorResult(fmt.Sprintf("Destination error: %v", bErr))
+		}
+		dstA, dstB, dstAM, dstBM = be, -1, "", ""
+	}
+
+	srcStart, srcEnd, err := resolveSourceLines(lines, srcL, srcE, srcM, srcEM, nth)
 	if err != nil {
 		return mcpErrorResult(fmt.Sprintf("Source error: %v", err))
 	}
-	destAfter, _, destDesc, err := resolveDestLine(lines, afterFlag, beforeFlag, afterMatchFlag, beforeMatchFlag)
+	destAfter, _, destDesc, err := resolveDestLine(lines, dstA, dstB, dstAM, dstBM)
 	if err != nil {
 		return mcpErrorResult(fmt.Sprintf("Destination error: %v", err))
 	}

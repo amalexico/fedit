@@ -18,7 +18,7 @@ func main() {
 	}
 
 	file := flag.String("file", "", "Path to the file")
-	op := flag.String("op", "", "Operation: insert, delete, replace, replaceall, show, write, map, find, insertafter, insertbefore, move, copy")
+	op := flag.String("op", "", "Operation: insert, delete, replace, replaceall, show, write, map, find, insertafter, insertbefore, move, copy (move/copy support -block/-beforeblock/-afterblock with -lang)")
 	line := flag.Int("line", 0, "Line number (1-based)")
 	endLine := flag.Int("end", 0, "End line for delete/replace range (inclusive)")
 	text := flag.String("text", "", "Text to insert/replace (use \\n for newlines, \\t for tabs)")
@@ -33,6 +33,9 @@ func main() {
 	aftermatch  := flag.String("aftermatch", "", "Destination: insert after first line matching TEXT")
 	beforematch := flag.String("beforematch", "", "Destination: insert before first line matching TEXT")
 	times       := flag.Int("times", 1, "Repeat N times (default 1, min 1; for move: cut once, paste N times)")
+	block       := flag.String("block", "", "Source: auto-derive range from named block (requires -lang)")
+	beforeblock := flag.String("beforeblock", "", "Destination: insert before named block (requires -lang)")
+	afterblock  := flag.String("afterblock", "", "Destination: insert after named block (requires -lang)")
 		flag.Parse()
 
 	if *file == "" || *op == "" {
@@ -126,9 +129,65 @@ func main() {
 		}
 		doReplaceAll(lines, *file, *match, replacement)
 	case "move":
-		doMoveOp(lines, *file, *line, *endLine, *match, *endmatch, *after, *before, *aftermatch, *beforematch, *nth, *times, linesBefore, startTime, *v)
+		srcL, srcE := *line, *endLine
+		srcM, srcEM := *match, *endmatch
+		dstA, dstB := *after, *before
+		dstAM, dstBM := *aftermatch, *beforematch
+		if *block != "" {
+			s, e, bErr := resolveBlock(lines, *lang, *block)
+			if bErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
+				os.Exit(1)
+			}
+			srcL, srcE, srcM, srcEM = s, e, "", ""
+		}
+		if *beforeblock != "" {
+			bs, _, bErr := resolveBlock(lines, *lang, *beforeblock)
+			if bErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
+				os.Exit(1)
+			}
+			dstB, dstA, dstAM, dstBM = bs, -1, "", ""
+		}
+		if *afterblock != "" {
+			_, be, bErr := resolveBlock(lines, *lang, *afterblock)
+			if bErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
+				os.Exit(1)
+			}
+			dstA, dstB, dstAM, dstBM = be, -1, "", ""
+		}
+		doMoveOp(lines, *file, srcL, srcE, srcM, srcEM, dstA, dstB, dstAM, dstBM, *nth, *times, linesBefore, startTime, *v)
 	case "copy":
-		doCopyOp(lines, *file, *line, *endLine, *match, *endmatch, *after, *before, *aftermatch, *beforematch, *nth, *times, linesBefore, startTime, *v)
+		srcL, srcE := *line, *endLine
+		srcM, srcEM := *match, *endmatch
+		dstA, dstB := *after, *before
+		dstAM, dstBM := *aftermatch, *beforematch
+		if *block != "" {
+			s, e, bErr := resolveBlock(lines, *lang, *block)
+			if bErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
+				os.Exit(1)
+			}
+			srcL, srcE, srcM, srcEM = s, e, "", ""
+		}
+		if *beforeblock != "" {
+			bs, _, bErr := resolveBlock(lines, *lang, *beforeblock)
+			if bErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
+				os.Exit(1)
+			}
+			dstB, dstA, dstAM, dstBM = bs, -1, "", ""
+		}
+		if *afterblock != "" {
+			_, be, bErr := resolveBlock(lines, *lang, *afterblock)
+			if bErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
+				os.Exit(1)
+			}
+			dstA, dstB, dstAM, dstBM = be, -1, "", ""
+		}
+		doCopyOp(lines, *file, srcL, srcE, srcM, srcEM, dstA, dstB, dstAM, dstBM, *nth, *times, linesBefore, startTime, *v)
 		default:
 		fmt.Fprintf(os.Stderr, "Unknown operation: %s\n", *op)
 		os.Exit(1)
@@ -1930,4 +1989,345 @@ func doCopyOp(lines []string, path string, lineFlag, endFlag int, matchFlag, end
 		showVerify(path, firstDest)
 		printMoveCopyStats("copy", path, destDesc, srcStart, srcEnd, times, linesBefore, len(result), startTime)
 	}
+}
+
+// ════════════════════════════════════════════════════════════
+// BLOCK RESOLUTION — mapper-aware source/dest for -block (v1.2.1)
+// ════════════════════════════════════════════════════════════
+
+// blockEntry represents one top-level structural element found by a language scanner.
+type blockEntry struct {
+	name  string // full display name, e.g. "class Foo" or "func Bar"
+	key   string // identifier only, e.g. "Foo" or "Bar"
+	start int    // 1-based start line
+	end   int    // 1-based end line (inclusive)
+}
+
+// resolveBlock finds a named top-level block and returns its (start, end) line range.
+// Error when: lang unsupported, no match, or multiple matches (ambiguous).
+func resolveBlock(lines []string, lang, name string) (start, end int, err error) {
+	if lang == "" {
+		return 0, 0, fmt.Errorf("-block requires -lang")
+	}
+	entries, err := getTopLevelBlocks(lines, lang)
+	if err != nil {
+		return 0, 0, err
+	}
+	var matches []blockEntry
+	for _, e := range entries {
+		if strings.Contains(e.name, name) || strings.Contains(e.key, name) {
+			matches = append(matches, e)
+		}
+	}
+	if len(matches) == 0 {
+		return 0, 0, fmt.Errorf("-block %q: no match found in %s structure (%d top-level blocks scanned)",
+			name, lang, len(entries))
+	}
+	if len(matches) > 1 {
+		lines2 := make([]string, len(matches))
+		for i, m := range matches {
+			lines2[i] = fmt.Sprintf("  line %d: %s", m.start, m.name)
+		}
+		return 0, 0, fmt.Errorf("-block %q matched %d blocks — use a more specific name:\n%s",
+			name, len(matches), strings.Join(lines2, "\n"))
+	}
+	return matches[0].start, matches[0].end, nil
+}
+
+// getTopLevelBlocks routes to the correct language scanner.
+func getTopLevelBlocks(lines []string, lang string) ([]blockEntry, error) {
+	switch strings.ToLower(lang) {
+	case "go":
+		return getGoBlocks(lines), nil
+	case "python":
+		return getPythonBlocks(lines), nil
+	case "javascript", "typescript":
+		return getJSBlocks(lines), nil
+	case "rust":
+		return getRustBlocks(lines), nil
+	case "java":
+		return getJavaBlocks(lines), nil
+	case "c#", "csharp":
+		return getCSharpBlocks(lines), nil
+	case "ruby":
+		return getRubyBlocks(lines), nil
+	case "php":
+		return getPHPBlocks(lines), nil
+	default:
+		return nil, fmt.Errorf("language %q does not yet support -block (use -match/-endmatch instead; block support for this language is planned for v1.3.0)", lang)
+	}
+}
+
+// ── Go ────────────────────────────────────────────────────────────────────────
+
+func getGoBlocks(lines []string) []blockEntry {
+	reFn := regexp.MustCompile(`^func\s+(\(.*?\)\s*)?(\w+)\s*[\(\[]`)
+	reType := regexp.MustCompile(`^type\s+(\w+)\s+`)
+	reVar := regexp.MustCompile(`^(?:var|const)\s+(\w+)\b`)
+
+	var entries []blockEntry
+	inBlock := false
+	depth := 0
+	curName, curKey := "", ""
+	curStart := 0
+
+	for i, line := range lines {
+		ln := i + 1
+		t := strings.TrimSpace(line)
+		if strings.HasPrefix(t, "//") {
+			continue
+		}
+
+		if !inBlock {
+			if m := reFn.FindStringSubmatch(line); m != nil {
+				recv := strings.TrimSpace(m[1])
+				name := m[2]
+				if recv != "" {
+					curName = "func (" + recv + ") " + name
+				} else {
+					curName = "func " + name
+				}
+				curKey = name
+				curStart = ln
+				inBlock = true
+				depth = 0
+			} else if m := reType.FindStringSubmatch(line); m != nil {
+				curKey = m[1]
+				curName = "type " + m[1]
+				curStart = ln
+				inBlock = true
+				depth = 0
+			} else if m := reVar.FindStringSubmatch(line); m != nil {
+				curKey = m[1]
+				curName = "var " + m[1]
+				curStart = ln
+				inBlock = true
+				depth = 0
+			}
+		}
+
+		if inBlock {
+			depth += strings.Count(t, "{") - strings.Count(t, "}")
+			if depth <= 0 && ln > curStart {
+				entries = append(entries, blockEntry{curName, curKey, curStart, ln})
+				inBlock = false
+				curName, curKey = "", ""
+			}
+		}
+	}
+	if inBlock && curStart > 0 {
+		entries = append(entries, blockEntry{curName, curKey, curStart, len(lines)})
+	}
+	return entries
+}
+
+// ── Python ────────────────────────────────────────────────────────────────────
+
+func getPythonBlocks(lines []string) []blockEntry {
+	reClass := regexp.MustCompile(`^class\s+(\w+)`)
+	reDef := regexp.MustCompile(`^def\s+(\w+)\s*\(`)
+
+	type start struct {
+		name, key string
+		line      int
+	}
+	var starts []start
+
+	for i, line := range lines {
+		// Top-level = first char is not whitespace (and not blank/comment/decorator)
+		if len(line) == 0 || line[0] == ' ' || line[0] == '\t' || line[0] == '#' || line[0] == '@' {
+			continue
+		}
+		t := strings.TrimSpace(line)
+		if m := reClass.FindStringSubmatch(t); m != nil {
+			starts = append(starts, start{"class " + m[1], m[1], i + 1})
+		} else if m := reDef.FindStringSubmatch(t); m != nil {
+			starts = append(starts, start{"def " + m[1], m[1], i + 1})
+		}
+	}
+
+	entries := make([]blockEntry, len(starts))
+	for i, s := range starts {
+		endLine := len(lines)
+		if i+1 < len(starts) {
+			// Find the last non-blank line before the next block's decorator or definition
+			endLine = starts[i+1].line - 1
+			for endLine > s.line && strings.TrimSpace(lines[endLine-1]) == "" {
+				endLine--
+			}
+		}
+		entries[i] = blockEntry{s.name, s.key, s.line, endLine}
+	}
+	return entries
+}
+
+// ── JavaScript / TypeScript ───────────────────────────────────────────────────
+
+func getJSBlocks(lines []string) []blockEntry {
+	reClass := regexp.MustCompile(`^(?:export\s+(?:default\s+)?)?class\s+(\w+)`)
+	reFunc := regexp.MustCompile(`^(?:export\s+)?(?:async\s+)?function\s+(\w+)`)
+	reArrow := regexp.MustCompile(`^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\(`)
+
+	return braceTrackedBlocks(lines, func(line string) (name, key string, ok bool) {
+		t := strings.TrimSpace(line)
+		if m := reClass.FindStringSubmatch(t); m != nil {
+			return "class " + m[1], m[1], true
+		}
+		if m := reFunc.FindStringSubmatch(t); m != nil {
+			return "function " + m[1], m[1], true
+		}
+		if m := reArrow.FindStringSubmatch(t); m != nil {
+			return "const " + m[1], m[1], true
+		}
+		return "", "", false
+	})
+}
+
+// ── Rust ──────────────────────────────────────────────────────────────────────
+
+func getRustBlocks(lines []string) []blockEntry {
+	re := regexp.MustCompile(`^(?:pub\s+)?(?:async\s+)?(?:fn|struct|enum|trait|impl|mod)\s+(\w+)`)
+	return braceTrackedBlocks(lines, func(line string) (name, key string, ok bool) {
+		t := strings.TrimSpace(line)
+		if m := re.FindStringSubmatch(t); m != nil {
+			keyword := strings.Fields(t)[0]
+			if keyword == "pub" || keyword == "async" {
+				keyword = strings.Fields(t)[1]
+			}
+			return keyword + " " + m[1], m[1], true
+		}
+		return "", "", false
+	})
+}
+
+// ── Java ──────────────────────────────────────────────────────────────────────
+
+func getJavaBlocks(lines []string) []blockEntry {
+	re := regexp.MustCompile(`^(?:public\s+|private\s+|protected\s+|static\s+|abstract\s+|final\s+)*(?:class|interface|enum|record)\s+(\w+)`)
+	return braceTrackedBlocks(lines, func(line string) (name, key string, ok bool) {
+		t := strings.TrimSpace(line)
+		if m := re.FindStringSubmatch(t); m != nil {
+			return "class " + m[1], m[1], true
+		}
+		return "", "", false
+	})
+}
+
+// ── C# ────────────────────────────────────────────────────────────────────────
+
+func getCSharpBlocks(lines []string) []blockEntry {
+	re := regexp.MustCompile(`^(?:public\s+|private\s+|protected\s+|internal\s+|static\s+|abstract\s+|sealed\s+|partial\s+)*(?:class|interface|struct|enum|record)\s+(\w+)`)
+	return braceTrackedBlocks(lines, func(line string) (name, key string, ok bool) {
+		t := strings.TrimSpace(line)
+		if m := re.FindStringSubmatch(t); m != nil {
+			return "class " + m[1], m[1], true
+		}
+		return "", "", false
+	})
+}
+
+// ── Ruby ──────────────────────────────────────────────────────────────────────
+
+func getRubyBlocks(lines []string) []blockEntry {
+	reClass := regexp.MustCompile(`^class\s+(\w+)`)
+	reDef := regexp.MustCompile(`^def\s+(\w+)`)
+	reModule := regexp.MustCompile(`^module\s+(\w+)`)
+
+	blockKws := regexp.MustCompile(`\b(?:class|module|def|do|if|unless|while|until|for|begin|case)\b`)
+	endKw := regexp.MustCompile(`\bend\b`)
+
+	var entries []blockEntry
+	inBlock := false
+	depth := 0
+	curName, curKey := "", ""
+	curStart := 0
+
+	for i, line := range lines {
+		ln := i + 1
+		t := strings.TrimSpace(line)
+		if !inBlock {
+			if len(line) > 0 && line[0] != ' ' && line[0] != '\t' {
+				if m := reClass.FindStringSubmatch(t); m != nil {
+					curName, curKey, curStart, inBlock, depth = "class "+m[1], m[1], ln, true, 1
+					continue
+				}
+				if m := reModule.FindStringSubmatch(t); m != nil {
+					curName, curKey, curStart, inBlock, depth = "module "+m[1], m[1], ln, true, 1
+					continue
+				}
+				if m := reDef.FindStringSubmatch(t); m != nil {
+					curName, curKey, curStart, inBlock, depth = "def "+m[1], m[1], ln, true, 1
+					continue
+				}
+			}
+		}
+		if inBlock {
+			depth += len(blockKws.FindAllString(t, -1))
+			depth -= len(endKw.FindAllString(t, -1))
+			if depth <= 0 {
+				entries = append(entries, blockEntry{curName, curKey, curStart, ln})
+				inBlock = false
+				curName, curKey = "", ""
+			}
+		}
+	}
+	if inBlock && curStart > 0 {
+		entries = append(entries, blockEntry{curName, curKey, curStart, len(lines)})
+	}
+	return entries
+}
+
+// ── PHP ───────────────────────────────────────────────────────────────────────
+
+func getPHPBlocks(lines []string) []blockEntry {
+	reClass := regexp.MustCompile(`^(?:abstract\s+|final\s+)?class\s+(\w+)`)
+	reFunc := regexp.MustCompile(`^(?:public\s+|private\s+|protected\s+|static\s+)*function\s+(\w+)`)
+	return braceTrackedBlocks(lines, func(line string) (name, key string, ok bool) {
+		t := strings.TrimSpace(line)
+		if m := reClass.FindStringSubmatch(t); m != nil {
+			return "class " + m[1], m[1], true
+		}
+		if m := reFunc.FindStringSubmatch(t); m != nil {
+			return "function " + m[1], m[1], true
+		}
+		return "", "", false
+	})
+}
+
+// ── shared brace-tracker ──────────────────────────────────────────────────────
+
+// braceTrackedBlocks is a generic brace-depth scanner used by JS, Rust, Java, C#, PHP.
+// matchFn is called on each line; return (name, key, true) to start a new block.
+func braceTrackedBlocks(lines []string, matchFn func(string) (string, string, bool)) []blockEntry {
+	var entries []blockEntry
+	inBlock := false
+	depth := 0
+	curName, curKey := "", ""
+	curStart := 0
+
+	for i, line := range lines {
+		ln := i + 1
+		t := strings.TrimSpace(line)
+
+		if !inBlock {
+			if name, key, ok := matchFn(line); ok {
+				curName, curKey, curStart = name, key, ln
+				inBlock = true
+				depth = 0
+			}
+		}
+
+		if inBlock {
+			depth += strings.Count(t, "{") - strings.Count(t, "}")
+			if depth <= 0 && ln > curStart {
+				entries = append(entries, blockEntry{curName, curKey, curStart, ln})
+				inBlock = false
+				curName, curKey = "", ""
+			}
+		}
+	}
+	if inBlock && curStart > 0 {
+		entries = append(entries, blockEntry{curName, curKey, curStart, len(lines)})
+	}
+	return entries
 }
