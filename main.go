@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -36,9 +37,11 @@ func main() {
 	block       := flag.String("block", "", "Source: auto-derive range from named block (requires -lang)")
 	beforeblock := flag.String("beforeblock", "", "Destination: insert before named block (requires -lang)")
 	afterblock  := flag.String("afterblock", "", "Destination: insert after named block (requires -lang)")
+	matchRegex  := flag.String("match-regex", "", "Regex pattern for replaceall with capture groups (e.g. -match-regex \"(\\w+)\" -text \"[$1]\")")
+	files       := flag.String("files", "", "Apply replaceall to all files matching a glob (e.g. -files \"*.go\")")
 		flag.Parse()
 
-	if *file == "" || *op == "" {
+	if (*file == "" && *files == "") || *op == "" {
 		fmt.Fprintln(os.Stderr, "Usage: fedit -file PATH -op OPERATION [flags]")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Operations:")
@@ -83,10 +86,14 @@ func main() {
 		return
 	}
 
-	lines, err := readLines(*file)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
-		os.Exit(1)
+	var lines []string
+	if *file != "" {
+		var rdErr error
+		lines, rdErr = readLines(*file)
+		if rdErr != nil {
+			fmt.Fprintf(os.Stderr, "Error reading file: %v\n", rdErr)
+			os.Exit(1)
+		}
 	}
 
 	if *endLine == 0 {
@@ -118,16 +125,31 @@ func main() {
 		newText := resolveText(*text, *textFile)
 		doInsertMatch(lines, *file, *match, *nth, newText, true)
 	case "replaceall":
-		if *match == "" {
-			fmt.Fprintln(os.Stderr, "replaceall requires -match (text to find)")
+		isRegex := *matchRegex != ""
+		if *match == "" && !isRegex {
+			fmt.Fprintln(os.Stderr, "replaceall requires -match TEXT or -match-regex PATTERN")
 			os.Exit(1)
+		}
+		searchStr := *match
+		if isRegex {
+			searchStr = *matchRegex
 		}
 		replacement := *text
 		if *textFile != "" {
 			rLines := resolveText("", *textFile)
 			replacement = strings.Join(rLines, "\n")
 		}
-		doReplaceAll(lines, *file, *match, replacement)
+		if *files != "" {
+			if isRegex {
+				doReplaceAllRegexGlob(*files, searchStr, replacement)
+			} else {
+				doReplaceAllGlob(*files, searchStr, replacement)
+			}
+		} else if isRegex {
+			doReplaceAllRegex(lines, *file, searchStr, replacement)
+		} else {
+			doReplaceAll(lines, *file, searchStr, replacement)
+		}
 	case "move":
 		srcL, srcE := *line, *endLine
 		srcM, srcEM := *match, *endmatch
@@ -2330,4 +2352,131 @@ func braceTrackedBlocks(lines []string, matchFn func(string) (string, string, bo
 		entries = append(entries, blockEntry{curName, curKey, curStart, len(lines)})
 	}
 	return entries
+}
+
+// ════════════════════════════════════════════════════════════
+// REGEX REPLACEALL + GLOB MULTI-FILE — v1.3.0
+// ════════════════════════════════════════════════════════════
+
+// execReplaceAllRegex is the pure testable core for -match-regex mode.
+// Returns (result lines, replacement count, error).
+// Go regex uses $1/$2 for capture group references in replacement strings.
+func execReplaceAllRegex(lines []string, pattern, replacement string) ([]string, int, error) {
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, 0, fmt.Errorf("invalid regex %q: %v", pattern, err)
+	}
+	count := 0
+	result := make([]string, len(lines))
+	for i, line := range lines {
+		newLine := re.ReplaceAllString(line, replacement)
+		result[i] = newLine
+		if newLine != line {
+			count++
+		}
+	}
+	return result, count, nil
+}
+
+func doReplaceAllRegex(lines []string, path, pattern, replacement string) {
+	result, count, err := execReplaceAllRegex(lines, pattern, replacement)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	if count == 0 {
+		fmt.Fprintf(os.Stderr, "No lines match regex: %s\n", pattern)
+		os.Exit(1)
+	}
+	if err := writeLines(path, result); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "Regex-replaced on %d line(s) (%d total)\n", count, len(result))
+}
+
+// doReplaceAllGlob applies a literal replaceall to every file matching a glob pattern.
+func doReplaceAllGlob(globPattern, search, replacement string) {
+	paths, err := filepath.Glob(globPattern)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Glob error: %v\n", err)
+		os.Exit(1)
+	}
+	if len(paths) == 0 {
+		fmt.Fprintf(os.Stderr, "No files matched: %s\n", globPattern)
+		os.Exit(1)
+	}
+	totalFiles, totalLines := 0, 0
+	for _, p := range paths {
+		lines, err := readLines(p)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  SKIP %-40s %v\n", p, err)
+			continue
+		}
+		count := 0
+		for i, line := range lines {
+			if strings.Contains(line, search) {
+				lines[i] = strings.ReplaceAll(line, search, replacement)
+				count++
+			}
+		}
+		if count == 0 {
+			continue
+		}
+		if err := writeLines(p, lines); err != nil {
+			fmt.Fprintf(os.Stderr, "  ERROR %-40s %v\n", p, err)
+			continue
+		}
+		fmt.Fprintf(os.Stderr, "  %-50s %d line(s)\n", p, count)
+		totalFiles++
+		totalLines += count
+	}
+	fmt.Fprintf(os.Stderr, "Glob %s: %d file(s) changed, %d total line(s) replaced\n",
+		globPattern, totalFiles, totalLines)
+}
+
+// doReplaceAllRegexGlob applies a regex replaceall to every file matching a glob pattern.
+func doReplaceAllRegexGlob(globPattern, pattern, replacement string) {
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid regex %q: %v\n", pattern, err)
+		os.Exit(1)
+	}
+	paths, err := filepath.Glob(globPattern)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Glob error: %v\n", err)
+		os.Exit(1)
+	}
+	if len(paths) == 0 {
+		fmt.Fprintf(os.Stderr, "No files matched: %s\n", globPattern)
+		os.Exit(1)
+	}
+	totalFiles, totalLines := 0, 0
+	for _, p := range paths {
+		lines, err := readLines(p)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  SKIP %-40s %v\n", p, err)
+			continue
+		}
+		count := 0
+		for i, line := range lines {
+			newLine := re.ReplaceAllString(line, replacement)
+			if newLine != line {
+				lines[i] = newLine
+				count++
+			}
+		}
+		if count == 0 {
+			continue
+		}
+		if err := writeLines(p, lines); err != nil {
+			fmt.Fprintf(os.Stderr, "  ERROR %-40s %v\n", p, err)
+			continue
+		}
+		fmt.Fprintf(os.Stderr, "  %-50s %d line(s)\n", p, count)
+		totalFiles++
+		totalLines += count
+	}
+	fmt.Fprintf(os.Stderr, "Glob %s: %d file(s) changed, %d total line(s) replaced\n",
+		globPattern, totalFiles, totalLines)
 }
