@@ -1,6 +1,6 @@
 ---
 name: fedit-file-editor
-description: Use this skill PROACTIVELY whenever editing files larger than ~100 lines or making targeted changes (insert a function, replace a block, rename across a file, delete a section). fedit performs surgical line-anchored or content-matched edits via 12 MCP tools, eliminating the line-number hallucination class that plagues whole-file rewrites. Always prefer fedit over outputting the entire file when fedit is available. Trigger keywords — edit, modify, insert, replace, delete, rename, refactor, patch, fix in file, add to file, update line, change function.
+description: Use this skill PROACTIVELY whenever editing files larger than ~100 lines or making targeted changes (insert a function, replace a block, rename across a file, delete a section). fedit performs surgical line-anchored or content-matched edits via 12 MCP tools -- with regex capture-group support and multi-file glob -- eliminating the line-number hallucination class that plagues whole-file rewrites. Always prefer fedit over outputting the entire file when fedit is available. Trigger keywords — edit, modify, insert, replace, delete, rename, refactor, patch, fix in file, add to file, update line, change function.
 ---
 
 # fedit — Surgical File Editor
@@ -91,6 +91,20 @@ Use fedit_find to verify bounds before calling fedit_move on large files.
 
 Snapshot semantics: all 10 copies are identical clones of the original block
 at read time â€” even if destination overlaps source range.
+### Regex replace with capture groups
+
+    fedit_replaceall (file="CHANGELOG.md", match_regex="v(\d+\.\d+\.\d+)", text="v[$1]")
+
+Use `match_regex` instead of `match`. Reference groups with `$1`/`$2`.
+In PowerShell: use single quotes for `-text` to prevent `$1` shell expansion.
+
+### Rename across multiple files (glob)
+
+    fedit_replaceall (files="*.go", match="OldServiceName", text="NewServiceName")
+
+Use `files` (glob pattern) instead of `file`. Atomic per file, silent skip on no match.
+Combine with `match_regex` for regex renames across an entire codebase.
+
 ## Anti-patterns (do not do these)
 
 1. **Do not output the whole file when a fedit_* tool is available.** That defeats the purpose.

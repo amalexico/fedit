@@ -66,6 +66,12 @@ fedit -file main.go -op move -match "func OldHelper(" -end 45 -beforematch "func
 
 # Copy a config block and paste it 3 times at a new location
 fedit -file values.yaml -op copy -line 50 -end 65 -after 200 -times 3 -v
+
+# Regex replace with capture groups (v1.3+) -- single quotes keep $1 literal in shells
+fedit -file CHANGELOG.md -op replaceall -match-regex 'v(\d+\.\d+\.\d+)' -text 'v[$1]' -v
+
+# Rename a symbol across every .go file in one command (v1.3+)
+fedit -files '*.go' -op replaceall -match 'OldServiceName' -text 'NewServiceName'
 ```
 
 ---
@@ -157,6 +163,37 @@ fedit -file nginx.conf -op replaceall -match "old.example.com" -text "new.exampl
 
 # Update a version string everywhere
 fedit -file Makefile -op replaceall -match "1.1.0" -text "1.2.0" -v
+```
+
+#### v1.3.0: `-match-regex` with capture groups
+
+```bash
+# Wrap every version string in brackets
+fedit -file CHANGELOG.md -op replaceall -match-regex 'v(\d+\.\d+\.\d+)' -text 'v[$1]' -v
+
+# Rename top-level Go functions only (anchored to line start)
+fedit -file main.go -op replaceall -match-regex '^func (\w+)' -text 'func Renamed_$1' -v
+
+# Swap first and last name on every line
+fedit -file people.txt -op replaceall -match-regex '^(\w+) (\w+)$' -text '$2, $1' -v
+```
+
+Use `$1`/`$2` for capture groups (Go regexp). In PowerShell, always single-quote `-text`.
+
+#### v1.3.0: `-files` multi-file glob
+
+```bash
+# Rename a symbol across every Go file in the directory
+fedit -files "*.go" -op replaceall -match "OldServiceName" -text "NewServiceName"
+
+# Bump image tag in all YAML files
+fedit -files "*.yaml" -op replaceall -match "myapp:1.0" -text "myapp:1.1"
+
+# Regex rename across multiple files
+fedit -files "*.go" -op replaceall -match-regex 'OldPkg\.(\w+)' -text 'NewPkg.$1'
+```
+
+Files with no matches are skipped silently. Each file is written atomically.
 
 ---
 
@@ -495,7 +532,7 @@ This starts a JSON-RPC 2.0 server on stdin/stdout. The server exposes all 12 edi
 | `fedit_insert` | Insert content after a line number |
 | `fedit_delete` | Delete one or more lines |
 | `fedit_replace` | Replace a line range with new content |
-| `fedit_replaceall` | Global find-and-replace across a file |
+| `fedit_replaceall` | Global find-and-replace; `-match-regex` capture groups; `-files` glob |
 | `fedit_write` | Create or overwrite a file |
 | `fedit_map` | Structural overview (17 languages) |
 | `fedit_find` | Find lines matching a substring |
@@ -555,7 +592,7 @@ If your workflow already catches these, the CLI is overkill. The MCP server may 
 
 ### Does fedit support Terraform / HCL?
 
-Not yet in `map` (the structural overview op). HCL is the next language on the roadmap precisely because heredoc and dynamic block syntax is where naive line-counting falls apart and you need real structural awareness.
+Not yet in `map` (planned for v1.4.0) (the structural overview op). HCL is the next language on the roadmap precisely because heredoc and dynamic block syntax is where naive line-counting falls apart and you need real structural awareness.
 
 That said, the line/match-based ops (`insertafter`, `replaceall`, `replace -line N -end M`, `find`) work on **any** text file regardless of `map` support. You can use fedit on `.tf` files today — you just won't get the structural overview from `map`.
 
