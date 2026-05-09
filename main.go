@@ -19,7 +19,7 @@ func main() {
 	}
 
 	file := flag.String("file", "", "Path to the file")
-	op := flag.String("op", "", "Operation: insert, delete, replace, replaceall, show, write, map, find, insertafter, insertbefore, move, copy (move/copy support -block/-beforeblock/-afterblock with -lang)")
+	op := flag.String("op", "", "Operation: insert, delete, replace, replaceall, show, write, map, find, insertafter, insertbefore, move, copy, fields")
 	line := flag.Int("line", 0, "Line number (1-based)")
 	endLine := flag.Int("end", 0, "End line for delete/replace range (inclusive)")
 	text := flag.String("text", "", "Text to insert/replace (use \\n for newlines, \\t for tabs)")
@@ -39,6 +39,9 @@ func main() {
 	afterblock  := flag.String("afterblock", "", "Destination: insert after named block (requires -lang)")
 	matchRegex  := flag.String("match-regex", "", "Regex pattern for replaceall with capture groups (e.g. -match-regex \"(\\w+)\" -text \"[$1]\")")
 	files       := flag.String("files", "", "Apply replaceall to all files matching a glob (e.g. -files \"*.go\")")
+	stream      := flag.Bool("stream", false, "Stream mode: line-by-line I/O for large files (replaceall, find)")
+	col         := flag.Int("col", 0, "Column number (1-based) for fields op")
+	delim       := flag.String("delim", "\t", "Field delimiter for fields op (default: tab)")
 		flag.Parse()
 
 	if (*file == "" && *files == "") || *op == "" {
@@ -117,7 +120,11 @@ func main() {
 	case "map":
 		doMap(lines, *file, *lang)
 	case "find":
-		doFind(lines, *match, *nth)
+		if *stream {
+			doStreamFind(*file, *match)
+		} else {
+			doFind(lines, *match, *nth)
+		}
 	case "insertafter":
 		newText := resolveText(*text, *textFile)
 		doInsertMatch(lines, *file, *match, *nth, newText, false)
@@ -144,6 +151,12 @@ func main() {
 				doReplaceAllRegexGlob(*files, searchStr, replacement)
 			} else {
 				doReplaceAllGlob(*files, searchStr, replacement)
+			}
+		} else if *stream {
+			if isRegex {
+				doStreamReplaceAllRegex(*file, searchStr, replacement)
+			} else {
+				doStreamReplaceAll(*file, searchStr, replacement)
 			}
 		} else if isRegex {
 			doReplaceAllRegex(lines, *file, searchStr, replacement)
@@ -210,7 +223,17 @@ func main() {
 			dstA, dstB, dstAM, dstBM = be, -1, "", ""
 		}
 		doCopyOp(lines, *file, srcL, srcE, srcM, srcEM, dstA, dstB, dstAM, dstBM, *nth, *times, linesBefore, startTime, *v)
-		default:
+		case "fields":
+		if *col == 0 {
+			fmt.Fprintln(os.Stderr, "fields requires -col N (1-based column number)")
+			os.Exit(1)
+		}
+		delimStr := *delim
+		if delimStr == "\\t" {
+			delimStr = "\t"
+		}
+		doFields(*file, *col, delimStr)
+	default:
 		fmt.Fprintf(os.Stderr, "Unknown operation: %s\n", *op)
 		os.Exit(1)
 	}
@@ -2479,4 +2502,185 @@ func doReplaceAllRegexGlob(globPattern, pattern, replacement string) {
 	}
 	fmt.Fprintf(os.Stderr, "Glob %s: %d file(s) changed, %d total line(s) replaced\n",
 		globPattern, totalFiles, totalLines)
+}
+
+// ════════════════════════════════════════════════════════════
+// STREAM ENGINE + FIELDS — v1.4.0
+// ════════════════════════════════════════════════════════════
+
+// streamLineBuffer is the per-line read buffer for the stream engine.
+// 10 MB handles JSON blobs, base64 payloads, and minified JS.
+const streamLineBuffer = 10 * 1024 * 1024
+
+// execStreamOp processes a file line-by-line using fn, writing results to
+// a temp file, then atomically replacing the original on success.
+//
+// fn receives (1-based lineNum, raw line text) and returns the lines that
+// should appear in the output for that input line:
+//   []string{line}         -- pass-through (unchanged)
+//   []string{newLine}      -- replace
+//   []string{}             -- delete
+//   []string{extra, line}  -- insertbefore
+//   []string{line, extra}  -- insertafter
+//
+// Returns (linesRead, linesWritten, error).
+func execStreamOp(path string, fn func(lineNum int, line string) []string) (int, int, error) {
+	src, err := os.Open(path)
+	if err != nil {
+		return 0, 0, fmt.Errorf("open: %v", err)
+	}
+
+	// Temp file in same directory for atomic rename.
+	tmpPath := path + ".fedit_stream_tmp"
+	dst, err := os.Create(tmpPath)
+	if err != nil {
+		src.Close()
+		return 0, 0, fmt.Errorf("create temp: %v", err)
+	}
+
+	scanner := bufio.NewScanner(src)
+	scanner.Buffer(make([]byte, streamLineBuffer), streamLineBuffer)
+	writer := bufio.NewWriter(dst)
+
+	linesRead, linesWritten := 0, 0
+	var scanErr error
+
+	for scanner.Scan() {
+		linesRead++
+		out := fn(linesRead, scanner.Text())
+		for _, ol := range out {
+			writer.WriteString(ol)
+			writer.WriteByte('\n')
+			linesWritten++
+		}
+	}
+	scanErr = scanner.Err()
+
+	writer.Flush()
+	dst.Close()
+	src.Close()
+
+	if scanErr != nil {
+		os.Remove(tmpPath)
+		return linesRead, 0, fmt.Errorf("scan: %v", scanErr)
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return linesRead, 0, fmt.Errorf("atomic rename: %v", err)
+	}
+	return linesRead, linesWritten, nil
+}
+
+// doStreamReplaceAll is the streaming path for literal replaceall (-stream).
+func doStreamReplaceAll(path, search, replacement string) {
+	changed := 0
+	linesRead, _, err := execStreamOp(path, func(_ int, line string) []string {
+		if strings.Contains(line, search) {
+			changed++
+			return []string{strings.ReplaceAll(line, search, replacement)}
+		}
+		return []string{line}
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	if changed == 0 {
+		fmt.Fprintf(os.Stderr, "No lines match: %s\n", search)
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "Stream-replaced on %d line(s) of %d total\n", changed, linesRead)
+}
+
+// doStreamReplaceAllRegex is the streaming path for regex replaceall (-stream).
+func doStreamReplaceAllRegex(path, pattern, replacement string) {
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid regex %q: %v\n", pattern, err)
+		os.Exit(1)
+	}
+	changed := 0
+	linesRead, _, sErr := execStreamOp(path, func(_ int, line string) []string {
+		newLine := re.ReplaceAllString(line, replacement)
+		if newLine != line {
+			changed++
+		}
+		return []string{newLine}
+	})
+	if sErr != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", sErr)
+		os.Exit(1)
+	}
+	if changed == 0 {
+		fmt.Fprintf(os.Stderr, "No lines match regex: %s\n", pattern)
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "Stream regex-replaced on %d line(s) of %d total\n", changed, linesRead)
+}
+
+// doStreamFind is the streaming path for find (-stream). Outputs to stdout.
+func doStreamFind(path, search string) {
+	src, err := os.Open(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	defer src.Close()
+
+	scanner := bufio.NewScanner(src)
+	scanner.Buffer(make([]byte, streamLineBuffer), streamLineBuffer)
+	count, lineNum := 0, 0
+	for scanner.Scan() {
+		lineNum++
+		line := scanner.Text()
+		if strings.Contains(line, search) {
+			count++
+			fmt.Printf("%d: %s\n", lineNum, line)
+		}
+	}
+	if scanner.Err() != nil {
+		fmt.Fprintf(os.Stderr, "Error reading: %v\n", scanner.Err())
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "Found %d match(es) across %d lines\n", count, lineNum)
+}
+
+// doFields extracts column col (1-based) from every line of path,
+// using delim as the field separator. Output goes to stdout.
+func doFields(path string, col int, delim string) {
+	if col < 1 {
+		fmt.Fprintln(os.Stderr, "Error: -col must be >= 1")
+		os.Exit(1)
+	}
+	src, err := os.Open(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	defer src.Close()
+
+	scanner := bufio.NewScanner(src)
+	scanner.Buffer(make([]byte, streamLineBuffer), streamLineBuffer)
+	lineNum, extracted := 0, 0
+	for scanner.Scan() {
+		lineNum++
+		line := scanner.Text()
+		if line == "" {
+			fmt.Println()
+			continue
+		}
+		parts := strings.Split(line, delim)
+		if col <= len(parts) {
+			fmt.Println(parts[col-1])
+			extracted++
+		}
+		// Lines shorter than col are skipped silently.
+	}
+	if scanner.Err() != nil {
+		fmt.Fprintf(os.Stderr, "Error reading: %v\n", scanner.Err())
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "Extracted col %d from %d/%d lines (delim=%q)\n",
+		col, extracted, lineNum, delim)
 }
