@@ -20,6 +20,8 @@ go install github.com/amalexico/fedit@latest
 - **17 language mappers** — see the structure of any file before editing
 - **-v flag** — verify every mutation before moving on
 - **Line-aware** — no regex surprises, no "which match did it hit?"
+- **Stream engine** — process multi-GB files line-by-line with atomic integrity
+- **Field extraction** — pull CSV/TSV column N without awk
 - **Safe** — no in-place unless you say so, never touches files you did not name
 
 ---
@@ -67,11 +69,11 @@ fedit -file main.go -op move -match "func OldHelper(" -end 45 -beforematch "func
 # Copy a config block and paste it 3 times at a new location
 fedit -file values.yaml -op copy -line 50 -end 65 -after 200 -times 3 -v
 
-# Regex replace with capture groups (v1.3+) -- single quotes keep $1 literal in shells
-fedit -file CHANGELOG.md -op replaceall -match-regex 'v(\d+\.\d+\.\d+)' -text 'v[$1]' -v
+# Extract column 2 from a TSV file (v1.4+)
+fedit -file data.tsv -op fields -col 2
 
-# Rename a symbol across every .go file in one command (v1.3+)
-fedit -files '*.go' -op replaceall -match 'OldServiceName' -text 'NewServiceName'
+# Regex replace on a multi-GB log without loading it into memory (v1.4+)
+fedit -file huge.log -op replaceall -match 'ERROR' -text 'WARN' -stream
 ```
 
 ---
@@ -163,39 +165,45 @@ fedit -file nginx.conf -op replaceall -match "old.example.com" -text "new.exampl
 
 # Update a version string everywhere
 fedit -file Makefile -op replaceall -match "1.1.0" -text "1.2.0" -v
-```
-
-#### v1.3.0: `-match-regex` with capture groups
-
-```bash
-# Wrap every version string in brackets
-fedit -file CHANGELOG.md -op replaceall -match-regex 'v(\d+\.\d+\.\d+)' -text 'v[$1]' -v
-
-# Rename top-level Go functions only (anchored to line start)
-fedit -file main.go -op replaceall -match-regex '^func (\w+)' -text 'func Renamed_$1' -v
-
-# Swap first and last name on every line
-fedit -file people.txt -op replaceall -match-regex '^(\w+) (\w+)$' -text '$2, $1' -v
-```
-
-Use `$1`/`$2` for capture groups (Go regexp). In PowerShell, always single-quote `-text`.
-
-#### v1.3.0: `-files` multi-file glob
-
-```bash
-# Rename a symbol across every Go file in the directory
-fedit -files "*.go" -op replaceall -match "OldServiceName" -text "NewServiceName"
-
-# Bump image tag in all YAML files
-fedit -files "*.yaml" -op replaceall -match "myapp:1.0" -text "myapp:1.1"
-
-# Regex rename across multiple files
-fedit -files "*.go" -op replaceall -match-regex 'OldPkg\.(\w+)' -text 'NewPkg.$1'
-```
-
-Files with no matches are skipped silently. Each file is written atomically.
 
 ---
+
+
+### fields -- Extract a column from delimited files (v1.4.0)
+
+```bash
+# Extract column 2 from a tab-separated file (default delimiter: tab)
+fedit -file data.tsv -op fields -col 2
+
+# Extract the third field from a CSV
+fedit -file report.csv -op fields -col 3 -delim ","
+
+# Extract usernames from /etc/passwd (colon-delimited)
+fedit -file /etc/passwd -op fields -col 1 -delim ":"
+```
+
+Output goes to stdout for piping. Lines shorter than `-col` are skipped silently.
+Always streaming -- no memory limit regardless of file size.
+
+### -stream -- Large-file streaming mode (v1.4.0)
+
+Add `-stream` to `replaceall` or `find` to process files line-by-line without
+loading them into memory. 10 MB per-line buffer handles JSON blobs and minified files.
+Atomic integrity: writes to a temp file then renames -- original is untouched on interruption.
+
+```bash
+# Replace a pattern in a multi-GB log file
+fedit -file server.log -op replaceall -match "10.0.0.1" -text "10.0.0.2" -stream
+
+# Regex replace in a huge file with capture groups
+fedit -file big.csv -op replaceall -match-regex 'id_(\d+)' -text 'ID_$1' -stream
+
+# Streaming find -- grep-style output to stdout
+fedit -file huge.log -op find -match "FATAL" -stream
+```
+
+Supported with `-stream`: `replaceall` (literal and regex), `find`.
+Not supported: `move`, `copy`, `map` (these require full file structure in memory).
 
 ### move â€” Move a line range to a new position
 
@@ -532,7 +540,7 @@ This starts a JSON-RPC 2.0 server on stdin/stdout. The server exposes all 12 edi
 | `fedit_insert` | Insert content after a line number |
 | `fedit_delete` | Delete one or more lines |
 | `fedit_replace` | Replace a line range with new content |
-| `fedit_replaceall` | Global find-and-replace; `-match-regex` capture groups; `-files` glob |
+| `fedit_replaceall` | Global find-and-replace; regex capture groups; multi-file glob; `-stream` for large files |
 | `fedit_write` | Create or overwrite a file |
 | `fedit_map` | Structural overview (17 languages) |
 | `fedit_find` | Find lines matching a substring |
@@ -590,9 +598,17 @@ Probably not for human-driven edits where you review every diff. fedit shines in
 
 If your workflow already catches these, the CLI is overkill. The MCP server may still be useful as an agent primitive.
 
+### Does fedit support streaming for all operations?
+
+Currently `replaceall` and `find` support `-stream` mode. `move` and `copy` require the full file in memory because they need to read both source and destination ranges. `map` requires structure analysis. `fields` is always streaming.
+
+### What is the maximum file size fedit can handle?
+
+In default (in-memory) mode: limited by available RAM, typically fine up to a few hundred MB. With `-stream`: unlimited -- fedit processes one line at a time with a 10 MB per-line buffer.
+
 ### Does fedit support Terraform / HCL?
 
-Not yet in `map` (planned for v1.4.0) (the structural overview op). HCL is the next language on the roadmap precisely because heredoc and dynamic block syntax is where naive line-counting falls apart and you need real structural awareness.
+Not yet in `map` (the structural overview op). HCL is the next language on the roadmap precisely because heredoc and dynamic block syntax is where naive line-counting falls apart and you need real structural awareness.
 
 That said, the line/match-based ops (`insertafter`, `replaceall`, `replace -line N -end M`, `find`) work on **any** text file regardless of `map` support. You can use fedit on `.tf` files today — you just won't get the structural overview from `map`.
 

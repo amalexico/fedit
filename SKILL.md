@@ -1,6 +1,6 @@
 ---
 name: fedit-file-editor
-description: Use this skill PROACTIVELY whenever editing files larger than ~100 lines or making targeted changes (insert a function, replace a block, rename across a file, delete a section). fedit performs surgical line-anchored or content-matched edits via 12 MCP tools -- with regex capture-group support and multi-file glob -- eliminating the line-number hallucination class that plagues whole-file rewrites. Always prefer fedit over outputting the entire file when fedit is available. Trigger keywords — edit, modify, insert, replace, delete, rename, refactor, patch, fix in file, add to file, update line, change function.
+description: Use this skill PROACTIVELY whenever editing files larger than ~100 lines or making targeted changes (insert a function, replace a block, rename across a file, delete a section). fedit performs surgical line-anchored or content-matched edits via 12 MCP tools -- with streaming large-file engine and CSV/TSV field extraction -- eliminating the line-number hallucination class that plagues whole-file rewrites. Always prefer fedit over outputting the entire file when fedit is available. Trigger keywords — edit, modify, insert, replace, delete, rename, refactor, patch, fix in file, add to file, update line, change function.
 ---
 
 # fedit — Surgical File Editor
@@ -13,6 +13,8 @@ Reach for fedit whenever the user asks you to:
 - **Patch code** — add a method, fix a bug on specific lines, modify a config block
 - **Modify large files** — anything over ~100 lines where rewriting the whole file is slow and risks truncation or formatting drift
 - **Make multiple coordinated edits** — fedit can chain operations atomically
+- **Process large files** -- add `-stream` to replaceall/find for multi-GB files
+- **Extract structured data** -- use `fields` to pull CSV/TSV columns without awk
 
 If you have an MCP connection to fedit, ALWAYS prefer it over generating a full-file rewrite. A 1000-line file rewrite is slow and error-prone; a single fedit_replaceall call achieves the same result in milliseconds.
 
@@ -91,19 +93,22 @@ Use fedit_find to verify bounds before calling fedit_move on large files.
 
 Snapshot semantics: all 10 copies are identical clones of the original block
 at read time â€” even if destination overlaps source range.
-### Regex replace with capture groups
+### Extract a CSV/TSV column (fields op)
 
-    fedit_replaceall (file="CHANGELOG.md", match_regex="v(\d+\.\d+\.\d+)", text="v[$1]")
+    fedit -file data.tsv -op fields -col 2 -delim "\t"
 
-Use `match_regex` instead of `match`. Reference groups with `$1`/`$2`.
-In PowerShell: use single quotes for `-text` to prevent `$1` shell expansion.
+Output goes to stdout for piping. For CSV: `-delim ","`. Default is tab.
+Lines shorter than the requested column are skipped silently.
 
-### Rename across multiple files (glob)
+### Stream mode for large files
 
-    fedit_replaceall (files="*.go", match="OldServiceName", text="NewServiceName")
+Add `-stream` to `fedit_replaceall` or `fedit_find` for files too large for memory.
+Atomic: writes temp file then renames -- original untouched on interruption.
 
-Use `files` (glob pattern) instead of `file`. Atomic per file, silent skip on no match.
-Combine with `match_regex` for regex renames across an entire codebase.
+    fedit_replaceall (file="huge.log", match="10.0.0.1", text="10.0.0.2")
+    # Add stream=true when file exceeds available RAM
+
+Not supported with move/copy/map (those need full structure in memory).
 
 ## Anti-patterns (do not do these)
 
@@ -127,4 +132,5 @@ Full results: https://github.com/amalexico/fedit#llm-benchmark
 
 - **Operations:** show, find, map, insert, insertafter, insertbefore, replace, replaceall, delete, write, move, copy
 - **Map languages (17):** Go, HTML, SQL, Python, JavaScript, TypeScript, CSS, Rust, Java, C#, YAML, TOML, Markdown, Ruby, PHP, Dockerfile, Makefile
-- All 12 operations available as MCP tools when fedit is connected via "fedit mcp" (see README MCP Server Mode section)
+- All 12 operations available as MCP tools when fedit is connected via "fedit mcp"
+- `fields` op: CLI only (stdout); `-stream` flag: works on replaceall + find via MCP and CLI
