@@ -2107,8 +2107,12 @@ func getTopLevelBlocks(lines []string, lang string) ([]blockEntry, error) {
 		return getRubyBlocks(lines), nil
 	case "php":
 		return getPHPBlocks(lines), nil
+	case "hcl", "terraform", "tf":
+		return getHCLBlocks(lines), nil
+	case "nix":
+		return getNixBlocks(lines), nil
 	default:
-		return nil, fmt.Errorf("language %q does not yet support -block (use -match/-endmatch instead; block support for this language is planned for v1.3.0)", lang)
+		return nil, fmt.Errorf("language %q does not yet support -block (use -match/-endmatch instead)", lang)
 	}
 }
 
@@ -2692,4 +2696,140 @@ func doFields(path string, col int, delim string) {
 	}
 	fmt.Fprintf(os.Stderr, "Extracted col %d from %d/%d lines (delim=%q)\n",
 		col, extracted, lineNum, delim)
+}
+
+// ════════════════════════════════════════════════════════════
+// IaC BLOCK SCANNERS — v1.5.0 (HCL/Terraform + Nix)
+// ════════════════════════════════════════════════════════════
+
+// getHCLBlocks extracts top-level block definitions from HCL/Terraform files.
+// Handles: resource, data, module, provider, variable, output,
+//          locals, terraform, moved, import, check.
+// Both multi-line blocks and single-line blocks (e.g. locals {}) are supported.
+func getHCLBlocks(lines []string) []blockEntry {
+	reTopBlock := regexp.MustCompile(`^(\w+)\s*(.*)`)
+	validKw := map[string]bool{
+		"resource": true, "data": true, "module": true, "provider": true,
+		"variable": true, "output": true, "locals": true, "terraform": true,
+		"moved": true, "import": true, "check": true,
+	}
+
+	var entries []blockEntry
+	inBlock := false
+	depth := 0
+	curName, curKey := "", ""
+	curStart := 0
+
+	for i, line := range lines {
+		ln := i + 1
+		t := strings.TrimSpace(line)
+
+		if !inBlock {
+			// Skip blank lines, comments, and indented lines (not top-level)
+			if t == "" || strings.HasPrefix(t, "#") || strings.HasPrefix(t, "//") {
+				continue
+			}
+			if len(line) > 0 && (line[0] == ' ' || line[0] == '\t') {
+				continue
+			}
+			m := reTopBlock.FindStringSubmatch(t)
+			if m == nil || !validKw[m[1]] {
+				continue
+			}
+			keyword := m[1]
+			// Strip trailing { and whitespace to get the label
+			rest := strings.TrimRight(strings.TrimSpace(m[2]), " \t{}")
+			// Build display name and searchable key
+			// e.g. resource "aws_instance" "web" → key: aws_instance_web
+			var key, name string
+			if rest == "" {
+				key = keyword
+				name = keyword
+			} else {
+				key = strings.ReplaceAll(rest, `" "`, "_")
+				key = strings.Trim(key, `"`)
+				name = keyword + " " + rest
+			}
+			curName, curKey, curStart = name, key, ln
+			inBlock = true
+			depth = 0
+		}
+
+		if inBlock {
+			depth += strings.Count(t, "{") - strings.Count(t, "}")
+			// Close when balanced. Allow single-line blocks (ln == curStart + brace close).
+			if depth <= 0 && (ln > curStart || strings.Contains(t, "}")) {
+				entries = append(entries, blockEntry{curName, curKey, curStart, ln})
+				inBlock = false
+				curName, curKey = "", ""
+			}
+		}
+	}
+	if inBlock && curStart > 0 {
+		entries = append(entries, blockEntry{curName, curKey, curStart, len(lines)})
+	}
+	return entries
+}
+
+// getNixBlocks extracts top-level attribute bindings that contain block bodies
+// from Nix expression files. Handles patterns like:
+//   someAttr = {       (attribute set)
+//   programs.git = {   (nested attribute)
+//   buildInputs = [    (list binding — tracked by bracket depth)
+//   mkDerivation = {   (derivation)
+func getNixBlocks(lines []string) []blockEntry {
+	reAttr := regexp.MustCompile(`^([\w.]+(?:\."[^"]+")?)\s*=`)
+
+	var entries []blockEntry
+	inBlock := false
+	depth := 0    // tracks { }
+	listDepth := 0 // tracks [ ]
+	curName, curKey := "", ""
+	curStart := 0
+
+	for i, line := range lines {
+		ln := i + 1
+		t := strings.TrimSpace(line)
+
+		if !inBlock {
+			if t == "" || strings.HasPrefix(t, "#") {
+				continue
+			}
+			// Only top-level lines (no leading whitespace)
+			if len(line) > 0 && (line[0] == ' ' || line[0] == '\t') {
+				continue
+			}
+			m := reAttr.FindStringSubmatch(t)
+			if m == nil {
+				continue
+			}
+			// Only start a block if the line opens a { or [
+			hasBrace := strings.Contains(t, "{")
+			hasList := strings.Contains(t, "[")
+			if !hasBrace && !hasList {
+				continue
+			}
+			key := m[1]
+			curName = key + " = {..}"
+			curKey = key
+			curStart = ln
+			inBlock = true
+			depth, listDepth = 0, 0
+		}
+
+		if inBlock {
+			depth += strings.Count(t, "{") - strings.Count(t, "}")
+			listDepth += strings.Count(t, "[") - strings.Count(t, "]")
+			closed := depth <= 0 && listDepth <= 0
+			if closed && (ln > curStart || strings.ContainsAny(t, "}]")) {
+				entries = append(entries, blockEntry{curName, curKey, curStart, ln})
+				inBlock = false
+				curName, curKey = "", ""
+			}
+		}
+	}
+	if inBlock && curStart > 0 {
+		entries = append(entries, blockEntry{curName, curKey, curStart, len(lines)})
+	}
+	return entries
 }
