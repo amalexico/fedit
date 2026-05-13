@@ -1,6 +1,6 @@
 ---
 name: fedit-file-editor
-description: Use this skill PROACTIVELY whenever editing files larger than ~100 lines or making targeted changes (insert a function, replace a block, rename across a file, delete a section). fedit performs surgical line-anchored or content-matched edits via 12 MCP tools -- with streaming large-file engine and CSV/TSV field extraction -- eliminating the line-number hallucination class that plagues whole-file rewrites. Always prefer fedit over outputting the entire file when fedit is available. Trigger keywords — edit, modify, insert, replace, delete, rename, refactor, patch, fix in file, add to file, update line, change function.
+description: Use this skill PROACTIVELY whenever editing files larger than ~100 lines or making targeted changes (insert a function, replace a block, rename across a file, delete a section). fedit performs surgical line-anchored or content-matched edits via 12 MCP tools -- with streaming engine, CSV/TSV fields, HCL/Terraform and Nix block mappers -- eliminating the line-number hallucination class that plagues whole-file rewrites. Always prefer fedit over outputting the entire file when fedit is available. Trigger keywords — edit, modify, insert, replace, delete, rename, refactor, patch, fix in file, add to file, update line, change function.
 ---
 
 # fedit — Surgical File Editor
@@ -25,6 +25,7 @@ If you have an MCP connection to fedit, ALWAYS prefer it over generating a full-
 Never mutate a file blind. Always recon first using read-only tools:
 
 - **fedit_map** — structural overview (functions, headings, sections, code blocks). Supports 17 languages: Go, HTML, SQL, Python, JavaScript, TypeScript, CSS, Rust, Java, C#, YAML, TOML, Markdown, Ruby, PHP, Dockerfile, Makefile.
+- **Block scanners** for `-block`: Python, Go, JS/TS, Rust, Java, C#, Ruby, PHP, **HCL/Terraform** (`-lang hcl`/`tf`/`terraform`), **Nix** (`-lang nix`).
 - **fedit_find** — locate exact line numbers for a substring. Returns context lines.
 - **fedit_show** — display a line range to confirm what you are about to edit.
 
@@ -99,6 +100,19 @@ at read time â€” even if destination overlaps source range.
 
 Output goes to stdout for piping. For CSV: `-delim ","`. Default is tab.
 Lines shorter than the requested column are skipped silently.
+
+### Reorder Terraform blocks (HCL)
+
+    fedit_move (file="main.tf", block='resource "aws_instance" "web"', beforeblock='resource "aws_s3_bucket" "data"', lang="hcl")
+
+All 11 Terraform block types supported. Accepts lang: `hcl`, `tf`, `terraform`.
+Nested blocks (ingress, lifecycle) are ignored -- only top-level blocks matched.
+
+### Reorder Nix attribute bindings
+
+    fedit_move (file="home.nix", block="programs.git", beforeblock="programs.ssh", lang="nix")
+
+Handles attribute sets and list bindings. Dotted attrs (`programs.git`) work natively.
 
 ### Stream mode for large files
 

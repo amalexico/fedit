@@ -205,6 +205,48 @@ fedit -file huge.log -op find -match "FATAL" -stream
 Supported with `-stream`: `replaceall` (literal and regex), `find`.
 Not supported: `move`, `copy`, `map` (these require full file structure in memory).
 
+#### v1.5.0: HCL/Terraform block mapper (`-lang hcl`)
+
+Move, copy, and refactor Terraform blocks by name — no line numbers needed.
+Accepts `-lang hcl`, `-lang tf`, or `-lang terraform` (all equivalent).
+
+Supported block types: `resource`, `data`, `module`, `provider`, `variable`,
+`output`, `locals`, `terraform`, `moved`, `import`, `check`.
+
+```bash
+# Move a resource block before another
+fedit -file main.tf -op move -block 'resource "aws_instance" "web"' \
+      -beforeblock 'resource "aws_s3_bucket" "data"' -lang hcl -v
+
+# Copy a variable definition (scaffold new variable from existing)
+fedit -file variables.tf -op copy -block 'variable "instance_type"' \
+      -after 20 -lang hcl -v
+
+# Reorder provider blocks
+fedit -file providers.tf -op move -block 'provider "google"' \
+      -beforeblock 'provider "aws"' -lang hcl -v
+```
+
+Nested blocks (e.g. `ingress {}` inside a `resource`) are correctly ignored —
+only top-level blocks are matched.
+
+#### v1.5.0: Nix block mapper (`-lang nix`)
+
+Move and copy top-level attribute bindings in Nix expression files.
+Handles attribute sets (`name = { }`), lists (`name = [ ]`), and
+dotted attributes (`programs.git = { }`).
+
+```bash
+# Reorder home-manager program configs
+fedit -file home.nix -op move -block "programs.git" \
+      -beforeblock "programs.ssh" -lang nix -v
+
+# Copy a service config as a scaffold
+fedit -file configuration.nix -op copy -block "services.nginx" \
+      -after 50 -lang nix -v
+```
+
+
 ### move â€” Move a line range to a new position
 
 ```bash
@@ -608,9 +650,7 @@ In default (in-memory) mode: limited by available RAM, typically fine up to a fe
 
 ### Does fedit support Terraform / HCL?
 
-Not yet in `map` (the structural overview op). HCL is the next language on the roadmap precisely because heredoc and dynamic block syntax is where naive line-counting falls apart and you need real structural awareness.
-
-That said, the line/match-based ops (`insertafter`, `replaceall`, `replace -line N -end M`, `find`) work on **any** text file regardless of `map` support. You can use fedit on `.tf` files today — you just won't get the structural overview from `map`.
+Yes, as of v1.5.0. Use `-lang hcl` (or `-lang tf`/`terraform`) with `-block`, `-beforeblock`, `-afterblock` to move and copy Terraform blocks by name. All 11 top-level block types are supported. The `map` op does not yet show HCL structure (planned for v1.6.0).
 
 ### Does fedit preserve comments and formatting?
 
