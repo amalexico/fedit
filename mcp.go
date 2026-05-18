@@ -94,7 +94,7 @@ func runMCP() {
 			mcpSendResult(req.ID, mcpInitResult{
 				ProtocolVersion: "2024-11-05",
 				Capabilities:    mcpCaps{Tools: map[string]any{}},
-				ServerInfo:      mcpServerInfo{Name: "fedit", Version: "1.2.0"},
+				ServerInfo:      mcpServerInfo{Name: "fedit", Version: "1.5.0"},
 			})
 		case "notifications/initialized":
 		// no response needed
@@ -132,14 +132,15 @@ func mcpToolDefs() []mcpToolDef {
 		{Name: "fedit_insert", Description: "Insert content after a given line number.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"line":{"type":"integer","description":"Insert after this line (0 = beginning)"},"text":{"type":"string","description":"Content to insert (use \\n for newlines)"}},"required":["file","line","text"]}`)},
 		{Name: "fedit_delete", Description: "Delete one or more lines.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"line":{"type":"integer","description":"Start line to delete"},"end":{"type":"integer","description":"End line (inclusive, defaults to start line)"}},"required":["file","line"]}`)},
 		{Name: "fedit_replace", Description: "Replace a line range with new content.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"line":{"type":"integer","description":"Start line"},"end":{"type":"integer","description":"End line (inclusive)"},"text":{"type":"string","description":"Replacement content (use \\n for newlines)"}},"required":["file","line","end","text"]}`)},
-		{Name: "fedit_replaceall", Description: "Global find-and-replace across entire file.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Text to find"},"text":{"type":"string","description":"Replacement text"}},"required":["file","match","text"]}`)},
+		{Name: "fedit_replaceall", Description: "Global find-and-replace. Use match_regex for capture groups. Use files for glob. Add stream=true for large files.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Literal text to find (use match_regex for regex)"},"match_regex":{"type":"string","description":"Regex pattern with capture groups $1 $2 (alternative to match)"},"files":{"type":"string","description":"Glob pattern to apply replaceall across multiple files (e.g. *.go)"},"stream":{"type":"boolean","description":"Line-by-line I/O for multi-GB files without loading into memory"},"text":{"type":"string","description":"Replacement text"},"textfile":{"type":"string","description":"File containing replacement text"}},"required":["file"]}`)},
 		{Name: "fedit_write", Description: "Write or overwrite an entire file.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"text":{"type":"string","description":"Full file content (use \\n for newlines)"}},"required":["file","text"]}`)},
-		{Name: "fedit_map", Description: "Structural overview of a source file. Supports 17 languages.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"lang":{"type":"string","description":"Language (auto-detected from extension if omitted)"}},"required":["file"]}`)},
-		{Name: "fedit_find", Description: "Find all lines matching a substring.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Substring to search for"},"nth":{"type":"integer","description":"Which occurrence (default 1, -1 for last)"}},"required":["file","match"]}`)},
+		{Name: "fedit_map", Description: "Structural overview of a source file. Supports 17 languages: go, python, js, ts, rust, java, cs, ruby, php, html, sql, hcl, tf, terraform, nix. Use lang param for ambiguous extensions.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"lang":{"type":"string","description":"Language hint: go, python, js, ts, rust, java, cs, ruby, php, html, sql, hcl, tf, terraform, nix (auto-detected from extension if omitted)"}},"required":["file"]}`)},
+		{Name: "fedit_find", Description: "Find all lines matching a substring. Add stream=true for large files.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Substring to search for"},"nth":{"type":"integer","description":"Which occurrence (default 1, -1 for last)"},"stream":{"type":"boolean","description":"Streaming grep-style output for large files"}},"required":["file","match"]}`)},
 		{Name: "fedit_insertafter", Description: "Insert content after a line matching a substring.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Substring to match"},"text":{"type":"string","description":"Content to insert (use \\n for newlines)"},"nth":{"type":"integer","description":"Which occurrence (default 1, -1 for last)"}},"required":["file","match","text"]}`)},
 		{Name: "fedit_insertbefore", Description: "Insert content before a line matching a substring.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Substring to match"},"text":{"type":"string","description":"Content to insert (use \\n for newlines)"},"nth":{"type":"integer","description":"Which occurrence (default 1, -1 for last)"}},"required":["file","match","text"]}`)},
-		{Name: "fedit_move", Description: "Move a line range to a new position. Atomic. Overlap (dest inside src) rejected. -times N: cut once, paste N times. Use -block/-beforeblock/-afterblock with -lang for mapper-aware moves.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer"},"end":{"type":"integer"},"match":{"type":"string"},"endmatch":{"type":"string"},"after":{"type":"integer","description":"Destination after line N (0=beginning)"},"before":{"type":"integer"},"aftermatch":{"type":"string"},"beforematch":{"type":"string"},"block":{"type":"string","description":"Source block name (requires lang)"},"beforeblock":{"type":"string","description":"Dest: before named block (requires lang)"},"afterblock":{"type":"string","description":"Dest: after named block (requires lang)"},"lang":{"type":"string"},"times":{"type":"integer"},"nth":{"type":"integer"}},"required":["file"]}`)},
-		{Name: "fedit_copy", Description: "Copy a line range to a new position. Atomic. Snapshot semantics: all N copies identical even with overlap. Supports -block/-beforeblock/-afterblock with -lang.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer"},"end":{"type":"integer"},"match":{"type":"string"},"endmatch":{"type":"string"},"after":{"type":"integer","description":"Destination after line N (0=beginning)"},"before":{"type":"integer"},"aftermatch":{"type":"string"},"beforematch":{"type":"string"},"block":{"type":"string","description":"Source block name (requires lang)"},"beforeblock":{"type":"string","description":"Dest: before named block (requires lang)"},"afterblock":{"type":"string","description":"Dest: after named block (requires lang)"},"lang":{"type":"string"},"times":{"type":"integer"},"nth":{"type":"integer"}},"required":["file"]}`)},
+		{Name: "fedit_move", Description: "Move a line range to a new position. Atomic. Overlap (dest inside src) rejected. -times N: cut once, paste N times. Use -block/-beforeblock/-afterblock with -lang for mapper-aware moves.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer"},"end":{"type":"integer"},"match":{"type":"string"},"endmatch":{"type":"string"},"after":{"type":"integer","description":"Destination after line N (0=beginning)"},"before":{"type":"integer"},"aftermatch":{"type":"string"},"beforematch":{"type":"string"},"block":{"type":"string","description":"Source block name (requires lang)"},"beforeblock":{"type":"string","description":"Dest: before named block (requires lang)"},"afterblock":{"type":"string","description":"Dest: after named block (requires lang)"},"lang":{"type":"string","description":"go, python, js, ts, rust, java, cs, ruby, php, hcl, tf, terraform, nix"},"times":{"type":"integer"},"nth":{"type":"integer"}},"required":["file"]}`)},
+		{Name: "fedit_copy", Description: "Copy a line range to a new position. Atomic. Snapshot semantics: all N copies identical even with overlap. Supports -block/-beforeblock/-afterblock with -lang.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer"},"end":{"type":"integer"},"match":{"type":"string"},"endmatch":{"type":"string"},"after":{"type":"integer","description":"Destination after line N (0=beginning)"},"before":{"type":"integer"},"aftermatch":{"type":"string"},"beforematch":{"type":"string"},"block":{"type":"string","description":"Source block name (requires lang)"},"beforeblock":{"type":"string","description":"Dest: before named block (requires lang)"},"afterblock":{"type":"string","description":"Dest: after named block (requires lang)"},"lang":{"type":"string","description":"go, python, js, ts, rust, java, cs, ruby, php, hcl, tf, terraform, nix"},"times":{"type":"integer"},"nth":{"type":"integer"}},"required":["file"]}`)},
+		{Name: "fedit_fields", Description: "Extract column N from a delimited file (CSV, TSV, colon-separated). Always streams -- no memory limit. Output goes to stdout.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"col":{"type":"integer","description":"Column number (1-based)"},"delim":{"type":"string","description":"Field delimiter: comma for CSV, default is tab"}},"required":["file","col"]}`)},
 	}
 }
 
@@ -201,7 +202,9 @@ func mcpExecTool(name string, args map[string]any) mcpCallResult {
 			getInt("after", -1), getInt("before", -1), getStr("aftermatch"), getStr("beforematch"),
 			getStr("block"), getStr("beforeblock"), getStr("afterblock"), getStr("lang"),
 			getInt("nth", 1), getInt("times", 1), start)
-		default:
+		case "fedit_fields":
+		return mcpDoFields(file, getInt("col", 0), getStr("delim"), start)
+	default:
 		return mcpErrorResult(fmt.Sprintf("unknown tool: %s", name))
 	}
 }
@@ -636,5 +639,44 @@ func mcpDoCopy(file string, lineFlag, endFlag int, matchFlag, endmatchFlag strin
 		msg = fmt.Sprintf("Copied lines %d-%d (%d lines) %s x%d (%d total now)", srcStart, srcEnd, blockSize, destDesc, times, len(result))
 	}
 	msg += mcpStats("copy", file, linesBefore, len(result), "", start)
+	return mcpOK(msg)
+}
+
+func mcpDoFields(file string, col int, delim string, start time.Time) mcpCallResult {
+	if col < 1 {
+		return mcpErrorResult("col must be >= 1")
+	}
+	if delim == "" {
+		delim = "\t"
+	}
+	src, err := os.Open(file)
+	if err != nil {
+		return mcpErrorResult(fmt.Sprintf("Error opening file: %v", err))
+	}
+	defer src.Close()
+
+	scanner := bufio.NewScanner(src)
+	scanner.Buffer(make([]byte, 10*1024*1024), 10*1024*1024)
+	var results []string
+	lineNum, extracted := 0, 0
+	for scanner.Scan() {
+		lineNum++
+		line := scanner.Text()
+		if line == "" {
+			results = append(results, "")
+			continue
+		}
+		parts := strings.Split(line, delim)
+		if col <= len(parts) {
+			results = append(results, parts[col-1])
+			extracted++
+		}
+	}
+	if scanner.Err() != nil {
+		return mcpErrorResult(fmt.Sprintf("Error reading: %v", scanner.Err()))
+	}
+	msg := strings.Join(results, "\n")
+	msg += fmt.Sprintf("\n\n(col %d from %d/%d lines, delim=%q, elapsed %s)",
+		col, extracted, lineNum, delim, time.Since(start).Round(time.Millisecond))
 	return mcpOK(msg)
 }
