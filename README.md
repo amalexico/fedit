@@ -574,7 +574,7 @@ fedit includes a built-in [Model Context Protocol](https://modelcontextprotocol.
 fedit mcp
 ```
 
-This starts a JSON-RPC 2.0 server on stdin/stdout. The server exposes all 12 editing operations as MCP tools:
+This starts a JSON-RPC 2.0 server on stdin/stdout. The server exposes all 13 editing operations as MCP tools:
 
 | Tool | Description |
 |------|-------------|
@@ -590,6 +590,7 @@ This starts a JSON-RPC 2.0 server on stdin/stdout. The server exposes all 12 edi
 | `fedit_insertbefore` | Insert before a matching line |
 | `fedit_move` | Move a line range to a new position; destination-overlap rejected |
 | `fedit_copy` | Copy a line range; snapshot semantics, overlap allowed, -times N |
+| `fedit_fields` | Extract column N from CSV/TSV/delimited file (`-col N -delim CHAR`); always streaming |
 
 ### Configuring with Claude Desktop
 
@@ -605,6 +606,8 @@ Add to your `claude_desktop_config.json`:
   }
 }
 ```
+
+> For a full setup guide (Windows paths, troubleshooting, Cursor/Cline/Windsurf snippets): [CLAUDE_DESKTOP.md](CLAUDE_DESKTOP.md)
 
 ### Configuring with Cursor
 
@@ -650,7 +653,7 @@ In default (in-memory) mode: limited by available RAM, typically fine up to a fe
 
 ### Does fedit support Terraform / HCL?
 
-Yes, as of v1.5.0. Use `-lang hcl` (or `-lang tf`/`terraform`) with `-block`, `-beforeblock`, `-afterblock` to move and copy Terraform blocks by name. All 11 top-level block types are supported. The `map` op does not yet show HCL structure (planned for v1.6.0).
+Yes, as of v1.5.0. Use `-lang hcl` (or `-lang tf`/`terraform`) with `-block`, `-beforeblock`, `-afterblock` to move and copy Terraform blocks by name. All 11 top-level block types are supported. The `map` op supports HCL/Terraform and Nix as of v1.5.0 -- `fedit_map -lang hcl` returns all top-level block names and line ranges.
 
 ### Does fedit preserve comments and formatting?
 

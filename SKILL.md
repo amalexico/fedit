@@ -1,6 +1,6 @@
 ---
 name: fedit-file-editor
-description: Use this skill PROACTIVELY whenever editing files larger than ~100 lines or making targeted changes (insert a function, replace a block, rename across a file, delete a section). fedit performs surgical line-anchored or content-matched edits via 12 MCP tools -- with streaming engine, CSV/TSV fields, HCL/Terraform and Nix block mappers -- eliminating the line-number hallucination class that plagues whole-file rewrites. Always prefer fedit over outputting the entire file when fedit is available. Trigger keywords — edit, modify, insert, replace, delete, rename, refactor, patch, fix in file, add to file, update line, change function.
+description: Use this skill PROACTIVELY whenever editing files larger than ~100 lines or making targeted changes (insert a function, replace a block, rename across a file, delete a section). fedit performs surgical line-anchored or content-matched edits via 13 MCP tools -- with streaming engine, CSV/TSV fields, HCL/Terraform and Nix block mappers -- eliminating the line-number hallucination class that plagues whole-file rewrites. Always prefer fedit over outputting the entire file when fedit is available. Trigger keywords — edit, modify, insert, replace, delete, rename, refactor, patch, fix in file, add to file, update line, change function.
 ---
 
 # fedit — Surgical File Editor
@@ -24,7 +24,7 @@ If you have an MCP connection to fedit, ALWAYS prefer it over generating a full-
 
 Never mutate a file blind. Always recon first using read-only tools:
 
-- **fedit_map** — structural overview (functions, headings, sections, code blocks). Supports 17 languages: Go, HTML, SQL, Python, JavaScript, TypeScript, CSS, Rust, Java, C#, YAML, TOML, Markdown, Ruby, PHP, Dockerfile, Makefile.
+- **fedit_map** — structural overview (functions, headings, sections, code blocks). Supports 17 languages: go, python, js, ts, rust, java, cs, ruby, php, html, sql, hcl, tf, terraform, nix.
 - **Block scanners** for `-block`: Python, Go, JS/TS, Rust, Java, C#, Ruby, PHP, **HCL/Terraform** (`-lang hcl`/`tf`/`terraform`), **Nix** (`-lang nix`).
 - **fedit_find** — locate exact line numbers for a substring. Returns context lines.
 - **fedit_show** — display a line range to confirm what you are about to edit.
@@ -144,7 +144,8 @@ Full results: https://github.com/amalexico/fedit#llm-benchmark
 
 ## Reference
 
-- **Operations:** show, find, map, insert, insertafter, insertbefore, replace, replaceall, delete, write, move, copy
+- **Operations:** show, find, map, insert, insertafter, insertbefore, replace, replaceall, delete, write, move, copy, fields
 - **Map languages (17):** Go, HTML, SQL, Python, JavaScript, TypeScript, CSS, Rust, Java, C#, YAML, TOML, Markdown, Ruby, PHP, Dockerfile, Makefile
-- All 12 operations available as MCP tools when fedit is connected via "fedit mcp"
-- `fields` op: CLI only (stdout); `-stream` flag: works on replaceall + find via MCP and CLI
+- All 13 operations available as MCP tools when fedit is connected via `fedit mcp`
+- `fields` op: available as `fedit_fields` MCP tool and CLI (`-op fields`). CLI outputs to stdout for piping.
+- `-stream` flag: works on replaceall + find via MCP and CLI
