@@ -72,6 +72,19 @@ fedit -file values.yaml -op copy -line 50 -end 65 -after 200 -times 3 -v
 # Extract column 2 from a TSV file (v1.4+)
 fedit -file data.tsv -op fields -col 2
 
+# Write content with literal backslashes — no \n escape expansion (v1.6.0)
+fedit -file config.txt -op writeraw -text "path=C:\\Users\\admin"
+
+# Hex-encode tricky text to sidestep shell quoting (v1.6.0)
+# fwencode produces the hex; fedit decodes it before writing
+fedit -file config.txt -op write -texthex 706174683d2f746d70
+
+# Overwrite a file cleanly then insert new content (v1.6.0)
+fedit -file config.txt -op insert -line 0 -cleanfirst -text "# regenerated"
+
+# Get bare line numbers for scripting (v1.6.0)
+fedit -file main.go -op find -match "TODO" -x 2>$null
+
 # Regex replace on a multi-GB log without loading it into memory (v1.4+)
 fedit -file huge.log -op replaceall -match 'ERROR' -text 'WARN' -stream
 ```
@@ -204,6 +217,62 @@ fedit -file huge.log -op find -match "FATAL" -stream
 
 Supported with `-stream`: `replaceall` (literal and regex), `find`.
 Not supported: `move`, `copy`, `map` (these require full file structure in memory).
+
+### writeraw — Write without escape expansion
+
+```bash
+# Write a Windows path without double-escaping backslashes
+fedit -file config.ini -op writeraw -text "basedir=C:\\Program Files\\App"
+
+# Write content from a file as-is
+fedit -file output.txt -op writeraw -textfile template.txt
+```
+
+Unlike `write`, `writeraw` treats `\n` as two characters (backslash + n), not a newline.
+
+---
+
+### writelines — Write lines interactively from stdin
+
+```bash
+fedit -file notes.txt -op writelines
+# Type lines at the > prompt, Ctrl+Z (Windows) or Ctrl+D (Unix) to finish
+```
+
+---
+
+### -texthex — Hex-encoded input (v1.6.0)
+
+Encode text to hex first (e.g. with `fwencode`), then pass the hex string as `-text`.
+Eliminates all shell-quoting issues with special characters.
+
+```bash
+# Decode hex string and write — no quoting gymnastics needed
+fedit -file deploy.sh -op write -texthex 23212f62696e2f62617368
+```
+
+---
+
+### -cleanfirst — Truncate before writing (v1.6.0)
+
+```bash
+# Clear the file then insert fresh content at line 0
+fedit -file output.txt -op insert -line 0 -cleanfirst -text "# regenerated"
+```
+
+---
+
+### -x — Machine-readable output (v1.6.0)
+
+```bash
+# Get bare line numbers from find (stdout only, no context noise)
+fedit -file main.go -op find -match "TODO" -x 2>$null
+
+# Extract CSV column with no stats footer
+fedit -file data.csv -op fields -col 2 -delim "," -x
+```
+
+---
 
 #### v1.5.0: HCL/Terraform block mapper (`-lang hcl`)
 
@@ -574,7 +643,7 @@ fedit includes a built-in [Model Context Protocol](https://modelcontextprotocol.
 fedit mcp
 ```
 
-This starts a JSON-RPC 2.0 server on stdin/stdout. The server exposes all 13 editing operations as MCP tools:
+This starts a JSON-RPC 2.0 server on stdin/stdout. The server exposes all 14 editing operations as MCP tools:
 
 | Tool | Description |
 |------|-------------|
@@ -584,6 +653,7 @@ This starts a JSON-RPC 2.0 server on stdin/stdout. The server exposes all 13 edi
 | `fedit_replace` | Replace a line range with new content |
 | `fedit_replaceall` | Global find-and-replace; regex capture groups; multi-file glob; `-stream` for large files |
 | `fedit_write` | Create or overwrite a file |
+| `fedit_writeraw` | Create or overwrite a file with no escape expansion (backslashes literal) |
 | `fedit_map` | Structural overview (17 languages) |
 | `fedit_find` | Find lines matching a substring |
 | `fedit_insertafter` | Insert after a matching line |

@@ -9,7 +9,7 @@ copy-pasting code blocks.
 
 ## 1. Prerequisites
 
-- **fedit v1.5.0+** installed and on your PATH  
+- **fedit v1.6.0+** installed and on your PATH  
   Verify: `fedit` prints the usage block  
 - **Claude Desktop** (macOS or Windows)  
   Download: https://claude.ai/download
@@ -106,6 +106,7 @@ Once connected, try these in Claude Desktop:
 | `fedit_delete` | Delete line or range |
 | `fedit_replace` | Replace line or range with new content |
 | `fedit_write` | Write or overwrite an entire file |
+| `fedit_writeraw` | Write or overwrite a file with no escape expansion |
 | `fedit_map` | Structural overview — go, python, js, ts, rust, java, cs, ruby, php, html, sql, hcl, tf, terraform, nix |
 | `fedit_find` | Find lines matching a substring; `stream=true` for large files |
 | `fedit_insertafter` | Insert content after a matched line |
@@ -179,7 +180,7 @@ Restart the editor after saving.
 
 **"Method not found" errors**  
 - You are running an older fedit binary. Run `fedit` — the usage block must
-  show `fields` and `move`/`copy` operations. Update to v1.5.0+.
+  show writeraw, writelines, ields and move/copy. Update to v1.6.0+.
 
 **Block not found for HCL/Nix files**  
 - Pass `lang` explicitly: `"lang": "hcl"` or `"lang": "nix"`  
@@ -193,5 +194,6 @@ Restart the editor after saving.
 
 - Repo: https://github.com/amalexico/fedit  
 - v1.5.0 release notes: HCL/Terraform + Nix block scanners, 333 tests  
+- v1.6.0 release notes: `-texthex`, `writeraw`, `writelines`, `-cleanfirst`, `-x` (machine-readable find/fields)
 - v1.4.0 release notes: stream engine, fields op  
 - v1.3.0 release notes: regex replaceall, multi-file glob  
