@@ -1,4 +1,10 @@
-fedit.exe
-fedit
-_patch.txt
-*.tmp
+_p_*.go
+_f2.txt
+fedit_pr_v16*.ps1
+.wrangler/
+*_patch*.py
+fix_*.py
+remove_*.py
+status_update_*.py
+*_patches.ps1
+roadmap_insert*.ps1
