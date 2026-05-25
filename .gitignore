@@ -9,3 +9,6 @@ status_update_*.py
 *_patches.ps1
 roadmap_insert*.ps1
 _mcp_*.go
+fedit.exe
+fedit_mcp_v*.ps1
+_patch.txt
