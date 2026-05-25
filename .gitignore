@@ -8,3 +8,4 @@ remove_*.py
 status_update_*.py
 *_patches.ps1
 roadmap_insert*.ps1
+_mcp_*.go
