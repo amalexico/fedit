@@ -12,3 +12,4 @@ _mcp_*.go
 fedit.exe
 fedit_mcp_v*.ps1
 _patch.txt
+_doc_*.md
