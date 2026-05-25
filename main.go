@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
@@ -19,7 +20,7 @@ func main() {
 	}
 
 	file := flag.String("file", "", "Path to the file")
-	op := flag.String("op", "", "Operation: insert, delete, replace, replaceall, show, write, map, find, insertafter, insertbefore, move, copy, fields")
+	op := flag.String("op", "", "Operation: insert, delete, replace, replaceall, show, write, writeraw, writelines, map, find, insertafter, insertbefore, move, copy, fields")
 	line := flag.Int("line", 0, "Line number (1-based)")
 	endLine := flag.Int("end", 0, "End line for delete/replace range (inclusive)")
 	text := flag.String("text", "", "Text to insert/replace (use \\n for newlines, \\t for tabs)")
@@ -42,7 +43,22 @@ func main() {
 	stream      := flag.Bool("stream", false, "Stream mode: line-by-line I/O for large files (replaceall, find)")
 	col         := flag.Int("col", 0, "Column number (1-based) for fields op")
 	delim       := flag.String("delim", "\t", "Field delimiter for fields op (default: tab)")
+	texthex    := flag.Bool("texthex", false, "Decode -text as hex-encoded UTF-8 (use fwencode to produce)")
+	cleanfirst := flag.Bool("cleanfirst", false, "Truncate -file to zero bytes before writing")
+	x          := flag.Bool("x", false, "Machine-readable output: bare line numbers / counts, no labels")
 		flag.Parse()
+
+	// -texthex: decode -text from a hex string produced by fwencode.
+	if *texthex && *text != "" {
+		decoded, hErr := hex.DecodeString(*text)
+		if hErr != nil {
+			fmt.Fprintf(os.Stderr, "Error decoding -texthex: %v\n", hErr)
+			os.Exit(1)
+		}
+		s := string(decoded)
+		text = &s
+	}
+
 
 	if (*file == "" && *files == "") || *op == "" {
 		fmt.Fprintln(os.Stderr, "Usage: fedit -file PATH -op OPERATION [flags]")
@@ -53,6 +69,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  delete        Delete line N (or range N to -end)")
 		fmt.Fprintln(os.Stderr, "  replace       Replace line N (or range N to -end) with text")
 		fmt.Fprintln(os.Stderr, "  write         Write text to -file (creates/overwrites)")
+		fmt.Fprintln(os.Stderr, "  writeraw      Write -text raw (no escape expansion; backslashes are literal)")
+		fmt.Fprintln(os.Stderr, "  writelines    Write lines interactively from stdin (Ctrl+Z/D to finish)")
 		fmt.Fprintln(os.Stderr, "  map           Show structure map (-lang go|html|sql)")
 		fmt.Fprintln(os.Stderr, "  find          Find lines containing -match text, print line numbers")
 		fmt.Fprintln(os.Stderr, "  insertafter   Find -match text, insert -textfile content AFTER matched line")
@@ -72,18 +90,47 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  -match-regex  Regex for replaceall with capture groups")
 		fmt.Fprintln(os.Stderr, "  -files GLOB   Apply replaceall to all files matching a glob")
 		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "  -texthex      Treat -text as hex from fwencode (bypasses PS quoting entirely)")
+		fmt.Fprintln(os.Stderr, "  -cleanfirst   Truncate -file before writing (pair with insert for clean overwrite)")
+		fmt.Fprintln(os.Stderr, "  -x            Machine-readable output: bare line numbers / counts, no labels")
+		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Escapes in -text: \\n = newline, \\t = tab, \\\\ = literal backslash")
 		os.Exit(1)
 	}
 
-	if *op == "write" {
-		content := expandText(*text)
-		if *textFile != "" {
-			var err error
-			content, err = readLines(*textFile)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error reading textfile: %v\n", err)
-				os.Exit(1)
+	if *op == "write" || *op == "writeraw" || *op == "writelines" {
+		var content []string
+		switch *op {
+		case "writelines":
+			scanner := bufio.NewScanner(os.Stdin)
+			for {
+				fmt.Fprint(os.Stderr, "> ")
+				if !scanner.Scan() {
+					break
+				}
+				content = append(content, scanner.Text())
+			}
+		case "writeraw":
+			if *textFile != "" {
+				var err error
+				content, err = readLines(*textFile)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error reading textfile: %v\n", err)
+					os.Exit(1)
+				}
+			} else {
+				// raw: split on actual newlines only -- no \n->newline expansion
+				content = strings.Split(*text, "\n")
+			}
+		default: // "write"
+			content = expandText(*text)
+			if *textFile != "" {
+				var err error
+				content, err = readLines(*textFile)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error reading textfile: %v\n", err)
+					os.Exit(1)
+				}
 			}
 		}
 		if len(content) == 0 {
@@ -96,6 +143,14 @@ func main() {
 		}
 		fmt.Fprintf(os.Stderr, "Wrote %d line(s) to %s\n", len(content), *file)
 		return
+	}
+
+	// -cleanfirst: truncate before reading so mutations start from an empty file.
+	if *cleanfirst && *file != "" {
+		if err := os.WriteFile(*file, []byte{}, 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "Error truncating file: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	var lines []string
@@ -130,9 +185,9 @@ func main() {
 		doMap(lines, *file, *lang)
 	case "find":
 		if *stream {
-			doStreamFind(*file, *match)
+			doStreamFind(*file, *match, *x)
 		} else {
-			doFind(lines, *match, *nth)
+			doFind(lines, *match, *nth, *x)
 		}
 	case "insertafter":
 		newText := resolveText(*text, *textFile)
@@ -241,14 +296,14 @@ func main() {
 		if delimStr == "\\t" {
 			delimStr = "\t"
 		}
-		doFields(*file, *col, delimStr)
+		doFields(*file, *col, delimStr, *x)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown operation: %s\n", *op)
 		os.Exit(1)
 	}
 	if *v {
 		switch *op {
-		case "show", "map", "find", "write", "move", "copy":
+		case "show", "map", "find", "write", "writeraw", "writelines", "move", "copy":
 		// read-only ops, no verify
 		default:
 			center := *line
@@ -415,7 +470,7 @@ func resolveNth(hits []int, nth int) (int, error) {
 	return hits[nth-1], nil
 }
 
-func doFind(lines []string, match string, nth int) {
+func doFind(lines []string, match string, nth int, x bool) {
 	if match == "" {
 		fmt.Fprintln(os.Stderr, "Error: -match is required for find")
 		os.Exit(1)
@@ -425,6 +480,14 @@ func doFind(lines []string, match string, nth int) {
 	if len(hits) == 0 {
 		fmt.Fprintf(os.Stderr, "No matches for: %s\n", match)
 		os.Exit(1)
+	}
+
+
+	if x {
+		for _, ln := range hits {
+			fmt.Println(ln)
+		}
+		return
 	}
 
 	width := len(strconv.Itoa(len(lines)))
@@ -2633,7 +2696,7 @@ func doStreamReplaceAllRegex(path, pattern, replacement string) {
 }
 
 // doStreamFind is the streaming path for find (-stream). Outputs to stdout.
-func doStreamFind(path, search string) {
+func doStreamFind(path, search string, x bool) {
 	src, err := os.Open(path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -2649,19 +2712,25 @@ func doStreamFind(path, search string) {
 		line := scanner.Text()
 		if strings.Contains(line, search) {
 			count++
-			fmt.Printf("%d: %s\n", lineNum, line)
+			if x {
+				fmt.Println(lineNum)
+			} else {
+				fmt.Printf("%d: %s\n", lineNum, line)
+			}
 		}
 	}
 	if scanner.Err() != nil {
 		fmt.Fprintf(os.Stderr, "Error reading: %v\n", scanner.Err())
 		os.Exit(1)
 	}
-	fmt.Fprintf(os.Stderr, "Found %d match(es) across %d lines\n", count, lineNum)
+	if !x {
+		fmt.Fprintf(os.Stderr, "Found %d match(es) across %d lines\n", count, lineNum)
+	}
 }
 
 // doFields extracts column col (1-based) from every line of path,
 // using delim as the field separator. Output goes to stdout.
-func doFields(path string, col int, delim string) {
+func doFields(path string, col int, delim string, x bool) {
 	if col < 1 {
 		fmt.Fprintln(os.Stderr, "Error: -col must be >= 1")
 		os.Exit(1)
@@ -2694,8 +2763,10 @@ func doFields(path string, col int, delim string) {
 		fmt.Fprintf(os.Stderr, "Error reading: %v\n", scanner.Err())
 		os.Exit(1)
 	}
-	fmt.Fprintf(os.Stderr, "Extracted col %d from %d/%d lines (delim=%q)\n",
-		col, extracted, lineNum, delim)
+	if !x {
+		fmt.Fprintf(os.Stderr, "Extracted col %d from %d/%d lines (delim=%q)\n",
+			col, extracted, lineNum, delim)
+	}
 }
 
 // ════════════════════════════════════════════════════════════
