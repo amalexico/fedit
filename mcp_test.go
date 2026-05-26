@@ -21,8 +21,8 @@ func schemaBytes(def mcpToolDef) []byte {
 
 func TestMCPToolDefs_Count(t *testing.T) {
 	defs := mcpToolDefs()
-	if len(defs) != 13 {
-		t.Errorf("expected 13 tools, got %d", len(defs))
+	if len(defs) != 14 {
+		t.Errorf("expected 14 tools, got %d", len(defs))
 	}
 }
 
@@ -551,5 +551,281 @@ func TestMCPExec_InsertBefore(t *testing.T) {
 	lines, _ := readLines(path)
 	if len(lines) != 4 || lines[1] != "before_anchor" {
 		t.Errorf("insertbefore: %v", lines)
+	}
+}
+
+// ── v1.6.0: schema presence checks ───────────────────────────────────────────
+
+func TestMCPToolDefs_WriteRawExists(t *testing.T) {
+	for _, def := range mcpToolDefs() {
+		if def.Name == "fedit_writeraw" {
+			var schema map[string]any
+			if err := json.Unmarshal(schemaBytes(def), &schema); err != nil {
+				t.Fatalf("fedit_writeraw: invalid JSON schema: %v", err)
+			}
+			props, ok := schema["properties"].(map[string]any)
+			if !ok {
+				t.Fatal("fedit_writeraw: missing properties object")
+			}
+			for _, want := range []string{"file", "text"} {
+				if _, exists := props[want]; !exists {
+					t.Errorf("fedit_writeraw: missing property %q", want)
+				}
+			}
+			req, _ := schema["required"].([]any)
+			reqSet := map[string]bool{}
+			for _, r := range req {
+				if s, ok := r.(string); ok {
+					reqSet[s] = true
+				}
+			}
+			for _, want := range []string{"file", "text"} {
+				if !reqSet[want] {
+					t.Errorf("fedit_writeraw: %q should be in required[]", want)
+				}
+			}
+			return
+		}
+	}
+	t.Error("fedit_writeraw not found in tool definitions")
+}
+
+func TestMCPToolDefs_FindHasXParam(t *testing.T) {
+	for _, def := range mcpToolDefs() {
+		if def.Name != "fedit_find" {
+			continue
+		}
+		var schema map[string]any
+		if err := json.Unmarshal(schemaBytes(def), &schema); err != nil {
+			t.Fatalf("fedit_find: invalid JSON schema: %v", err)
+		}
+		props, ok := schema["properties"].(map[string]any)
+		if !ok {
+			t.Fatal("fedit_find: missing properties object")
+		}
+		if _, exists := props["x"]; !exists {
+			t.Error("fedit_find: x param not found in properties{}")
+		}
+		req, _ := schema["required"].([]any)
+		for _, r := range req {
+			if r == "x" {
+				t.Error("fedit_find: x must not appear in required[] (it is optional)")
+			}
+		}
+		return
+	}
+	t.Error("fedit_find not found")
+}
+
+func TestMCPToolDefs_FieldsHasXParam(t *testing.T) {
+	for _, def := range mcpToolDefs() {
+		if def.Name != "fedit_fields" {
+			continue
+		}
+		var schema map[string]any
+		if err := json.Unmarshal(schemaBytes(def), &schema); err != nil {
+			t.Fatalf("fedit_fields: invalid JSON schema: %v", err)
+		}
+		props, ok := schema["properties"].(map[string]any)
+		if !ok {
+			t.Fatal("fedit_fields: missing properties object")
+		}
+		if _, exists := props["x"]; !exists {
+			t.Error("fedit_fields: x param not found in properties{}")
+		}
+		req, _ := schema["required"].([]any)
+		for _, r := range req {
+			if r == "x" {
+				t.Error("fedit_fields: x must not appear in required[] (it is optional)")
+			}
+		}
+		return
+	}
+	t.Error("fedit_fields not found")
+}
+
+func TestMCPToolDefs_InsertHasCleanFirstParam(t *testing.T) {
+	for _, def := range mcpToolDefs() {
+		if def.Name != "fedit_insert" {
+			continue
+		}
+		var schema map[string]any
+		if err := json.Unmarshal(schemaBytes(def), &schema); err != nil {
+			t.Fatalf("fedit_insert: invalid JSON schema: %v", err)
+		}
+		props, ok := schema["properties"].(map[string]any)
+		if !ok {
+			t.Fatal("fedit_insert: missing properties object")
+		}
+		if _, exists := props["cleanfirst"]; !exists {
+			t.Error("fedit_insert: cleanfirst param not found in properties{}")
+		}
+		req, _ := schema["required"].([]any)
+		for _, r := range req {
+			if r == "cleanfirst" {
+				t.Error("fedit_insert: cleanfirst must not appear in required[] (it is optional)")
+			}
+		}
+		return
+	}
+	t.Error("fedit_insert not found")
+}
+
+// ── v1.6.0: fedit_writeraw ────────────────────────────────────────────────────
+
+func TestMCPExec_WriteRaw(t *testing.T) {
+	path := mcpTempFile(t, "old content\n")
+	defer os.Remove(path)
+	r := mcpExecTool("fedit_writeraw", map[string]any{
+		"file": path,
+		"text": "new content",
+	})
+	if r.IsError {
+		t.Fatalf("writeraw error: %s", mcpText(r))
+	}
+	lines, _ := readLines(path)
+	if len(lines) == 0 || lines[0] != "new content" {
+		t.Errorf("writeraw: line[0] = %q, want \"new content\"", func() string {
+			if len(lines) > 0 {
+				return lines[0]
+			}
+			return "<empty>"
+		}())
+	}
+}
+
+// TestMCPExec_WriteRaw_BackslashLiteral verifies that writeraw does not expand
+// escape sequences: a backslash-n in the input must appear as the two
+// characters '\' and 'n' on disk, not as a newline.
+func TestMCPExec_WriteRaw_BackslashLiteral(t *testing.T) {
+	path := mcpTempFile(t, "")
+	defer os.Remove(path)
+	// Go string "hello\\nworld" contains the characters: h e l l o \ n w o r l d
+	r := mcpExecTool("fedit_writeraw", map[string]any{
+		"file": path,
+		"text": "hello\\nworld",
+	})
+	if r.IsError {
+		t.Fatalf("writeraw error: %s", mcpText(r))
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("readfile: %v", err)
+	}
+	content := string(raw)
+	if !strings.Contains(content, "\\n") {
+		t.Errorf("writeraw: expected literal \\n in file, got: %q", content)
+	}
+	// There must be exactly one logical line (the backslash-n is NOT a newline)
+	lines, _ := readLines(path)
+	if len(lines) != 1 {
+		t.Errorf("writeraw: expected 1 line (backslash-n not expanded), got %d: %v", len(lines), lines)
+	}
+}
+
+// ── v1.6.0: fedit_insert cleanfirst ──────────────────────────────────────────
+
+// TestMCPExec_Insert_CleanFirst verifies that cleanfirst=true truncates the
+// file before inserting, so pre-existing content is gone.
+func TestMCPExec_Insert_CleanFirst(t *testing.T) {
+	path := mcpTempFile(t, "old_line1\nold_line2\nold_line3\n")
+	defer os.Remove(path)
+	r := mcpExecTool("fedit_insert", map[string]any{
+		"file":       path,
+		"line":       float64(0),
+		"text":       "fresh_line",
+		"cleanfirst": true,
+	})
+	if r.IsError {
+		t.Fatalf("insert cleanfirst error: %s", mcpText(r))
+	}
+	lines, _ := readLines(path)
+	for _, l := range lines {
+		if strings.Contains(l, "old_") {
+			t.Errorf("insert cleanfirst: old content survived: %v", lines)
+			return
+		}
+	}
+	found := false
+	for _, l := range lines {
+		if l == "fresh_line" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("insert cleanfirst: inserted text not found: %v", lines)
+	}
+}
+
+// ── v1.6.0: fedit_find -x (bare line numbers) ────────────────────────────────
+
+// TestMCPExec_Find_X verifies that x=true returns bare line numbers only,
+// with no surrounding context or matched text in the output.
+func TestMCPExec_Find_X(t *testing.T) {
+	path := mcpTempFile(t, "hello world\nfoo bar\nhello again\n")
+	defer os.Remove(path)
+	r := mcpExecTool("fedit_find", map[string]any{
+		"file":  path,
+		"match": "hello",
+		"x":     true,
+	})
+	if r.IsError {
+		t.Fatalf("find x error: %s", mcpText(r))
+	}
+	text := mcpText(r)
+	// Output must contain the matching line numbers
+	if !strings.Contains(text, "1") {
+		t.Errorf("find x: expected line number 1 in output, got: %q", text)
+	}
+	if !strings.Contains(text, "3") {
+		t.Errorf("find x: expected line number 3 in output, got: %q", text)
+	}
+	// Output must NOT contain the matched text (bare numbers only)
+	if strings.Contains(text, "hello world") || strings.Contains(text, "hello again") {
+		t.Errorf("find x: matched text should not appear in bare output, got: %q", text)
+	}
+}
+
+// ── v1.6.0: fedit_fields -x (suppress stats footer) ─────────────────────────
+
+// TestMCPExec_Fields_X verifies that x=true suppresses the stats footer line
+// that normally follows the column data.
+func TestMCPExec_Fields_X(t *testing.T) {
+	path := mcpTempFile(t, "a\tb\tc\n1\t2\t3\nx\ty\tz\n")
+	defer os.Remove(path)
+
+	// Baseline: run without x to capture what the stats footer looks like
+	rNormal := mcpExecTool("fedit_fields", map[string]any{
+		"file": path,
+		"col":  float64(1),
+	})
+	if rNormal.IsError {
+		t.Fatalf("fields (no x) error: %s", mcpText(rNormal))
+	}
+	normalText := mcpText(rNormal)
+
+	// Run with x=true
+	rX := mcpExecTool("fedit_fields", map[string]any{
+		"file": path,
+		"col":  float64(1),
+		"x":    true,
+	})
+	if rX.IsError {
+		t.Fatalf("fields x error: %s", mcpText(rX))
+	}
+	xText := mcpText(rX)
+
+	// x output must still contain the column values
+	for _, want := range []string{"a", "1", "x"} {
+		if !strings.Contains(xText, want) {
+			t.Errorf("fields x: missing column value %q: %s", want, xText)
+		}
+	}
+
+	// x output must be shorter than normal output (stats stripped)
+	if len(xText) >= len(normalText) {
+		t.Errorf("fields x: expected shorter output (stats suppressed); normal=%d bytes, x=%d bytes\nnormal: %q\nx: %q",
+			len(normalText), len(xText), normalText, xText)
 	}
 }

@@ -251,7 +251,7 @@ func TestDoStreamFind_DoesNotModifyFile(t *testing.T) {
 	// Redirect stdout to /dev/null for test cleanliness
 	old := os.Stdout
 	os.Stdout, _ = os.Open(os.DevNull)
-	doStreamFind(path, "line 3")
+	doStreamFind(path, "line 3", false)
 	os.Stdout = old
 	// File must be unchanged
 	got := readTestFile(t, path)
@@ -271,7 +271,7 @@ func TestDoFields_TSV(t *testing.T) {
 	old := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
-	doFields(path, 2, "\t")
+	doFields(path, 2, "\t", false)
 	w.Close()
 	os.Stdout = old
 	buf := make([]byte, 1024)
@@ -292,7 +292,7 @@ func TestDoFields_CSV(t *testing.T) {
 	old := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
-	doFields(path, 1, ",")
+	doFields(path, 1, ",", false)
 	w.Close()
 	os.Stdout = old
 	buf := make([]byte, 512)
@@ -310,7 +310,7 @@ func TestDoFields_LastColumn(t *testing.T) {
 	old := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
-	doFields(path, 3, "\t")
+	doFields(path, 3, "\t", false)
 	w.Close()
 	os.Stdout = old
 	buf := make([]byte, 512)
@@ -328,7 +328,7 @@ func TestDoFields_ColBeyondWidth_Skipped(t *testing.T) {
 	old := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
-	doFields(path, 3, "\t") // first line has only 2 cols
+	doFields(path, 3, "\t", false) // first line has only 2 cols
 	w.Close()
 	os.Stdout = old
 	buf := make([]byte, 512)
@@ -348,7 +348,7 @@ func TestDoFields_EmptyDelimiter(t *testing.T) {
 	old := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
-	doFields(path, 2, " ")
+	doFields(path, 2, " ", false)
 	w.Close()
 	os.Stdout = old
 	buf := make([]byte, 512)
@@ -373,8 +373,7 @@ func TestDoFields_LargeFile(t *testing.T) {
 	old := os.Stdout
 	dev, _ := os.Open(os.DevNull)
 	os.Stdout = dev
-	doFields(path, 2, "\t")
-	dev.Close()
+	doFields(path, 2, "\t", false)
 	os.Stdout = old
 	// No panic = pass
 }
@@ -385,7 +384,7 @@ func TestDoFields_FirstColumn(t *testing.T) {
 	old := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
-	doFields(path, 1, "\t")
+	doFields(path, 1, "\t", false)
 	w.Close()
 	os.Stdout = old
 	buf := make([]byte, 512)
