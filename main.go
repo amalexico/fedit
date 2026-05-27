@@ -43,20 +43,22 @@ func main() {
 	stream      := flag.Bool("stream", false, "Stream mode: line-by-line I/O for large files (replaceall, find)")
 	col         := flag.Int("col", 0, "Column number (1-based) for fields op")
 	delim       := flag.String("delim", "\t", "Field delimiter for fields op (default: tab)")
-	texthex    := flag.Bool("texthex", false, "Decode -text as hex-encoded UTF-8 (use fwencode to produce)")
+	texthex    := flag.String("texthex", "", "Content as UTF-8 hex (fwencode output); bypasses -text and all escape expansion")
 	cleanfirst := flag.Bool("cleanfirst", false, "Truncate -file to zero bytes before writing")
 	x          := flag.Bool("x", false, "Machine-readable output: bare line numbers / counts, no labels")
 		flag.Parse()
 
-	// -texthex: decode -text from a hex string produced by fwencode.
-	if *texthex && *text != "" {
-		decoded, hErr := hex.DecodeString(*text)
+	// -texthex: hex string is the content itself (produced by fwencode or PS hex encode).
+	// Decoded bytes bypass expandText entirely — no escape expansion, no backslash mangling.
+	// resolvedBytes is nil when -texthex is absent; all downstream code checks nil before use.
+	var resolvedBytes []byte
+	if *texthex != "" {
+		var hErr error
+		resolvedBytes, hErr = hex.DecodeString(*texthex)
 		if hErr != nil {
-			fmt.Fprintf(os.Stderr, "Error decoding -texthex: %v\n", hErr)
+			fmt.Fprintf(os.Stderr, "texthex: invalid hex string: %v\n", hErr)
 			os.Exit(1)
 		}
-		s := string(decoded)
-		text = &s
 	}
 
 
@@ -111,7 +113,9 @@ func main() {
 				content = append(content, scanner.Text())
 			}
 		case "writeraw":
-			if *textFile != "" {
+			if resolvedBytes != nil {
+				content = bytesToLines(resolvedBytes)
+			} else if *textFile != "" {
 				var err error
 				content, err = readLines(*textFile)
 				if err != nil {
@@ -119,18 +123,21 @@ func main() {
 					os.Exit(1)
 				}
 			} else {
-				// raw: split on actual newlines only -- no \n->newline expansion
+				// raw: split on actual newlines only — no \n->newline expansion
 				content = strings.Split(*text, "\n")
 			}
 		default: // "write"
-			content = expandText(*text)
-			if *textFile != "" {
+			if resolvedBytes != nil {
+				content = bytesToLines(resolvedBytes)
+			} else if *textFile != "" {
 				var err error
 				content, err = readLines(*textFile)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Error reading textfile: %v\n", err)
 					os.Exit(1)
 				}
+			} else {
+				content = expandText(*text)
 			}
 		}
 		if len(content) == 0 {
@@ -174,12 +181,12 @@ func main() {
 	case "show":
 		doShow(lines, *line, *endLine)
 	case "insert":
-		newText := resolveText(*text, *textFile)
+		newText := resolveTextFull(*text, *textFile, resolvedBytes)
 		doInsert(lines, *file, *line, newText)
 	case "delete":
 		doDelete(lines, *file, *line, *endLine)
 	case "replace":
-		newText := resolveText(*text, *textFile)
+		newText := resolveTextFull(*text, *textFile, resolvedBytes)
 		doReplace(lines, *file, *line, *endLine, newText)
 	case "map":
 		doMap(lines, *file, *lang)
@@ -190,10 +197,10 @@ func main() {
 			doFind(lines, *match, *nth, *x)
 		}
 	case "insertafter":
-		newText := resolveText(*text, *textFile)
+		newText := resolveTextFull(*text, *textFile, resolvedBytes)
 		doInsertMatch(lines, *file, *match, *nth, newText, false)
 	case "insertbefore":
-		newText := resolveText(*text, *textFile)
+		newText := resolveTextFull(*text, *textFile, resolvedBytes)
 		doInsertMatch(lines, *file, *match, *nth, newText, true)
 	case "replaceall":
 		isRegex := *matchRegex != ""
@@ -206,7 +213,9 @@ func main() {
 			searchStr = *matchRegex
 		}
 		replacement := *text
-		if *textFile != "" {
+		if resolvedBytes != nil {
+			replacement = string(resolvedBytes)
+		} else if *textFile != "" {
 			rLines := resolveText("", *textFile)
 			replacement = strings.Join(rLines, "\n")
 		}
@@ -370,6 +379,31 @@ func resolveText(text, textFile string) []string {
 		return lines
 	}
 	return expandText(text)
+}
+
+// resolveTextFull is resolveText extended with -texthex support.
+// Priority: resolvedBytes (from -texthex) > textFile > text.
+// When resolvedBytes is non-nil the content is used as-is — no escape expansion,
+// no backslash processing. This is intentional: hex-encoded bytes are already exact.
+func resolveTextFull(text, textFile string, resolvedBytes []byte) []string {
+	if resolvedBytes != nil {
+		return bytesToLines(resolvedBytes)
+	}
+	return resolveText(text, textFile)
+}
+
+// bytesToLines splits raw bytes on newline and strips the trailing empty element
+// that strings.Split produces for content ending with '\n'. This matches the
+// behaviour of readLines (scanner-based) so callers get consistent line slices.
+func bytesToLines(b []byte) []string {
+	if len(b) == 0 {
+		return nil
+	}
+	parts := strings.Split(string(b), "\n")
+	if len(parts) > 0 && parts[len(parts)-1] == "" {
+		parts = parts[:len(parts)-1]
+	}
+	return parts
 }
 
 func readLines(path string) ([]string, error) {
