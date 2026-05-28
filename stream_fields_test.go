@@ -251,7 +251,7 @@ func TestDoStreamFind_DoesNotModifyFile(t *testing.T) {
 	// Redirect stdout to /dev/null for test cleanliness
 	old := os.Stdout
 	os.Stdout, _ = os.Open(os.DevNull)
-	doStreamFind(path, "line 3", false)
+	doStreamFind(path, "line 3", false, "", "", "")
 	os.Stdout = old
 	// File must be unchanged
 	got := readTestFile(t, path)
@@ -374,6 +374,7 @@ func TestDoFields_LargeFile(t *testing.T) {
 	dev, _ := os.Open(os.DevNull)
 	os.Stdout = dev
 	doFields(path, 2, "\t", false)
+	dev.Close()
 	os.Stdout = old
 	// No panic = pass
 }

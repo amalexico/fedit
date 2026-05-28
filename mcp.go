@@ -136,7 +136,7 @@ func mcpToolDefs() []mcpToolDef {
 		{Name: "fedit_write", Description: "Write or overwrite an entire file.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"text":{"type":"string","description":"Full file content (use \\n for newlines)"}},"required":["file","text"]}`)},
 	{Name: "fedit_writeraw", Description: "Write or overwrite a file with no escape expansion -- backslashes are literal. Use when content already contains real newlines.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"text":{"type":"string","description":"Full file content; real newlines only, no escape expansion"}},"required":["file","text"]}`)},
 		{Name: "fedit_map", Description: "Structural overview of a source file. Supports 17 languages: go, python, js, ts, rust, java, cs, ruby, php, html, sql, hcl, tf, terraform, nix. Use lang param for ambiguous extensions.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"lang":{"type":"string","description":"Language hint: go, python, js, ts, rust, java, cs, ruby, php, html, sql, hcl, tf, terraform, nix (auto-detected from extension if omitted)"}},"required":["file"]}`)},
-	{Name: "fedit_find", Description: "Find all lines matching a substring. Add stream=true for large files.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Substring to search for"},"nth":{"type":"integer","description":"Which occurrence (default 1, -1 for last)"},"stream":{"type":"boolean","description":"Streaming grep-style output for large files"},"x":{"type":"boolean","description":"Machine-readable: return bare line numbers only, no context"}},"required":["file","match"]}`)},
+	{Name: "fedit_find", Description: "Find all lines matching a substring. Add stream=true for large files.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Substring to search for"},"nth":{"type":"integer","description":"Which occurrence (default 1, -1 for last)"},"stream":{"type":"boolean","description":"Streaming grep-style output for large files"},"x":{"type":"boolean","description":"Machine-readable: return bare line numbers only, no context"},"extract":{"type":"string","description":"Extract from matched line: WN  WN[s:c]  WN[s:]  WN/DELIM/F"},"get":{"type":"string","description":"Regex pre-filter: extract matching token from line before -extract applies"},"wdelim":{"type":"string","description":"Word delimiter for -extract (default: normalized whitespace)"}},"required":["file","match"]}`)},
 		{Name: "fedit_insertafter", Description: "Insert content after a line matching a substring.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Substring to match"},"text":{"type":"string","description":"Content to insert (use \\n for newlines)"},"nth":{"type":"integer","description":"Which occurrence (default 1, -1 for last)"}},"required":["file","match","text"]}`)},
 		{Name: "fedit_insertbefore", Description: "Insert content before a line matching a substring.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Substring to match"},"text":{"type":"string","description":"Content to insert (use \\n for newlines)"},"nth":{"type":"integer","description":"Which occurrence (default 1, -1 for last)"}},"required":["file","match","text"]}`)},
 		{Name: "fedit_move", Description: "Move a line range to a new position. Atomic. Overlap (dest inside src) rejected. -times N: cut once, paste N times. Use -block/-beforeblock/-afterblock with -lang for mapper-aware moves.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer"},"end":{"type":"integer"},"match":{"type":"string"},"endmatch":{"type":"string"},"after":{"type":"integer","description":"Destination after line N (0=beginning)"},"before":{"type":"integer"},"aftermatch":{"type":"string"},"beforematch":{"type":"string"},"block":{"type":"string","description":"Source block name (requires lang)"},"beforeblock":{"type":"string","description":"Dest: before named block (requires lang)"},"afterblock":{"type":"string","description":"Dest: after named block (requires lang)"},"lang":{"type":"string","description":"go, python, js, ts, rust, java, cs, ruby, php, hcl, tf, terraform, nix"},"times":{"type":"integer"},"nth":{"type":"integer"}},"required":["file"]}`)},
@@ -198,7 +198,7 @@ func mcpExecTool(name string, args map[string]any) mcpCallResult {
 	case "fedit_map":
 		return mcpDoMap(file, getStr("lang"), start)
 	case "fedit_find":
-		return mcpDoFind(file, getStr("match"), getInt("nth", 1), getBool("x"), start)
+		return mcpDoFind(file, getStr("match"), getInt("nth", 1), getBool("x"), getStr("get"), getStr("extract"), getStr("wdelim"), start)
 	case "fedit_insertafter":
 		return mcpDoInsertMatch(file, getStr("match"), getInt("nth", 1), getStr("text"), false, start)
 	case "fedit_insertbefore":
@@ -474,7 +474,7 @@ func mcpDoMap(file, lang string, start time.Time) mcpCallResult {
 	return mcpOK(buf.String())
 }
 
-func mcpDoFind(file, match string, nth int, x bool, start time.Time) mcpCallResult {
+func mcpDoFind(file, match string, nth int, x bool, get, extractStr, wdelim string, start time.Time) mcpCallResult {
 	if match == "" {
 		return mcpErrorResult("find requires match parameter")
 	}
@@ -486,6 +486,48 @@ func mcpDoFind(file, match string, nth int, x bool, start time.Time) mcpCallResu
 	if len(hits) == 0 {
 		return mcpErrorResult(fmt.Sprintf("No matches found for: %s", match))
 	}
+
+	// Extract mode: -extract or -get provided.
+	if extractStr != "" || get != "" {
+		var es extractSpec
+		if extractStr != "" {
+			es, err = parseExtractSpec(extractStr)
+			if err != nil {
+				return mcpErrorResult(fmt.Sprintf("extract: %v", err))
+			}
+		}
+		var b strings.Builder
+		extracted, skipped := 0, 0
+		for _, h := range hits {
+			line := lines[h-1]
+			if get != "" {
+				filtered, ok := applyGet(line, get)
+				if !ok {
+					skipped++
+					continue
+				}
+				line = filtered
+			}
+			if extractStr != "" {
+				val, ok := applyExtract(line, es, wdelim)
+				if !ok {
+					skipped++
+					continue
+				}
+				fmt.Fprintln(&b, val)
+			} else {
+				fmt.Fprintln(&b, line)
+			}
+			extracted++
+		}
+		if skipped > 0 {
+			fmt.Fprintf(&b, "\nExtracted %d value(s), skipped %d (no match)", extracted, skipped)
+		} else {
+			fmt.Fprintf(&b, "\nExtracted %d value(s) from %d match(es)", extracted, len(hits))
+		}
+		return mcpOK(b.String())
+	}
+
 	if x {
 		var b strings.Builder
 		for _, h := range hits {

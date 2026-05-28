@@ -46,6 +46,9 @@ func main() {
 	texthex    := flag.String("texthex", "", "Content as UTF-8 hex (fwencode output); bypasses -text and all escape expansion")
 	cleanfirst := flag.Bool("cleanfirst", false, "Truncate -file to zero bytes before writing")
 	x          := flag.Bool("x", false, "Machine-readable output: bare line numbers / counts, no labels")
+	extractFlag := flag.String("extract", "", "Extract from matched line: WN  WN[s:c]  WN[s:]  WN/DELIM/F")
+	get         := flag.String("get", "",     "Regex pre-filter: extract matching token from line before -extract applies")
+	wdelim      := flag.String("wdelim", "",  "Word delimiter for -extract (default: normalized whitespace, awk-style)")
 		flag.Parse()
 
 	// -texthex: hex string is the content itself (produced by fwencode or PS hex encode).
@@ -192,9 +195,9 @@ func main() {
 		doMap(lines, *file, *lang)
 	case "find":
 		if *stream {
-			doStreamFind(*file, *match, *x)
+			doStreamFind(*file, *match, *x, *get, *extractFlag, *wdelim)
 		} else {
-			doFind(lines, *match, *nth, *x)
+			doFind(lines, *match, *nth, *x, *get, *extractFlag, *wdelim)
 		}
 	case "insertafter":
 		newText := resolveTextFull(*text, *textFile, resolvedBytes)
@@ -406,6 +409,156 @@ func bytesToLines(b []byte) []string {
 	return parts
 }
 
+// ════════════════════════════════════════════════════════════
+// EXTRACT — sub-line word/character extraction (-extract, -get, -wdelim)
+// Implements the File→Line→Word→Sub-word→Character hierarchy.
+// ════════════════════════════════════════════════════════════
+
+// extractSpec is the parsed form of a -extract spec string.
+// Spec formats (all 1-based):
+//   WN          — word N (normalized whitespace, like awk $N)
+//   WN[s:c]     — word N, chars s through s+c-1
+//   WN[s:]      — word N, from char s to end
+//   WN/DELIM/F  — word N, split by DELIM, take field F
+type extractSpec struct {
+	wordN         int    // 1-based word index
+	charStart     int    // 1-based; 0 = whole word/subfield
+	charCount     int    // number of chars; 0 = to end
+	subfieldDelim string // "" = not specified
+	subfieldN     int    // 1-based; 0 = not specified
+}
+
+// parseExtractSpec parses a -extract spec string into an extractSpec.
+func parseExtractSpec(spec string) (extractSpec, error) {
+	if !strings.HasPrefix(spec, "W") {
+		return extractSpec{}, fmt.Errorf("-extract: spec must start with W (e.g. W3, W5[2:3], W1/./2), got %q", spec)
+	}
+	rest := spec[1:]
+
+	// Isolate the word number — ends at '[', '/', or end of string.
+	wordNumEnd := strings.IndexAny(rest, "[/")
+	var wordNumStr, remainder string
+	if wordNumEnd == -1 {
+		wordNumStr = rest
+	} else {
+		wordNumStr = rest[:wordNumEnd]
+		remainder = rest[wordNumEnd:]
+	}
+	wordN, err := strconv.Atoi(wordNumStr)
+	if err != nil || wordN < 1 {
+		return extractSpec{}, fmt.Errorf("-extract: word number must be >= 1, got %q", wordNumStr)
+	}
+	es := extractSpec{wordN: wordN}
+	if remainder == "" {
+		return es, nil
+	}
+
+	if strings.HasPrefix(remainder, "[") {
+		// Char range: [s:c] or [s:]
+		if !strings.HasSuffix(remainder, "]") {
+			return extractSpec{}, fmt.Errorf("-extract: missing closing ] in %q", remainder)
+		}
+		inner := remainder[1 : len(remainder)-1]
+		parts := strings.SplitN(inner, ":", 2)
+		if len(parts) != 2 {
+			return extractSpec{}, fmt.Errorf("-extract: char range must be [s:c] or [s:], got %q", remainder)
+		}
+		s, err := strconv.Atoi(parts[0])
+		if err != nil || s < 1 {
+			return extractSpec{}, fmt.Errorf("-extract: char start must be >= 1, got %q", parts[0])
+		}
+		es.charStart = s
+		if parts[1] != "" {
+			c, err := strconv.Atoi(parts[1])
+			if err != nil || c < 1 {
+				return extractSpec{}, fmt.Errorf("-extract: char count must be >= 1, got %q", parts[1])
+			}
+			es.charCount = c
+		}
+		return es, nil
+	}
+
+	if strings.HasPrefix(remainder, "/") {
+		// Subfield: /DELIM/F — use LastIndex to correctly handle delimiters that
+		// themselves contain '/' (e.g. W1///2 splits on '/').
+		inner := remainder[1:]
+		slashIdx := strings.LastIndex(inner, "/")
+		if slashIdx < 1 {
+			return extractSpec{}, fmt.Errorf("-extract: subfield spec must be /DELIM/N, got %q", remainder)
+		}
+		delim := inner[:slashIdx]
+		nStr := inner[slashIdx+1:]
+		n, err := strconv.Atoi(nStr)
+		if err != nil || n < 1 {
+			return extractSpec{}, fmt.Errorf("-extract: subfield number must be >= 1, got %q", nStr)
+		}
+		es.subfieldDelim = delim
+		es.subfieldN = n
+		return es, nil
+	}
+
+	return extractSpec{}, fmt.Errorf("-extract: unrecognized spec format %q", spec)
+}
+
+// applyExtract applies an extractSpec to a single line, returning the
+// extracted value and whether the extraction succeeded.
+// wdelim controls word splitting: "" = normalized whitespace (strings.Fields,
+// awk-compatible); any other value = split on that literal string.
+func applyExtract(line string, es extractSpec, wdelim string) (string, bool) {
+	var words []string
+	if wdelim != "" {
+		words = strings.Split(line, wdelim)
+	} else {
+		words = strings.Fields(line) // normalized: collapses runs of whitespace
+	}
+	if es.wordN < 1 || es.wordN > len(words) {
+		return "", false
+	}
+	token := words[es.wordN-1]
+
+	// Subfield split: WN/DELIM/F
+	if es.subfieldDelim != "" {
+		subfields := strings.Split(token, es.subfieldDelim)
+		if es.subfieldN < 1 || es.subfieldN > len(subfields) {
+			return "", false
+		}
+		token = subfields[es.subfieldN-1]
+	}
+
+	// Character range: WN[s:c] or WN[s:]
+	if es.charStart > 0 {
+		runes := []rune(token)
+		start := es.charStart - 1 // convert to 0-based
+		if start >= len(runes) {
+			return "", false
+		}
+		if es.charCount > 0 {
+			end := start + es.charCount
+			if end > len(runes) {
+				end = len(runes)
+			}
+			return string(runes[start:end]), true
+		}
+		return string(runes[start:]), true
+	}
+
+	return token, true
+}
+
+// applyGet applies a regex to a line and returns the first match.
+// Returns ("", false) on no match or invalid regex (silent skip).
+func applyGet(line, pattern string) (string, bool) {
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return "", false
+	}
+	m := re.FindString(line)
+	if m == "" {
+		return "", false
+	}
+	return m, true
+}
+
 func readLines(path string) ([]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -504,7 +657,7 @@ func resolveNth(hits []int, nth int) (int, error) {
 	return hits[nth-1], nil
 }
 
-func doFind(lines []string, match string, nth int, x bool) {
+func doFind(lines []string, match string, nth int, x bool, get, extractStr, wdelim string) {
 	if match == "" {
 		fmt.Fprintln(os.Stderr, "Error: -match is required for find")
 		os.Exit(1)
@@ -516,7 +669,51 @@ func doFind(lines []string, match string, nth int, x bool) {
 		os.Exit(1)
 	}
 
+	// Extract mode: -extract or -get provided.
+	// Output is the extracted/filtered value per matched line.
+	// Silent skip when get/extract finds no match on a line.
+	if extractStr != "" || get != "" {
+		var es extractSpec
+		if extractStr != "" {
+			var err error
+			es, err = parseExtractSpec(extractStr)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+		}
+		extracted, skipped := 0, 0
+		for _, ln := range hits {
+			line := lines[ln-1]
+			if get != "" {
+				filtered, ok := applyGet(line, get)
+				if !ok {
+					skipped++
+					continue
+				}
+				line = filtered
+			}
+			if extractStr != "" {
+				val, ok := applyExtract(line, es, wdelim)
+				if !ok {
+					skipped++
+					continue
+				}
+				fmt.Println(val)
+			} else {
+				fmt.Println(line)
+			}
+			extracted++
+		}
+		if skipped > 0 {
+			fmt.Fprintf(os.Stderr, "Extracted %d value(s), skipped %d (no match)\n", extracted, skipped)
+		} else {
+			fmt.Fprintf(os.Stderr, "Extracted %d value(s) from %d match(es)\n", extracted, len(hits))
+		}
+		return
+	}
 
+	// -x mode: bare line numbers only.
 	if x {
 		for _, ln := range hits {
 			fmt.Println(ln)
@@ -524,10 +721,10 @@ func doFind(lines []string, match string, nth int, x bool) {
 		return
 	}
 
+	// Default: context display with surrounding lines.
 	width := len(strconv.Itoa(len(lines)))
 	fmt.Fprintf(os.Stderr, "Found %d match(es) for: %s\n", len(hits), match)
 
-	// Show context: matched line + 1 line before and after
 	for _, ln := range hits {
 		fmt.Println()
 		start := ln - 2
@@ -547,7 +744,6 @@ func doFind(lines []string, match string, nth int, x bool) {
 		}
 	}
 
-	// If nth specified, highlight which one
 	if nth != 0 {
 		resolved, err := resolveNth(hits, nth)
 		if err != nil {
@@ -2730,7 +2926,7 @@ func doStreamReplaceAllRegex(path, pattern, replacement string) {
 }
 
 // doStreamFind is the streaming path for find (-stream). Outputs to stdout.
-func doStreamFind(path, search string, x bool) {
+func doStreamFind(path, search string, x bool, get, extractStr, wdelim string) {
 	src, err := os.Open(path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -2738,26 +2934,65 @@ func doStreamFind(path, search string, x bool) {
 	}
 	defer src.Close()
 
+	// Pre-parse extract spec once (not per line).
+	var es extractSpec
+	if extractStr != "" {
+		es, err = parseExtractSpec(extractStr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	extractMode := extractStr != "" || get != ""
 	scanner := bufio.NewScanner(src)
 	scanner.Buffer(make([]byte, streamLineBuffer), streamLineBuffer)
-	count, lineNum := 0, 0
+	count, lineNum, extracted, skipped := 0, 0, 0, 0
 	for scanner.Scan() {
 		lineNum++
 		line := scanner.Text()
-		if strings.Contains(line, search) {
-			count++
-			if x {
-				fmt.Println(lineNum)
-			} else {
-				fmt.Printf("%d: %s\n", lineNum, line)
+		if !strings.Contains(line, search) {
+			continue
+		}
+		count++
+		if extractMode {
+			token := line
+			if get != "" {
+				filtered, ok := applyGet(token, get)
+				if !ok {
+					skipped++
+					continue
+				}
+				token = filtered
 			}
+			if extractStr != "" {
+				val, ok := applyExtract(token, es, wdelim)
+				if !ok {
+					skipped++
+					continue
+				}
+				fmt.Println(val)
+			} else {
+				fmt.Println(token)
+			}
+			extracted++
+		} else if x {
+			fmt.Println(lineNum)
+		} else {
+			fmt.Printf("%d: %s\n", lineNum, line)
 		}
 	}
 	if scanner.Err() != nil {
 		fmt.Fprintf(os.Stderr, "Error reading: %v\n", scanner.Err())
 		os.Exit(1)
 	}
-	if !x {
+	if extractMode {
+		if skipped > 0 {
+			fmt.Fprintf(os.Stderr, "Extracted %d value(s), skipped %d (no match) across %d lines\n", extracted, skipped, lineNum)
+		} else {
+			fmt.Fprintf(os.Stderr, "Extracted %d value(s) from %d match(es) across %d lines\n", extracted, count, lineNum)
+		}
+	} else if !x {
 		fmt.Fprintf(os.Stderr, "Found %d match(es) across %d lines\n", count, lineNum)
 	}
 }
