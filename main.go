@@ -49,6 +49,7 @@ func main() {
 	extractFlag := flag.String("extract", "", "Extract from matched line: WN  WN[s:c]  WN[s:]  WN/DELIM/F")
 	get         := flag.String("get", "",     "Regex pre-filter: extract matching token from line before -extract applies")
 	wdelim      := flag.String("wdelim", "",  "Word delimiter for -extract (default: normalized whitespace, awk-style)")
+	raw         := flag.Bool("raw", false, "Raw show output: no line numbers or prefix (for piping to fwencode)")
 		flag.Parse()
 
 	// -texthex: hex string is the content itself (produced by fwencode or PS hex encode).
@@ -182,7 +183,16 @@ func main() {
 
 	switch *op {
 	case "show":
-		doShow(lines, *line, *endLine)
+		showStart, showEnd := *line, *endLine
+		if *block != "" {
+			var bErr error
+			showStart, showEnd, bErr = resolveBlock(lines, *lang, *block)
+			if bErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
+				os.Exit(1)
+			}
+		}
+		doShow(lines, showStart, showEnd, *raw)
 	case "insert":
 		newText := resolveTextFull(*text, *textFile, resolvedBytes)
 		doInsert(lines, *file, *line, newText)
@@ -190,7 +200,16 @@ func main() {
 		doDelete(lines, *file, *line, *endLine)
 	case "replace":
 		newText := resolveTextFull(*text, *textFile, resolvedBytes)
-		doReplace(lines, *file, *line, *endLine, newText)
+		replStart, replEnd := *line, *endLine
+		if *block != "" {
+			var bErr error
+			replStart, replEnd, bErr = resolveBlock(lines, *lang, *block)
+			if bErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
+				os.Exit(1)
+			}
+		}
+		doReplace(lines, *file, replStart, replEnd, newText)
 	case "map":
 		doMap(lines, *file, *lang)
 	case "find":
@@ -201,10 +220,28 @@ func main() {
 		}
 	case "insertafter":
 		newText := resolveTextFull(*text, *textFile, resolvedBytes)
-		doInsertMatch(lines, *file, *match, *nth, newText, false)
+		if *block != "" {
+			_, blockEnd, bErr := resolveBlock(lines, *lang, *block)
+			if bErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
+				os.Exit(1)
+			}
+			doInsert(lines, *file, blockEnd, newText) // after closing line of block
+		} else {
+			doInsertMatch(lines, *file, *match, *nth, newText, false)
+		}
 	case "insertbefore":
 		newText := resolveTextFull(*text, *textFile, resolvedBytes)
-		doInsertMatch(lines, *file, *match, *nth, newText, true)
+		if *block != "" {
+			blockStart, _, bErr := resolveBlock(lines, *lang, *block)
+			if bErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
+				os.Exit(1)
+			}
+			doInsert(lines, *file, blockStart-1, newText) // before opening line of block
+		} else {
+			doInsertMatch(lines, *file, *match, *nth, newText, true)
+		}
 	case "replaceall":
 		isRegex := *matchRegex != ""
 		if *match == "" && !isRegex {
@@ -570,7 +607,13 @@ func readLines(path string) ([]string, error) {
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
+		line := scanner.Text()
+		// Strip UTF-8 BOM (EF BB BF) from the first line only. Some editors
+		// and PowerShell's pipeline encoding add a BOM to UTF-8 files.
+		if len(lines) == 0 {
+			line = strings.TrimPrefix(line, "\xef\xbb\xbf")
+		}
+		lines = append(lines, line)
 	}
 	return lines, scanner.Err()
 }
@@ -804,7 +847,7 @@ func doInsertMatch(lines []string, path, match string, nth int, newLines []strin
 // SHOW / INSERT / DELETE / REPLACE
 // ════════════════════════════════════════════════════════════
 
-func doShow(lines []string, start, end int) {
+func doShow(lines []string, start, end int, raw bool) {
 	if start == 0 && end == 0 {
 		start = 1
 		end = len(lines)
@@ -814,6 +857,14 @@ func doShow(lines []string, start, end int) {
 	}
 	if end > len(lines) {
 		end = len(lines)
+	}
+	if raw {
+		// Raw mode: bare content only — no line-number prefix, no footer.
+		// Used for piping to fwencode or other tools.
+		for i := start; i <= end; i++ {
+			fmt.Println(lines[i-1])
+		}
+		return
 	}
 	width := len(strconv.Itoa(end))
 	for i := start; i <= end; i++ {
