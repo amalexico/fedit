@@ -9,7 +9,7 @@ copy-pasting code blocks.
 
 ## 1. Prerequisites
 
-- **fedit v1.6.0+** installed and on your PATH  
+- **fedit v1.7.0+** installed and on your PATH  
   Verify: `fedit` prints the usage block  
 - **Claude Desktop** (macOS or Windows)  
   Download: https://claude.ai/download
@@ -95,32 +95,38 @@ Once connected, try these in Claude Desktop:
 **Stream-safe edit on a large log file**
 > Find all lines containing "ERROR" in app.log using stream mode
 
+**Replace a function body by name (no line numbers)**
+> Replace the `handleLogin` function body in server.go with an updated version
+
+**Extract a sub-field from matched lines**
+> Find lines matching "endpoint:" in config.yaml and extract the third word
+
 ---
 
 ## 6. All available tools
 
 | Tool | What it does |
 |------|-------------|
-| `fedit_show` | Display file with line numbers (optional range) |
+| `fedit_show` | Display file with line numbers (optional range); add `-raw` for bare content output |
 | `fedit_insert` | Insert content after line N |
 | `fedit_delete` | Delete line or range |
 | `fedit_replace` | Replace line or range with new content |
 | `fedit_write` | Write or overwrite an entire file |
 | `fedit_writeraw` | Write or overwrite a file with no escape expansion |
 | `fedit_map` | Structural overview — go, python, js, ts, rust, java, cs, ruby, php, html, sql, hcl, tf, terraform, nix |
-| `fedit_find` | Find lines matching a substring; `stream=true` for large files |
+| `fedit_find` | Find lines matching a substring; `-extract`/`-get`/`-wdelim` for sub-line extraction; `-x` for bare line numbers; `stream=true` for large files |
 | `fedit_insertafter` | Insert content after a matched line |
 | `fedit_insertbefore` | Insert content before a matched line |
 | `fedit_replaceall` | Global replace; supports regex capture groups and glob (`files`) |
 | `fedit_move` | Move a line range or named block to a new position |
 | `fedit_copy` | Copy a line range or named block |
-| `fedit_fields` | Extract column N from CSV/TSV/delimited file |
+| `fedit_fields` | Extract column N from CSV/TSV/delimited file; `-x` suppresses stats footer |
 
 ---
 
 ## 7. Block-aware editing (IaC + source)
 
-`fedit_move` and `fedit_copy` accept a `block` parameter instead of line
+`fedit_replace`, `fedit_insertbefore`, `fedit_insertafter`, `fedit_move`, and `fedit_copy` all accept a `block` parameter instead of line
 numbers. Pass the block name and the language — fedit resolves the exact line
 range automatically.
 
@@ -140,6 +146,26 @@ range automatically.
   "file": "main.go",
   "block": "handleRequest",
   "afterblock": "handleHealth",
+  "lang": "go"
+}
+```
+
+**Replace a named block**
+```json
+{
+  "file": "main.go",
+  "block": "handleRequest",
+  "lang": "go",
+  "text": "<new function body>"
+}
+```
+
+**Insert before or after a named block**
+```json
+{
+  "file": "main.go",
+  "block": "handleRequest",
+  "beforeblock": "handleHealth",
   "lang": "go"
 }
 ```
@@ -180,7 +206,7 @@ Restart the editor after saving.
 
 **"Method not found" errors**  
 - You are running an older fedit binary. Run `fedit` — the usage block must
-  show writeraw, writelines, ields and move/copy. Update to v1.6.0+.
+  show writeraw, writelines, fields and move/copy. Update to v1.7.0+.
 
 **Block not found for HCL/Nix files**  
 - Pass `lang` explicitly: `"lang": "hcl"` or `"lang": "nix"`  
@@ -195,5 +221,6 @@ Restart the editor after saving.
 - Repo: https://github.com/amalexico/fedit  
 - v1.5.0 release notes: HCL/Terraform + Nix block scanners, 333 tests  
 - v1.6.0 release notes: `-texthex`, `writeraw`, `writelines`, `-cleanfirst`, `-x` (machine-readable find/fields)
+- v1.7.0 release notes: `-raw` on show, `-extract`/`-get`/`-wdelim` (sub-line extraction), `-block`/`-lang` on replace/insertbefore/insertafter, BOM strip  
 - v1.4.0 release notes: stream engine, fields op  
 - v1.3.0 release notes: regex replaceall, multi-file glob  
