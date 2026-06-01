@@ -92,6 +92,19 @@ One call. Done. No line numbers needed.
     fedit_find (match="<unique start of block>")   -> confirm start line
     fedit_show (line=N, end=N+30)                  -> verify end of block
     fedit_replace (line=N, end=M, text="<new block>")
+### Show / delete / replace by content anchors (no line numbers)
+
+    # Show everything from one function signature to another
+    fedit_show (match="func Start", endmatch="func End")
+
+    # Delete a section bounded by content anchors
+    fedit_delete (match="## Section Header", endmatch="## Next Header")
+
+    # Replace a plain-text block by content anchors
+    fedit_replace (match="Version 1.6", endmatch="Version 1.6", text="Version 1.7")
+
+Both anchor lines are included in the range. -nth applies to -match only.
+Requires either -endmatch or -end N as the end bound.
 
 ### Pass content with special characters (texthex -- preferred)
 
@@ -281,3 +294,7 @@ Full results: https://amalexhandler.com/fedit#benchmark
   -nth N         which occurrence (default 1, -1 = last)
   -match-regex   regex pattern for replaceall with capture groups ($1 $2)
   -files GLOB    apply replaceall to all files matching a glob
+  -line N:+M     lines N to N+M inclusive (N:+0 = N only); -N counts from end; -N: = last N lines; : = EOF/append
+  -end -N        end line relative to EOF (-1 = last line, -5 = fifth from end)
+  -endmatch TEXT content-anchor end of range -- show, replace, delete, move, copy
+  -quiet         suppress stdout on success; exit code signals result (wins over -v)

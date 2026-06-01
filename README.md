@@ -101,6 +101,17 @@ fedit -file app.conf -op show
 
 # Lines 50-75 only
 fedit -file app.conf -op show -line 50 -end 75
+# Last 10 lines
+fedit -file app.conf -op show -line -10:
+
+# Lines 50 to 5th from end
+fedit -file app.conf -op show -line 50 -end -5
+
+# Lines 100-103 (relative range)
+fedit -file app.conf -op show -line 100:+3
+
+# Show from one anchor to another (no line numbers needed)
+fedit -file config.go -op show -match "func Start" -endmatch "func End"
 ```
 
 ---
@@ -166,6 +177,8 @@ fedit -file config.ini -op replace -line 15 -end 15 -text "max_connections = 200
 
 # Replace lines 30-35 with content from a patch file
 fedit -file server.conf -op replace -line 30 -end 35 -textfile patched-block.txt -v
+# Replace a section by content anchors (no line numbers needed)
+fedit -file CHANGELOG.md -op replace -match "## v1.6" -endmatch "## v1.5" -textfile new-section.txt -v
 ```
 
 ---
@@ -429,14 +442,16 @@ All mappers detect **duplicates** and flag them with warnings.
 |------------|------------------------------------------|
 | -file PATH | Target file (required) |
 | -op OP | Operation to perform (required) |
-| -line N | Starting line number (1-based) |
-| -end N | Ending line number (for ranges) |
+| -line N | Starting line number (1-based); N:+M=range, -N=from end, -N:=last N lines, :=EOF |
+| -end N | Ending line (for ranges); -N counts from end of file |
 | -text "s" | Inline text content |
 | -textfile F | Read content from a file |
 | -match "s" | Substring to search for |
 | -nth N | Which occurrence (default 1, -1 = last) |
 | -lang LANG | Language for map operation |
 | -v | Verify: show affected lines after edit |
+| -endmatch "s" | Content-anchor end of range (show/replace/delete/move/copy) |
+| -quiet | Suppress stdout on success; exit code signals result |
 
 ---
 
