@@ -1,0 +1,4 @@
+First line assorted number 48.6 4/9 23 8373.8626
+	Second line text a tabulation inside	a number 32378
+	Third line has everything 224.43 51/17 #$%^&*!@ and more text
+Fourth line is the last one

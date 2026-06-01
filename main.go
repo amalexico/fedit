@@ -29,28 +29,29 @@ func main() {
 	match := flag.String("match", "", "Text to search for (find/insertafter/insertbefore)")
 	nth := flag.Int("nth", 1, "Which occurrence to match (default 1, use -1 for last)")
 	v := flag.Bool("v", false, "Verify: show affected lines after mutation")
-	endmatch    := flag.String("endmatch", "", "End line bound for move/copy source (content-based)")
-	after       := flag.Int("after", -1, "Destination: insert after line N (0 = beginning of file)")
-	before      := flag.Int("before", -1, "Destination: insert before line N")
-	aftermatch  := flag.String("aftermatch", "", "Destination: insert after first line matching TEXT")
+	endmatch := flag.String("endmatch", "", "End line bound for move/copy source (content-based)")
+	after := flag.Int("after", -1, "Destination: insert after line N (0 = beginning of file)")
+	before := flag.Int("before", -1, "Destination: insert before line N")
+	aftermatch := flag.String("aftermatch", "", "Destination: insert after first line matching TEXT")
 	beforematch := flag.String("beforematch", "", "Destination: insert before first line matching TEXT")
-	times       := flag.Int("times", 1, "Repeat N times (default 1, min 1; for move: cut once, paste N times)")
-	block       := flag.String("block", "", "Source: auto-derive range from named block (requires -lang)")
+	times := flag.Int("times", 1, "Repeat N times (default 1, min 1; for move: cut once, paste N times)")
+	block := flag.String("block", "", "Source: auto-derive range from named block (requires -lang)")
 	beforeblock := flag.String("beforeblock", "", "Destination: insert before named block (requires -lang)")
-	afterblock  := flag.String("afterblock", "", "Destination: insert after named block (requires -lang)")
-	matchRegex  := flag.String("match-regex", "", "Regex pattern for replaceall with capture groups (e.g. -match-regex \"(\\w+)\" -text \"[$1]\")")
-	files       := flag.String("files", "", "Apply replaceall to all files matching a glob (e.g. -files \"*.go\")")
-	stream      := flag.Bool("stream", false, "Stream mode: line-by-line I/O for large files (replaceall, find)")
-	col         := flag.Int("col", 0, "Column number (1-based) for fields op")
-	delim       := flag.String("delim", "\t", "Field delimiter for fields op (default: tab)")
-	texthex    := flag.String("texthex", "", "Content as UTF-8 hex (fwencode output); bypasses -text and all escape expansion")
+	afterblock := flag.String("afterblock", "", "Destination: insert after named block (requires -lang)")
+	matchRegex := flag.String("match-regex", "", "Regex pattern for replaceall with capture groups (e.g. -match-regex \"(\\w+)\" -text \"[$1]\")")
+	files := flag.String("files", "", "Apply replaceall to all files matching a glob (e.g. -files \"*.go\")")
+	stream := flag.Bool("stream", false, "Stream mode: line-by-line I/O for large files (replaceall, find)")
+	col := flag.Int("col", 0, "Column number (1-based) for fields op")
+	delim := flag.String("delim", "\t", "Field delimiter for fields op (default: tab)")
+	texthex := flag.String("texthex", "", "Content as UTF-8 hex (fwencode output); bypasses -text and all escape expansion")
 	cleanfirst := flag.Bool("cleanfirst", false, "Truncate -file to zero bytes before writing")
-	x          := flag.Bool("x", false, "Machine-readable output: bare line numbers / counts, no labels")
+	x := flag.Bool("x", false, "Machine-readable output: bare line numbers / counts, no labels")
 	extractFlag := flag.String("extract", "", "Extract from matched line: WN  WN[s:c]  WN[s:]  WN/DELIM/F")
-	get         := flag.String("get", "",     "Regex pre-filter: extract matching token from line before -extract applies")
-	wdelim      := flag.String("wdelim", "",  "Word delimiter for -extract (default: normalized whitespace, awk-style)")
-	raw         := flag.Bool("raw", false, "Raw show output: no line numbers or prefix (for piping to fwencode)")
-		flag.Parse()
+	get := flag.String("get", "", "Regex pre-filter: extract matching token from line before -extract applies")
+	wdelim := flag.String("wdelim", "", "Word delimiter for -extract (default: normalized whitespace, awk-style)")
+	raw := flag.Bool("raw", false, "Raw show output: no line numbers or prefix (for piping to fwencode)")
+	quiet := flag.Bool("quiet", false, "Suppress stdout on success; exit code signals result (-quiet wins over -v)")
+	flag.Parse()
 
 	// -texthex: hex string is the content itself (produced by fwencode or PS hex encode).
 	// Decoded bytes bypass expandText entirely — no escape expansion, no backslash mangling.
@@ -65,7 +66,9 @@ func main() {
 		}
 	}
 
-
+	if *quiet {
+		*v = false
+	}
 	if (*file == "" && *files == "") || *op == "" {
 		fmt.Fprintln(os.Stderr, "Usage: fedit -file PATH -op OPERATION [flags]")
 		fmt.Fprintln(os.Stderr, "")
@@ -191,13 +194,29 @@ func main() {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
 				os.Exit(1)
 			}
+		} else if *match != "" {
+			var mErr error
+			showStart, showEnd, mErr = resolveSourceLines(lines, 0, 0, *match, *endmatch, *nth)
+			if mErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", mErr)
+				os.Exit(1)
+			}
 		}
 		doShow(lines, showStart, showEnd, *raw)
 	case "insert":
 		newText := resolveTextFull(*text, *textFile, resolvedBytes)
 		doInsert(lines, *file, *line, newText)
 	case "delete":
-		doDelete(lines, *file, *line, *endLine)
+		delStart, delEnd := *line, *endLine
+		if *match != "" {
+			var mErr error
+			delStart, delEnd, mErr = resolveSourceLines(lines, 0, 0, *match, *endmatch, *nth)
+			if mErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", mErr)
+				os.Exit(1)
+			}
+		}
+		doDelete(lines, *file, delStart, delEnd)
 	case "replace":
 		newText := resolveTextFull(*text, *textFile, resolvedBytes)
 		replStart, replEnd := *line, *endLine
@@ -207,6 +226,13 @@ func main() {
 			if bErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
 				os.Exit(1)
+			} else if *match != "" {
+				var mErr error
+				replStart, replEnd, mErr = resolveSourceLines(lines, 0, 0, *match, *endmatch, *nth)
+				if mErr != nil {
+					fmt.Fprintf(os.Stderr, "Error: %v\n", mErr)
+					os.Exit(1)
+				}
 			}
 		}
 		doReplace(lines, *file, replStart, replEnd, newText)
@@ -336,7 +362,7 @@ func main() {
 			dstA, dstB, dstAM, dstBM = be, -1, "", ""
 		}
 		doCopyOp(lines, *file, srcL, srcE, srcM, srcEM, dstA, dstB, dstAM, dstBM, *nth, *times, linesBefore, startTime, *v)
-		case "fields":
+	case "fields":
 		if *col == 0 {
 			fmt.Fprintln(os.Stderr, "fields requires -col N (1-based column number)")
 			os.Exit(1)
@@ -453,10 +479,11 @@ func bytesToLines(b []byte) []string {
 
 // extractSpec is the parsed form of a -extract spec string.
 // Spec formats (all 1-based):
-//   WN          — word N (normalized whitespace, like awk $N)
-//   WN[s:c]     — word N, chars s through s+c-1
-//   WN[s:]      — word N, from char s to end
-//   WN/DELIM/F  — word N, split by DELIM, take field F
+//
+//	WN          — word N (normalized whitespace, like awk $N)
+//	WN[s:c]     — word N, chars s through s+c-1
+//	WN[s:]      — word N, from char s to end
+//	WN/DELIM/F  — word N, split by DELIM, take field F
 type extractSpec struct {
 	wordN         int    // 1-based word index
 	charStart     int    // 1-based; 0 = whole word/subfield
@@ -2150,9 +2177,10 @@ func resolveSourceLines(lines []string, lineFlag, endFlag int, matchFlag, endmat
 // Exactly one of the four destination flags must be set (non-sentinel).
 // afterFlag/beforeFlag use -1 as "not set" sentinel; afterMatchFlag/beforeMatchFlag use "".
 // Returns:
-//   destAfter  — insert after this line index (0 = top of file)
-//   destLine   — human-facing line number used for overlap checks
-//   destDesc   — human-readable description for messages
+//
+//	destAfter  — insert after this line index (0 = top of file)
+//	destLine   — human-facing line number used for overlap checks
+//	destDesc   — human-readable description for messages
 func resolveDestLine(lines []string, afterFlag, beforeFlag int, afterMatchFlag, beforeMatchFlag string) (destAfter, destLine int, destDesc string, err error) {
 	specified := 0
 	if afterFlag != -1 {
@@ -2874,11 +2902,12 @@ const streamLineBuffer = 10 * 1024 * 1024
 //
 // fn receives (1-based lineNum, raw line text) and returns the lines that
 // should appear in the output for that input line:
-//   []string{line}         -- pass-through (unchanged)
-//   []string{newLine}      -- replace
-//   []string{}             -- delete
-//   []string{extra, line}  -- insertbefore
-//   []string{line, extra}  -- insertafter
+//
+//	[]string{line}         -- pass-through (unchanged)
+//	[]string{newLine}      -- replace
+//	[]string{}             -- delete
+//	[]string{extra, line}  -- insertbefore
+//	[]string{line, extra}  -- insertafter
 //
 // Returns (linesRead, linesWritten, error).
 func execStreamOp(path string, fn func(lineNum int, line string) []string) (int, int, error) {
@@ -3095,7 +3124,9 @@ func doFields(path string, col int, delim string, x bool) {
 
 // getHCLBlocks extracts top-level block definitions from HCL/Terraform files.
 // Handles: resource, data, module, provider, variable, output,
-//          locals, terraform, moved, import, check.
+//
+//	locals, terraform, moved, import, check.
+//
 // Both multi-line blocks and single-line blocks (e.g. locals {}) are supported.
 func getHCLBlocks(lines []string) []blockEntry {
 	reTopBlock := regexp.MustCompile(`^(\w+)\s*(.*)`)
@@ -3164,16 +3195,17 @@ func getHCLBlocks(lines []string) []blockEntry {
 
 // getNixBlocks extracts top-level attribute bindings that contain block bodies
 // from Nix expression files. Handles patterns like:
-//   someAttr = {       (attribute set)
-//   programs.git = {   (nested attribute)
-//   buildInputs = [    (list binding — tracked by bracket depth)
-//   mkDerivation = {   (derivation)
+//
+//	someAttr = {       (attribute set)
+//	programs.git = {   (nested attribute)
+//	buildInputs = [    (list binding — tracked by bracket depth)
+//	mkDerivation = {   (derivation)
 func getNixBlocks(lines []string) []blockEntry {
 	reAttr := regexp.MustCompile(`^([\w.]+(?:\."[^"]+")?)\s*=`)
 
 	var entries []blockEntry
 	inBlock := false
-	depth := 0    // tracks { }
+	depth := 0     // tracks { }
 	listDepth := 0 // tracks [ ]
 	curName, curKey := "", ""
 	curStart := 0

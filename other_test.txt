@@ -1,0 +1,4 @@
+First line involves some content
+	Second line has tab and number 09876154.8626 that way we can test
+Third line has some symbols $%^&*!@#""''
+This is the last
