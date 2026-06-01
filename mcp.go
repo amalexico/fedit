@@ -94,7 +94,7 @@ func runMCP() {
 			mcpSendResult(req.ID, mcpInitResult{
 				ProtocolVersion: "2024-11-05",
 				Capabilities:    mcpCaps{Tools: map[string]any{}},
-			ServerInfo: mcpServerInfo{Name: "fedit", Version: "1.6.0"},
+				ServerInfo:      mcpServerInfo{Name: "fedit", Version: "1.6.0"},
 			})
 		case "notifications/initialized":
 		// no response needed
@@ -128,20 +128,20 @@ func mcpSendError(id json.RawMessage, code int, msg string) {
 func mcpToolDefs() []mcpToolDef {
 	s := func(s string) json.RawMessage { return json.RawMessage(s) }
 	return []mcpToolDef{
-		{Name: "fedit_show", Description: "Display file with line numbers. block+lang for named blocks. raw=true strips prefix for piping.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer"},"end":{"type":"integer"},"block":{"type":"string","description":"Named block (func/class/resource)"},"lang":{"type":"string","description":"Language: go python js hcl nix etc"},"raw":{"type":"boolean","description":"Bare content, no line numbers (for piping)"}},"required":["file"]}`)},
-	{Name: "fedit_insert", Description: "Insert content after a given line number.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"line":{"type":"integer","description":"Insert after this line (0 = beginning)"},"text":{"type":"string","description":"Content to insert (use \\n for newlines)"},"cleanfirst":{"type":"boolean","description":"Truncate file before inserting (result is just the inserted content)"}},"required":["file","line","text"]}`)},
-		{Name: "fedit_delete", Description: "Delete one or more lines.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"line":{"type":"integer","description":"Start line to delete"},"end":{"type":"integer","description":"End line (inclusive, defaults to start line)"}},"required":["file","line"]}`)},
-		{Name: "fedit_replace", Description: "Replace a line range or named block with new content.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer","description":"Start line"},"end":{"type":"integer","description":"End line (inclusive)"},"text":{"type":"string","description":"Replacement content"},"block":{"type":"string","description":"Named block to replace (func/class/resource)"},"lang":{"type":"string","description":"Language for block resolution"}},"required":["file","text"]}`)},
+		{Name: "fedit_show", Description: "Display file with line numbers. block+lang for named blocks. raw=true strips prefix for piping.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer"},"end":{"type":"integer"},"block":{"type":"string","description":"Named block (func/class/resource)"},"lang":{"type":"string","description":"Language: go python js hcl nix etc"},"raw":{"type":"boolean","description":"Bare content, no line numbers (for piping)"},"match":{"type":"string","description":"Content anchor for start of range"},"endmatch":{"type":"string","description":"Content anchor for end of range"},"nth":{"type":"integer","description":"Which occurrence of match (default 1, -1 for last)"}},"required":["file"]}`)},
+		{Name: "fedit_insert", Description: "Insert content after a given line number.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"line":{"type":"integer","description":"Insert after this line (0 = beginning)"},"text":{"type":"string","description":"Content to insert (use \\n for newlines)"},"cleanfirst":{"type":"boolean","description":"Truncate file before inserting (result is just the inserted content)"}},"required":["file","line","text"]}`)},
+		{Name: "fedit_delete", Description: "Delete one or more lines.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"line":{"type":"integer","description":"Start line to delete"},"end":{"type":"integer","description":"End line (inclusive, defaults to start line)"},"match":{"type":"string","description":"Content anchor for start of range"},"endmatch":{"type":"string","description":"Content anchor for end of range"},"nth":{"type":"integer","description":"Which occurrence of match (default 1, -1 for last)"}},"required":["file"]}`)},
+		{Name: "fedit_replace", Description: "Replace a line range or named block with new content.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer","description":"Start line"},"end":{"type":"integer","description":"End line (inclusive)"},"text":{"type":"string","description":"Replacement content"},"block":{"type":"string","description":"Named block to replace (func/class/resource)"},"lang":{"type":"string","description":"Language for block resolution"},"match":{"type":"string","description":"Content anchor for start of range"},"endmatch":{"type":"string","description":"Content anchor for end of range"},"nth":{"type":"integer","description":"Which occurrence of match (default 1, -1 for last)"}},"required":["file","text"]}`)},
 		{Name: "fedit_replaceall", Description: "Global find-and-replace. Use match_regex for capture groups. Use files for glob. Add stream=true for large files.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Literal text to find (use match_regex for regex)"},"match_regex":{"type":"string","description":"Regex pattern with capture groups $1 $2 (alternative to match)"},"files":{"type":"string","description":"Glob pattern to apply replaceall across multiple files (e.g. *.go)"},"stream":{"type":"boolean","description":"Line-by-line I/O for multi-GB files without loading into memory"},"text":{"type":"string","description":"Replacement text"},"textfile":{"type":"string","description":"File containing replacement text"}},"required":["file"]}`)},
 		{Name: "fedit_write", Description: "Write or overwrite an entire file.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"text":{"type":"string","description":"Full file content (use \\n for newlines)"}},"required":["file","text"]}`)},
-	{Name: "fedit_writeraw", Description: "Write or overwrite a file with no escape expansion -- backslashes are literal. Use when content already contains real newlines.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"text":{"type":"string","description":"Full file content; real newlines only, no escape expansion"}},"required":["file","text"]}`)},
+		{Name: "fedit_writeraw", Description: "Write or overwrite a file with no escape expansion -- backslashes are literal. Use when content already contains real newlines.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"text":{"type":"string","description":"Full file content; real newlines only, no escape expansion"}},"required":["file","text"]}`)},
 		{Name: "fedit_map", Description: "Structural overview of a source file. Supports 17 languages: go, python, js, ts, rust, java, cs, ruby, php, html, sql, hcl, tf, terraform, nix. Use lang param for ambiguous extensions.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"lang":{"type":"string","description":"Language hint: go, python, js, ts, rust, java, cs, ruby, php, html, sql, hcl, tf, terraform, nix (auto-detected from extension if omitted)"}},"required":["file"]}`)},
-	{Name: "fedit_find", Description: "Find all lines matching a substring. Add stream=true for large files.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Substring to search for"},"nth":{"type":"integer","description":"Which occurrence (default 1, -1 for last)"},"stream":{"type":"boolean","description":"Streaming grep-style output for large files"},"x":{"type":"boolean","description":"Machine-readable: return bare line numbers only, no context"},"extract":{"type":"string","description":"Extract from matched line: WN  WN[s:c]  WN[s:]  WN/DELIM/F"},"get":{"type":"string","description":"Regex pre-filter: extract matching token from line before -extract applies"},"wdelim":{"type":"string","description":"Word delimiter for -extract (default: normalized whitespace)"}},"required":["file","match"]}`)},
+		{Name: "fedit_find", Description: "Find all lines matching a substring. Add stream=true for large files.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Substring to search for"},"nth":{"type":"integer","description":"Which occurrence (default 1, -1 for last)"},"stream":{"type":"boolean","description":"Streaming grep-style output for large files"},"x":{"type":"boolean","description":"Machine-readable: return bare line numbers only, no context"},"extract":{"type":"string","description":"Extract from matched line: WN  WN[s:c]  WN[s:]  WN/DELIM/F"},"get":{"type":"string","description":"Regex pre-filter: extract matching token from line before -extract applies"},"wdelim":{"type":"string","description":"Word delimiter for -extract (default: normalized whitespace)"}},"required":["file","match"]}`)},
 		{Name: "fedit_insertafter", Description: "Insert content after a matching line or after a named block.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"match":{"type":"string"},"text":{"type":"string","description":"Content to insert"},"nth":{"type":"integer"},"block":{"type":"string","description":"Insert after this named block"},"lang":{"type":"string"}},"required":["file","text"]}`)},
 		{Name: "fedit_insertbefore", Description: "Insert content before a matching line or before a named block.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"match":{"type":"string"},"text":{"type":"string","description":"Content to insert"},"nth":{"type":"integer"},"block":{"type":"string","description":"Insert before this named block"},"lang":{"type":"string"}},"required":["file","text"]}`)},
 		{Name: "fedit_move", Description: "Move a line range to a new position. Atomic. Overlap (dest inside src) rejected. -times N: cut once, paste N times. Use -block/-beforeblock/-afterblock with -lang for mapper-aware moves.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer"},"end":{"type":"integer"},"match":{"type":"string"},"endmatch":{"type":"string"},"after":{"type":"integer","description":"Destination after line N (0=beginning)"},"before":{"type":"integer"},"aftermatch":{"type":"string"},"beforematch":{"type":"string"},"block":{"type":"string","description":"Source block name (requires lang)"},"beforeblock":{"type":"string","description":"Dest: before named block (requires lang)"},"afterblock":{"type":"string","description":"Dest: after named block (requires lang)"},"lang":{"type":"string","description":"go, python, js, ts, rust, java, cs, ruby, php, hcl, tf, terraform, nix"},"times":{"type":"integer"},"nth":{"type":"integer"}},"required":["file"]}`)},
 		{Name: "fedit_copy", Description: "Copy a line range to a new position. Atomic. Snapshot semantics: all N copies identical even with overlap. Supports -block/-beforeblock/-afterblock with -lang.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer"},"end":{"type":"integer"},"match":{"type":"string"},"endmatch":{"type":"string"},"after":{"type":"integer","description":"Destination after line N (0=beginning)"},"before":{"type":"integer"},"aftermatch":{"type":"string"},"beforematch":{"type":"string"},"block":{"type":"string","description":"Source block name (requires lang)"},"beforeblock":{"type":"string","description":"Dest: before named block (requires lang)"},"afterblock":{"type":"string","description":"Dest: after named block (requires lang)"},"lang":{"type":"string","description":"go, python, js, ts, rust, java, cs, ruby, php, hcl, tf, terraform, nix"},"times":{"type":"integer"},"nth":{"type":"integer"}},"required":["file"]}`)},
-	{Name: "fedit_fields", Description: "Extract column N from a delimited file (CSV, TSV, colon-separated). Always streams -- no memory limit. Output goes to stdout.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"col":{"type":"integer","description":"Column number (1-based)"},"delim":{"type":"string","description":"Field delimiter: comma for CSV, default is tab"},"x":{"type":"boolean","description":"Suppress stats footer; return field values only"}},"required":["file","col"]}`)},
+		{Name: "fedit_fields", Description: "Extract column N from a delimited file (CSV, TSV, colon-separated). Always streams -- no memory limit. Output goes to stdout.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"col":{"type":"integer","description":"Column number (1-based)"},"delim":{"type":"string","description":"Field delimiter: comma for CSV, default is tab"},"x":{"type":"boolean","description":"Suppress stats footer; return field values only"}},"required":["file","col"]}`)},
 	}
 }
 
@@ -181,7 +181,7 @@ func mcpExecTool(name string, args map[string]any) mcpCallResult {
 	file, _ = filepath.Abs(file)
 	switch name {
 	case "fedit_show":
-		return mcpDoShow(file, getInt("line", 0), getInt("end", 0), getStr("block"), getStr("lang"), getBool("raw"), start)
+		return mcpDoShow(file, getInt("line", 0), getInt("end", 0), getInt("nth", 1), getStr("match"), getStr("endmatch"), getStr("block"), getStr("lang"), getBool("raw"), start)
 	case "fedit_write":
 		return mcpDoWrite(file, getStr("text"), start)
 	case "fedit_writeraw":
@@ -190,9 +190,9 @@ func mcpExecTool(name string, args map[string]any) mcpCallResult {
 		return mcpDoInsert(file, getInt("line", 0), getStr("text"), getBool("cleanfirst"), start)
 	case "fedit_delete":
 		ln := getInt("line", 0)
-		return mcpDoDelete(file, ln, getInt("end", ln), start)
+		return mcpDoDelete(file, ln, getInt("end", ln), getInt("nth", 1), getStr("match"), getStr("endmatch"), start)
 	case "fedit_replace":
-		return mcpDoReplace(file, getInt("line", 0), getInt("end", 0), getStr("block"), getStr("lang"), getStr("text"), start)
+		return mcpDoReplace(file, getInt("line", 0), getInt("end", 0), getInt("nth", 1), getStr("match"), getStr("endmatch"), getStr("block"), getStr("lang"), getStr("text"), start)
 	case "fedit_replaceall":
 		return mcpDoReplaceAll(file, getStr("match"), getStr("text"), start)
 	case "fedit_map":
@@ -213,7 +213,7 @@ func mcpExecTool(name string, args map[string]any) mcpCallResult {
 			getInt("after", -1), getInt("before", -1), getStr("aftermatch"), getStr("beforematch"),
 			getStr("block"), getStr("beforeblock"), getStr("afterblock"), getStr("lang"),
 			getInt("nth", 1), getInt("times", 1), start)
-		case "fedit_fields":
+	case "fedit_fields":
 		return mcpDoFields(file, getInt("col", 0), getStr("delim"), getBool("x"), start)
 	default:
 		return mcpErrorResult(fmt.Sprintf("unknown tool: %s", name))
@@ -298,15 +298,28 @@ func inferLang(file string) string {
 	}
 	return ""
 }
-func mcpDoShow(file string, startLine, endLine int, block, lang string, raw bool, start time.Time) mcpCallResult {
+func mcpDoShow(file string, startLine, endLine, nth int, match, endmatch, block, lang string, raw bool, start time.Time) mcpCallResult {
 	lines, err := readLines(file)
 	if err != nil {
 		return mcpErrorResult(fmt.Sprintf("Error reading file: %v", err))
 	}
-	if block != "" {
+	if match != "" {
+		var mErr error
+		startLine, endLine, mErr = resolveSourceLines(lines, 0, 0, match, endmatch, nth)
+		if mErr != nil {
+			return mcpErrorResult(fmt.Sprintf("Error: %v", mErr))
+		}
+	} else if block != "" {
 		startLine, endLine, err = resolveBlock(lines, lang, block)
 		if err != nil {
 			return mcpErrorResult(fmt.Sprintf("block: %v", err))
+		}
+	} else {
+		if startLine < 0 {
+			startLine = len(lines) + 1 + startLine
+		}
+		if endLine < 0 {
+			endLine = len(lines) + 1 + endLine
 		}
 	}
 	if startLine == 0 && endLine == 0 {
@@ -392,10 +405,24 @@ func mcpDoInsert(file string, afterLine int, text string, cleanfirst bool, start
 	return mcpOK(msg)
 }
 
-func mcpDoDelete(file string, startLine, endLine int, start time.Time) mcpCallResult {
+func mcpDoDelete(file string, startLine, endLine, nth int, match, endmatch string, start time.Time) mcpCallResult {
 	lines, err := readLines(file)
 	if err != nil {
 		return mcpErrorResult(fmt.Sprintf("Error reading file: %v", err))
+	}
+	if match != "" {
+		var mErr error
+		startLine, endLine, mErr = resolveSourceLines(lines, 0, 0, match, endmatch, nth)
+		if mErr != nil {
+			return mcpErrorResult(fmt.Sprintf("Error: %v", mErr))
+		}
+	} else {
+		if startLine < 0 {
+			startLine = len(lines) + 1 + startLine
+		}
+		if endLine < 0 {
+			endLine = len(lines) + 1 + endLine
+		}
 	}
 	if startLine < 1 || endLine > len(lines) || startLine > endLine {
 		return mcpErrorResult(fmt.Sprintf("Invalid range %d-%d (file has %d lines)", startLine, endLine, len(lines)))
@@ -412,15 +439,28 @@ func mcpDoDelete(file string, startLine, endLine int, start time.Time) mcpCallRe
 	return mcpOK(msg)
 }
 
-func mcpDoReplace(file string, startLine, endLine int, block, lang, text string, start time.Time) mcpCallResult {
+func mcpDoReplace(file string, startLine, endLine, nth int, match, endmatch, block, lang, text string, start time.Time) mcpCallResult {
 	lines, err := readLines(file)
 	if err != nil {
 		return mcpErrorResult(fmt.Sprintf("Error reading file: %v", err))
 	}
-	if block != "" {
+	if match != "" {
+		var mErr error
+		startLine, endLine, mErr = resolveSourceLines(lines, 0, 0, match, endmatch, nth)
+		if mErr != nil {
+			return mcpErrorResult(fmt.Sprintf("Error: %v", mErr))
+		}
+	} else if block != "" {
 		startLine, endLine, err = resolveBlock(lines, lang, block)
 		if err != nil {
 			return mcpErrorResult(fmt.Sprintf("block: %v", err))
+		}
+	} else {
+		if startLine < 0 {
+			startLine = len(lines) + 1 + startLine
+		}
+		if endLine < 0 {
+			endLine = len(lines) + 1 + endLine
 		}
 	}
 	if startLine < 1 || endLine > len(lines) || startLine > endLine {
