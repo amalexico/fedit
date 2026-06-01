@@ -21,8 +21,8 @@ func main() {
 
 	file := flag.String("file", "", "Path to the file")
 	op := flag.String("op", "", "Operation: insert, delete, replace, replaceall, show, write, writeraw, writelines, map, find, insertafter, insertbefore, move, copy, fields")
-	line := flag.Int("line", 0, "Line number (1-based)")
-	endLine := flag.Int("end", 0, "End line for delete/replace range (inclusive)")
+	line := flag.String("line", "", "Line number (1-based)")
+	endLine := flag.String("end", "", "End line for delete/replace range (inclusive)")
 	text := flag.String("text", "", "Text to insert/replace (use \\n for newlines, \\t for tabs)")
 	textFile := flag.String("textfile", "", "Read insert/replace text from this file instead of -text")
 	lang := flag.String("lang", "", "Language for map: go, html, sql")
@@ -177,8 +177,10 @@ func main() {
 		}
 	}
 
-	if *endLine == 0 {
-		*endLine = *line
+	lineN, endN, lineErr := parseAndResolveLines(*line, *endLine, len(lines))
+	if lineErr != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", lineErr)
+		os.Exit(1)
 	}
 
 	linesBefore := len(lines)
@@ -186,7 +188,7 @@ func main() {
 
 	switch *op {
 	case "show":
-		showStart, showEnd := *line, *endLine
+		showStart, showEnd := lineN, endN
 		if *block != "" {
 			var bErr error
 			showStart, showEnd, bErr = resolveBlock(lines, *lang, *block)
@@ -205,9 +207,9 @@ func main() {
 		doShow(lines, showStart, showEnd, *raw)
 	case "insert":
 		newText := resolveTextFull(*text, *textFile, resolvedBytes)
-		doInsert(lines, *file, *line, newText)
+		doInsert(lines, *file, lineN, newText)
 	case "delete":
-		delStart, delEnd := *line, *endLine
+		delStart, delEnd := lineN, endN
 		if *match != "" {
 			var mErr error
 			delStart, delEnd, mErr = resolveSourceLines(lines, 0, 0, *match, *endmatch, *nth)
@@ -219,7 +221,7 @@ func main() {
 		doDelete(lines, *file, delStart, delEnd)
 	case "replace":
 		newText := resolveTextFull(*text, *textFile, resolvedBytes)
-		replStart, replEnd := *line, *endLine
+		replStart, replEnd := lineN, endN
 		if *block != "" {
 			var bErr error
 			replStart, replEnd, bErr = resolveBlock(lines, *lang, *block)
@@ -303,7 +305,7 @@ func main() {
 			doReplaceAll(lines, *file, searchStr, replacement)
 		}
 	case "move":
-		srcL, srcE := *line, *endLine
+		srcL, srcE := lineN, endN
 		srcM, srcEM := *match, *endmatch
 		dstA, dstB := *after, *before
 		dstAM, dstBM := *aftermatch, *beforematch
@@ -333,7 +335,7 @@ func main() {
 		}
 		doMoveOp(lines, *file, srcL, srcE, srcM, srcEM, dstA, dstB, dstAM, dstBM, *nth, *times, linesBefore, startTime, *v)
 	case "copy":
-		srcL, srcE := *line, *endLine
+		srcL, srcE := lineN, endN
 		srcM, srcEM := *match, *endmatch
 		dstA, dstB := *after, *before
 		dstAM, dstBM := *aftermatch, *beforematch
@@ -381,7 +383,7 @@ func main() {
 		case "show", "map", "find", "write", "writeraw", "writelines", "move", "copy":
 		// read-only ops, no verify
 		default:
-			center := *line
+			center := lineN
 			if center == 0 {
 				searchFor := *match
 				if *op == "replaceall" && *text != "" {
@@ -461,6 +463,103 @@ func resolveTextFull(text, textFile string, resolvedBytes []byte) []string {
 // bytesToLines splits raw bytes on newline and strips the trailing empty element
 // that strings.Split produces for content ending with '\n'. This matches the
 // behaviour of readLines (scanner-based) so callers get consistent line slices.
+// parseLineFlag parses a -line flag value into raw components.
+// Supports: "N", "-N", "N:+M", "-N:+M", "-N:", ":"
+func parseLineFlag(s string) (startRaw, relEnd int, hasColon, endIsEOF bool, err error) {
+	if s == "" {
+		return 0, 0, false, false, nil
+	}
+	if s == ":" {
+		return 0, 0, true, true, nil
+	}
+	if idx := strings.Index(s, ":"); idx >= 0 {
+		left, right := s[:idx], s[idx+1:]
+		startRaw, err = strconv.Atoi(left)
+		if err != nil {
+			return 0, 0, false, false, fmt.Errorf("invalid -line %q: %v", s, err)
+		}
+		if right == "" {
+			return startRaw, 0, true, true, nil
+		}
+		if !strings.HasPrefix(right, "+") {
+			return 0, 0, false, false, fmt.Errorf("invalid -line range %q: expected +N after colon", s)
+		}
+		relEnd, err = strconv.Atoi(right[1:])
+		if err != nil {
+			return 0, 0, false, false, fmt.Errorf("invalid -line range %q: %v", s, err)
+		}
+		return startRaw, relEnd, true, false, nil
+	}
+	startRaw, err = strconv.Atoi(s)
+	if err != nil {
+		return 0, 0, false, false, fmt.Errorf("invalid -line %q: %v", s, err)
+	}
+	return startRaw, 0, false, false, nil
+}
+
+// parseEndFlag parses a -end flag value: "N" or "-N"
+func parseEndFlag(s string) (raw int, err error) {
+	if s == "" {
+		return 0, nil
+	}
+	raw, err = strconv.Atoi(s)
+	if err != nil {
+		return 0, fmt.Errorf("invalid -end %q: %v", s, err)
+	}
+	return raw, nil
+}
+
+// parseAndResolveLines parses -line and -end string flags and resolves to absolute 1-based integers.
+// Negative indices count from end: -1 = last line, -2 = second-to-last, etc.
+// +N offset on -line colon syntax is relative to resolved start.
+// Returns lineN=0, endN=0 when flags are not specified.
+func parseAndResolveLines(lineFlag, endFlag string, totalLines int) (lineN, endN int, err error) {
+	startRaw, relEnd, hasColon, endIsEOF, err := parseLineFlag(lineFlag)
+	if err != nil {
+		return 0, 0, err
+	}
+	endRaw, err := parseEndFlag(endFlag)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// Resolve start
+	switch {
+	case lineFlag == "":
+		lineN = 0
+	case lineFlag == ":":
+		lineN = totalLines
+	case startRaw < 0:
+		lineN = totalLines + 1 + startRaw
+	default:
+		lineN = startRaw
+	}
+
+	// Resolve end
+	switch {
+	case hasColon && endIsEOF:
+		endN = totalLines
+	case hasColon:
+		endN = lineN + relEnd
+	case endFlag != "":
+		if endRaw < 0 {
+			endN = totalLines + 1 + endRaw
+		} else {
+			endN = endRaw
+		}
+	default:
+		endN = lineN
+	}
+
+	// Validate
+	if lineN != 0 && lineN < 1 {
+		return 0, 0, fmt.Errorf("resolved start line %d is out of range (file has %d lines)", lineN, totalLines)
+	}
+	if lineN != 0 && endN != 0 && endN < lineN {
+		return 0, 0, fmt.Errorf("resolved end line %d is before start line %d (file has %d lines)", endN, lineN, totalLines)
+	}
+	return lineN, endN, nil
+}
 func bytesToLines(b []byte) []string {
 	if len(b) == 0 {
 		return nil

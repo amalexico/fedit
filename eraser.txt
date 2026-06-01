@@ -1,4 +1,0 @@
-    quiet := flag.Bool("quiet", false, "Suppress stdout")
-This is another test with special characters ()":?><!@#-v%%^^&
-This is another test with special characters ()":?><!@#-v%%^^&
-This is a test of last line
