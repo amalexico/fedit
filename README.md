@@ -771,6 +771,60 @@ fedit -op replaceall -file f.conf -match "old.com" -text "new.com" -v ; fedit -o
 The tradeoff is one disk read per operation, which is negligible for editing workflows.
 
 If you want drift-immunity by design, prefer content-based targeting (`insertafter` / `insertbefore` / `replaceall` with `-match`) over line numbers — those resolve the target on each invocation regardless of what previous ops did.
+
+## LLM Benchmark
+
+fedit is the missing layer between LLMs and your codebase. LLMs excel at generating correct code — but applying that code to the right line of a 900-line file, across a 3-step chain, without hallucinating line numbers? That is a different problem.
+
+We tested **Claude Sonnet 4.6**, **ChatGPT GPT-4o**, and **Gemini 2.5 Pro** on 7 realistic editing tasks against files of 565–1206 lines. Each task ran twice: once asking the model to output the whole rewritten file ("raw"), once asking it to output fedit commands only ("fedit"). All outputs were diffed byte-for-byte against ground truth.
+
+### Top-line results
+
+| Model | Raw | fedit |
+|---|---|---|
+| Claude Sonnet 4.6 | 7/7 PASS | 4/7 PASS · 3 PARTIAL |
+| ChatGPT GPT-4o | 1/7 PASS (6 truncated) | 2/7 PASS · 1 PARTIAL · 4 FAIL |
+| Gemini 2.5 Pro | 7/7 PASS\* | 1/7 PASS · 6 FAIL |
+
+\*PASS\* = correct content, formatting artifact from chat UI render.
+
+### Per-test results
+
+| Test | File | Task | CL raw | CL fedit | GPT raw | GPT fedit | GM raw | GM fedit |
+|---|---|---|---|---|---|---|---|---|
+| T1 | processor.go (575 L) | Insert method after struct method | PASS | PARTIAL | FAIL | PARTIAL | PASS | FAIL |
+| T2 | config.yaml (1059 L) | Replace 24-line deployment block | PASS | PASS | FAIL | FAIL | PASS | FAIL |
+| T3 | styles.css (565 L) | Find and delete CSS rule | PASS | PASS | PASS\* | FAIL | PASS\* | FAIL |
+| T4 | system.go (980 L) | Global rename (36 occurrences) | PASS | PASS+ | FAIL | PASS+ | PASS\* | PASS+ |
+| T5 | analytics.py (682 L) | 3-step chain (insert + delete + replace) | PASS | PARTIAL | FAIL | FAIL | PASS | FAIL |
+| T6 | dashboard.html (891 L) | Insert before 3rd match (`-nth`) | PASS | PARTIAL | FAIL | PASS+ | PASS | FAIL |
+| T7 | engine.go (1196 L) | Map + targeted insert after method | PASS | PASS | FAIL | FAIL | PASS | FAIL |
+
+PASS+ = optimal one-liner &nbsp;·&nbsp; PASS = correct &nbsp;·&nbsp; PARTIAL = correct intent, fragile execution &nbsp;·&nbsp; FAIL = wrong output
+
+### Key findings
+
+**1. ChatGPT cannot reliably output large files.** 6 of 7 raw tests were truncated. T6 inserted the literal placeholder `[... TRUNCATED FOR BREVITY ...]` into otherwise valid HTML. T7 compressed 1196 lines down to 166.
+
+**2. LLMs hallucinate line numbers — and it compounds with chain length.** Gemini drifted by 36–56 lines on T2, 45 on T3, then 73 lines on a 3-step chain (T5). Only Claude produced correct line-numbered commands consistently.
+
+**3. Content-matching ops are immune to the drift problem.** Gemini failed every fedit test that required line numbers — but PASSED T4 with `replaceall -match`. Same model, same task complexity, dramatically different reliability. The bottleneck is counting, not understanding.
+
+**4. All three models converged on the same one-liner for T4.** Claude, ChatGPT, and Gemini independently produced `fedit -op replaceall -match "FetchUser" -text "GetAccount"`. When the right tool is obvious, models reach for it.
+
+### Recommendations
+
+Prefer **content-matching operations over line-number operations** when generating fedit commands from an LLM:
+
+- Use `insertbefore -match "next anchor"` instead of `insert -line N`
+- Use `replaceall -match "old" -text "new"` instead of `replace -line N -end M`
+- Use `find -match` and `show` to confirm position before any line-numbered op
+- Use `-block/-lang` to target named functions and structs without any line numbers
+
+For best results, give the LLM an MCP connection to fedit (`fedit mcp`). This eliminates the line-number hallucination class entirely — the path Claude consistently took when recon was available.
+
+Full results, ground truth files, test prompts, and the 7-file corpus: [amalexhandler.com/fedit#benchmark](https://amalexhandler.com/fedit#benchmark)
+
 ## License
 
 MIT — see [LICENSE](LICENSE)
