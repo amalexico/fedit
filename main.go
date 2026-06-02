@@ -228,13 +228,13 @@ func main() {
 			if bErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
 				os.Exit(1)
-			} else if *match != "" {
-				var mErr error
-				replStart, replEnd, mErr = resolveSourceLines(lines, 0, 0, *match, *endmatch, *nth)
-				if mErr != nil {
-					fmt.Fprintf(os.Stderr, "Error: %v\n", mErr)
-					os.Exit(1)
-				}
+			}
+		} else if *match != "" {
+			var mErr error
+			replStart, replEnd, mErr = resolveSourceLines(lines, 0, 0, *match, *endmatch, *nth)
+			if mErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", mErr)
+				os.Exit(1)
 			}
 		}
 		doReplace(lines, *file, replStart, replEnd, newText)

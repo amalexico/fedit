@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: May 31, 2026
+# Last updated: June 1, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -8,13 +8,16 @@ FEDIT -- PROJECT STATE
 
 REPO:    github.com/amalexico/fedit (PUBLIC -- MIT)
 PATH:    C:\Users\kehsi\Desktop\amalex-brand\fedit\
-WEBSITE: amalexhandler.com/fedit (LIVE -- current: v1.7.0, DONE)
+WEBSITE: amalexhandler.com/fedit (LIVE -- current: v1.7.0, needs v1.8.0 update)
 INSTALL: go install github.com/amalexico/fedit@latest
 STARS:   8 (as of May 4)
 
-CURRENT TAG:  v1.7.0 (PUSHED)
-LATEST COMMITS (v1.7.0):
-  d9c1cf9  docs: add LLM benchmark section (v1.7.0)
+CURRENT TAG:  v1.8.0 (PUSHED)
+LATEST COMMITS (v1.8.0):
+  c2860a1  feat: mcp.go -- endmatch+match+negative indices for show/delete/replace
+  a288cc4  docs: update SKILL.md and README for v1.8.0
+  757d5f5  feat: colon line syntax + negative indices for -line/-end (F2)
+  9e30767  feat: endmatch+quiet support for show/delete/replace (F1+F3)
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PENDING TASKS
@@ -54,7 +57,7 @@ MAP LANGUAGES (17):
   Go, HTML, SQL, Python, JavaScript, TypeScript, CSS, Rust,
   Java, C#, YAML, TOML, Markdown, Ruby, PHP, Dockerfile, Makefile
 
-KEY FLAGS (v1.7.0):
+KEY FLAGS (v1.8.0):
   -block NAME + -lang LANG   target named block (no line numbers)
   -raw                       show: bare content for piping to fwencode
   -texthex HEX               hex-encoded content (bypasses PS quoting)
@@ -70,6 +73,13 @@ KEY FLAGS (v1.7.0):
   -nth N                     occurrence selector (default 1, -1 = last)
   -match-regex P             regex pattern with capture groups ($1 $2) for replaceall
   -files GLOB                apply replaceall across matching files
+  -line N:+M               colon range: N to N+M (M additional lines)
+  -line -N                 N-th line from end of file
+  -line -N:                last N lines (from -N to EOF)
+  -line :                  EOF -- append for insert, last line for show/delete/replace
+  -end -N                  end line relative to EOF
+  -endmatch TEXT           content-anchor end of range (show, replace, delete, move, copy)
+  -quiet                   suppress stdout on success; exit code signals result (wins over -v)
 
 EXTRACT HIERARCHY (File -> Line -> Word -> Char):
   WN           word N (normalized whitespace, 1-based)
@@ -208,8 +218,8 @@ T7 (1196L) -- Map + targeted insert after specific struct method
 FEDIT -- FILES IN REPO
 ═══════════════════════════════════════════════════════════════
 
-main.go          (2906+ lines -- primary source)
-mcp.go           (719+ lines)
+main.go          (3357 lines -- primary source)
+mcp.go           (845 lines)
 README.md        (needs ## LLM Benchmark section)
 SKILL.md         (updated May 29 -- v1.7.0 features + new anti-patterns)
 CLAUDE_DESKTOP.md (updated May 29 -- v1.7.0 features, committed)
@@ -226,21 +236,15 @@ Demo:
 FEDIT -- NEXT VERSION TODO
 ===============================================================
 
-IDEAS & IMPROVEMENTS (discussed May 31, 2026):
+SHIPPED IN v1.8.0 (June 1, 2026):
+  [X] 1. Anchor-to-anchor replace (-match/-endmatch on show/replace/delete + MCP)
+  [X] 2. Colon line syntax (-line N:+M, -N, -N:, : and -end -N)
+  [X] 3. Quiet mode (-quiet flag)
 
-  1. Anchor-to-anchor block replace (generic text version of -block/-lang)
-     fedit -file f -op replace -match 'section start' -endmatch 'section end' -texthex $h
-     Currently needs 3 steps: find + show to confirm range + delete/replace.
-     Targets: markdown, status files, any plain-text section-based file.
+PENDING v1.8.0:
+  [ ] 1. Update fedit.html on website for v1.8.0    TODO
+  [ ] 2. Post r/devops v1.8.0 update                TODO
+  [ ] 3. Add tests for new flags                    TODO
 
-  2. Relative -end offset
-     Allow -end +N meaning start+N lines, e.g. -line 100 -end +10
-     Eliminates PS arithmetic like ($n1[0]+10) which breaks in pipelines.
-     Also: -line -5 meaning 5 lines from end of file.
-
-  3. Structured verify / quiet mode
-     -silent / -quiet flag: suppress verify block, only fail on error.
-     Useful for LLM agent loops that issue sequences and validate exit codes.
-
-END OF FEDIT STATUS -- May 31, 2026
+END OF FEDIT STATUS -- June 1, 2026
 ═══════════════════════════════════════════════════════════════
