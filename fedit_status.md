@@ -242,9 +242,14 @@ SHIPPED IN v1.8.0 (June 1, 2026):
   [X] 3. Quiet mode (-quiet flag)
 
 PENDING v1.8.0:
-  [ ] 1. Update fedit.html on website for v1.8.0    TODO
-  [ ] 2. Post r/devops v1.8.0 update                TODO
-  [ ] 3. Add tests for new flags                    TODO
+  [X] 1. Update fedit.html on website for v1.8.0    DONE (June 2, 2026, deployed)
+  [X] 2. Post r/devops v1.8.0 update                DONE (June 2, 2026, standalone post live)
+  [X] 3. Add tests for new flags                    DONE (June 2, 2026, commit de164ab, v180_test.go)
+
+REDDIT STATUS (June 2, 2026):
+  r/devops   -- standalone post LIVE
+  r/sysadmin -- standalone post, awaiting mod review (modmail sent)
+  r/golang   -- post held by small projects filter, modmail sent to appeal
 
 END OF FEDIT STATUS -- June 1, 2026
 ═══════════════════════════════════════════════════════════════
