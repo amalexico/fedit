@@ -54,6 +54,12 @@ Multi-line content -- Notepad++ _patch.txt (PREFERRED when content has quotes/ba
     fedit -file f -op insertafter -match 'anchor' -texthex $(fwencode "content") -v
     WARNING: $$ in double-quoted PS strings expands to process ID -- avoid.
     SAFE:    $h = fwencode "content with $ signs" ; fedit ... -texthex $h
+  fwencode USAGE RULES:
+    WORKS:   $h = fwencode "single line"
+    WORKS:   $h = fwencode "with `"double quotes`" escaped"
+    WORKS:   $h = fwencode "line one`nline two"   -- PS expands `n to newline before fwencode sees it
+    BROKEN:  $h = fwencode "line one\nline two"   -- \n is literal backslash-n, NOT a newline
+    CORRECT for complex multi-line: Notepad++ _patch.txt + -textfile (avoids all escaping)
   NEVER use Set-Content.
   NEVER chain write + fedit in the same command block (separate commands).
   Double-quotes in -text/-match: use -texthex (see fwencode section below).
@@ -119,7 +125,10 @@ Multi-line content -- Notepad++ _patch.txt (PREFERRED when content has quotes/ba
            Anchor replace:  -op replace -match "start" -endmatch "end" -textfile f.txt -v
            Anchor delete:   -op delete -match "start" -endmatch "end" -v
            Substring replace only: replaceall -match "old" -text "new"
-           Single-line match-delete: $n = fedit -op find -match X -x ; fedit -op delete -line $n -v
+           Single-line match-delete: $n = [int](fedit -op find -match X -x) ; fedit -op delete -line $n -v
+           PS -x CAST RULE: fedit -x returns STRING -- wrap in [int]() before arithmetic.
+             WRONG:   $n = fedit ... -x  →  ($n+3) concatenates: "2443" not 247
+             CORRECT: $n = [int](fedit ... -x)  →  ($n+3) = 247
            Paste-safe pattern: one $var = cmd ; cmd per line -- reversal does not break same-line chains.
            BRACE NESTING RISK: replacing } with } else if -- verify indentation level in verify block.
            gofmt nests else if inside inner block if patch indentation places it at wrong brace depth.

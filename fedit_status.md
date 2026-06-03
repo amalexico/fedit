@@ -120,6 +120,11 @@ VERIFY RULE:
   Always read the === VERIFY === block before running the next command.
   The verify shows surrounding context -- placement errors are visible immediately.
   If something looks off: stop, diagnose, fix before continuing.
+POWERSHELL -X RULE:
+  fedit -x output is a STRING in PS -- always cast to [int] before arithmetic.
+  CORRECT:  $n = [int](fedit -file f -op find -match "text" -x)
+            fedit -file f -op delete -line $n -end ($n+3) -v
+  WRONG:    $n = fedit ... -x  then ($n+3) -- string concat, gives "2443" not 247
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- BENCHMARK PROJECT
