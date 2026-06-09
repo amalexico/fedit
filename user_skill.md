@@ -42,8 +42,9 @@
     [IO.File]::WriteAllText('C:\...\absolute\_patch.txt', "content here")
 
 Multi-line content -- Notepad++ _patch.txt (PREFERRED when content has quotes/backticks):
-    Open Notepad++, create _patch.txt, type exact content, save UTF-8 no BOM.
-    fedit -file target -op insertafter -match 'anchor' -textfile _patch.txt -v
+    Open Notepad++, create _patch.txt, save UTF-8 no BOM.
+    NOTE: if Notepad++ accidentally saves with BOM, fedit strips it from the first line.
+    fedit -file target -op insert -line N -textfile _patch.txt -v
     Remove-Item _patch.txt
 
   Python replacement -- Notepad++ _fix.py (for substrings containing double-quotes):
