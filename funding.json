@@ -1,40 +1,29 @@
 {
-  "version": "v1.0.0",
+  "$schema": "https://fundingjson.org/schema/v1.1.0.json",
+  "version": "v1.1.0",
   "entity": {
     "type": "individual",
     "role": "maintainer",
     "name": "Alejandro Castaneda",
     "email": "kehsiaocuba@gmail.com",
     "description": "Independent systems engineer and open source developer. Creator and sole maintainer of fedit, a CLI tool and MCP server for surgical file editing in AI pipelines.",
-    "webpages": [
-      "https://github.com/amalexico/fedit"
-    ]
-  },
-  "projects": [
-    {
-      "guid": "fedit",
-      "name": "fedit",
-      "description": "A zero-dependency CLI tool and MCP server written in Go for surgical, precise file editing from the command line. Supports block-aware editing for Go, Python, Terraform/HCL, Nix and more. Used by AI agents via Model Context Protocol for controlled, token-efficient file manipulation in automated pipelines.",
-      "webpages": [
-        "https://amalexhandler.com/fedit"
-      ],
-      "repositories": [
-        "https://github.com/amalexico/fedit"
-      ],
-      "licenses": [
-        "MIT"
-      ],
-      "tags": [
-        "cli",
-        "mcp",
-        "go",
-        "file-editing",
-        "ai-tooling",
-        "developer-tools",
-        "automation"
-      ]
+    "webpageUrl": {
+      "url": "https://github.com/amalexico/fedit"
     }
-  ],
+  },
+  "projects": [{
+    "guid": "fedit",
+    "name": "fedit",
+    "description": "A zero-dependency CLI tool and MCP server written in Go for surgical, precise file editing from the command line. Supports block-aware editing for Go, Python, Terraform/HCL, Nix and more. Used by AI agents via Model Context Protocol for controlled, token-efficient file manipulation in automated pipelines.",
+    "webpageUrl": {
+      "url": "https://amalexhandler.com/fedit"
+    },
+    "repositoryUrl": {
+      "url": "https://github.com/amalexico/fedit"
+    },
+    "licenses": ["spdx:MIT"],
+    "tags": ["cli", "mcp", "go", "file-editing", "ai-tooling", "developer-tools", "automation"]
+  }],
   "funding": {
     "channels": [
       {
@@ -54,13 +43,4 @@
       {
         "guid": "maintenance",
         "status": "active",
-        "name": "Ongoing Maintenance",
-        "description": "Sustain active development, security improvements, documentation, and community support for fedit.",
-        "amount": 12000,
-        "currency": "USD",
-        "frequency": "yearly"
-      }
-    ],
-    "history": []
-  }
-}
+        "na
