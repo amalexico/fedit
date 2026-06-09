@@ -43,4 +43,14 @@
       {
         "guid": "maintenance",
         "status": "active",
-        "na
+        "name": "Ongoing Maintenance",
+        "description": "Sustain active development, security improvements, documentation, and community support for fedit.",
+        "amount": 12000,
+        "currency": "USD",
+        "frequency": "yearly",
+        "channels": ["github-sponsors", "paypal"]
+      }
+    ],
+    "history": []
+  }
+}
