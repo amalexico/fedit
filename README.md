@@ -1,5 +1,6 @@
 # fedit — Fast File Editor for the Terminal
 [![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/fedit)
+[![Open Collective](https://img.shields.io/opencollective/all/fedit?label=Open%20Collective&logo=opencollective)](https://opencollective.com/fedit)
 
 A zero-dependency CLI tool for **surgical file edits** from the command line.
 No interactive editors. No sed/awk gymnastics. Just simple, predictable operations
