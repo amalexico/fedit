@@ -197,8 +197,29 @@ func main() {
 		return
 	}
 
-	// Multi -file (comma list or glob): read-only ops only, see multifile.go.
+	// Multi -file (comma list or glob): show/find/map go to runMultiFile (multifile.go);
+	// replaceall/insertafter/insertbefore/delete go to runMultiMutate (multimutate.go).
 	if *file != "" && isMultiSpec(*file) {
+		switch *op {
+		case "replaceall", "insertafter", "insertbefore", "delete":
+			if *matchRegex != "" || *block != "" || *line != "" || *cleanfirst || *stream || *files != "" {
+				fmt.Fprintln(os.Stderr, "Error: multi -file mutation takes -match (plus -endmatch for delete) only; -match-regex, -block, -line, -cleanfirst, -stream and -files are not supported with it")
+				os.Exit(1)
+			}
+			mo := multiMutOpts{spec: *file, op: *op, match: *match, endmatch: *endmatch, nth: *nth}
+			switch *op {
+			case "replaceall":
+				mo.replacement = *text
+				if resolvedBytes != nil {
+					mo.replacement = string(resolvedBytes)
+				} else if *textFile != "" {
+					mo.replacement = strings.Join(resolveText("", *textFile), "\n")
+				}
+			case "insertafter", "insertbefore":
+				mo.newLines = resolveTextFull(*text, *textFile, resolvedBytes)
+			}
+			os.Exit(runMultiMutate(mo))
+		}
 		os.Exit(runMultiFile(multiOpts{
 			spec: *file, op: *op, match: *match, endmatch: *endmatch, nth: *nth,
 			x: *x, get: *get, extract: *extractFlag, wdelim: *wdelim,
@@ -997,40 +1018,44 @@ func doFind(lines []string, match string, nth int, x bool, get, extractStr, wdel
 // INSERT AFTER/BEFORE — content-based insertion
 // ════════════════════════════════════════════════════════════
 
-func doInsertMatch(lines []string, path, match string, nth int, newLines []string, before bool) {
+// execInsertMatch is the pure core of doInsertMatch: it validates the request,
+// resolves the -nth match, and returns the new line slice plus the matched line
+// and the line the insert lands after. It never touches the file and never calls os.Exit.
+func execInsertMatch(lines []string, match string, nth int, newLines []string, before bool) (result []string, targetLine, insertAfter int, err error) {
 	if match == "" {
-		fmt.Fprintln(os.Stderr, "Error: -match is required for insertafter/insertbefore")
-		os.Exit(1)
+		return nil, 0, 0, fmt.Errorf("Error: -match is required for insertafter/insertbefore")
 	}
 	if len(newLines) == 0 {
-		fmt.Fprintln(os.Stderr, "Nothing to insert (-text or -textfile is empty)")
-		os.Exit(1)
+		return nil, 0, 0, fmt.Errorf("Nothing to insert (-text or -textfile is empty)")
 	}
-
 	hits := findMatches(lines, match)
-	targetLine, err := resolveNth(hits, nth)
+	targetLine, err = resolveNth(hits, nth)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Match error: %v\nSearched for: %s\n", err, match)
-		os.Exit(1)
+		return nil, 0, 0, fmt.Errorf("Match error: %v\nSearched for: %s", err, match)
 	}
-
-	// Show what we matched for confirmation
-	fmt.Fprintf(os.Stderr, "Matched line %d: %s\n", targetLine, strings.TrimSpace(lines[targetLine-1]))
-
-	var insertAfter int
-	direction := "after"
 	if before {
-		insertAfter = targetLine - 1 // insert after the line BEFORE the match
-		direction = "before"
+		insertAfter = targetLine - 1
 	} else {
-		insertAfter = targetLine // insert after the matched line
+		insertAfter = targetLine
 	}
-
-	result := make([]string, 0, len(lines)+len(newLines))
+	result = make([]string, 0, len(lines)+len(newLines))
 	result = append(result, lines[:insertAfter]...)
 	result = append(result, newLines...)
 	result = append(result, lines[insertAfter:]...)
+	return result, targetLine, insertAfter, nil
+}
 
+func doInsertMatch(lines []string, path, match string, nth int, newLines []string, before bool) {
+	result, targetLine, insertAfter, err := execInsertMatch(lines, match, nth, newLines, before)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "Matched line %d: %s\n", targetLine, strings.TrimSpace(lines[targetLine-1]))
+	direction := "after"
+	if before {
+		direction = "before"
+	}
 	if err := writeLines(path, result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
 		os.Exit(1)
@@ -1070,21 +1095,28 @@ func doShow(lines []string, start, end int, raw bool) {
 	fmt.Fprintf(os.Stderr, "--- %d total lines ---\n", len(lines))
 }
 
-func doInsert(lines []string, path string, afterLine int, newLines []string) {
+// execInsert is the pure core of doInsert: it validates the request and returns
+// the new line slice. It never touches the file and never calls os.Exit.
+func execInsert(lines []string, afterLine int, newLines []string) ([]string, error) {
 	if len(newLines) == 0 {
-		fmt.Fprintln(os.Stderr, "Nothing to insert (-text or -textfile is empty)")
-		os.Exit(1)
+		return nil, fmt.Errorf("Nothing to insert (-text or -textfile is empty)")
 	}
 	if afterLine < 0 || afterLine > len(lines) {
-		fmt.Fprintf(os.Stderr, "Line %d out of range (file has %d lines)\n", afterLine, len(lines))
-		os.Exit(1)
+		return nil, fmt.Errorf("Line %d out of range (file has %d lines)", afterLine, len(lines))
 	}
-
 	result := make([]string, 0, len(lines)+len(newLines))
 	result = append(result, lines[:afterLine]...)
 	result = append(result, newLines...)
 	result = append(result, lines[afterLine:]...)
+	return result, nil
+}
 
+func doInsert(lines []string, path string, afterLine int, newLines []string) {
+	result, err := execInsert(lines, afterLine, newLines)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	if err := writeLines(path, result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
 		os.Exit(1)
@@ -1094,15 +1126,24 @@ func doInsert(lines []string, path string, afterLine int, newLines []string) {
 		len(newLines), afterLine, len(result))
 }
 
-func doDelete(lines []string, path string, start, end int) {
+// execDelete is the pure core of doDelete: it validates the range and returns
+// the new line slice. It never touches the file and never calls os.Exit.
+func execDelete(lines []string, start, end int) ([]string, error) {
 	if start < 1 || end > len(lines) || start > end {
-		fmt.Fprintf(os.Stderr, "Invalid range %d-%d (file has %d lines)\n", start, end, len(lines))
-		os.Exit(1)
+		return nil, fmt.Errorf("Invalid range %d-%d (file has %d lines)", start, end, len(lines))
 	}
 	result := make([]string, 0, len(lines)-(end-start+1))
 	result = append(result, lines[:start-1]...)
 	result = append(result, lines[end:]...)
+	return result, nil
+}
 
+func doDelete(lines []string, path string, start, end int) {
+	result, err := execDelete(lines, start, end)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	if err := writeLines(path, result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
 		os.Exit(1)
@@ -1111,16 +1152,25 @@ func doDelete(lines []string, path string, start, end int) {
 	fmt.Fprintf(os.Stderr, "Deleted lines %d-%d (%d total now)\n", start, end, len(result))
 }
 
-func doReplace(lines []string, path string, start, end int, newLines []string) {
+// execReplace is the pure core of doReplace: it validates the range and returns
+// the new line slice. It never touches the file and never calls os.Exit.
+func execReplace(lines []string, start, end int, newLines []string) ([]string, error) {
 	if start < 1 || end > len(lines) || start > end {
-		fmt.Fprintf(os.Stderr, "Invalid range %d-%d (file has %d lines)\n", start, end, len(lines))
-		os.Exit(1)
+		return nil, fmt.Errorf("Invalid range %d-%d (file has %d lines)", start, end, len(lines))
 	}
 	result := make([]string, 0, len(lines)-(end-start+1)+len(newLines))
 	result = append(result, lines[:start-1]...)
 	result = append(result, newLines...)
 	result = append(result, lines[end:]...)
+	return result, nil
+}
 
+func doReplace(lines []string, path string, start, end int, newLines []string) {
+	result, err := execReplace(lines, start, end, newLines)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	if err := writeLines(path, result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
 		os.Exit(1)
@@ -1129,27 +1179,41 @@ func doReplace(lines []string, path string, start, end int, newLines []string) {
 	fmt.Fprintf(os.Stderr, "Replaced lines %d-%d with %d line(s) (%d total now)\n",
 		start, end, len(newLines), len(result))
 }
-func doReplaceAll(lines []string, path, search, replacement string) {
+
+// execReplaceAll is the pure core of doReplaceAll: it replaces every occurrence
+// of search on every line and returns the new slice plus the changed-line count.
+// It never mutates its input, never touches the file and never calls os.Exit.
+func execReplaceAll(lines []string, search, replacement string) ([]string, int, error) {
 	if search == "" {
-		fmt.Fprintln(os.Stderr, "replaceall requires -match (text to find)")
-		os.Exit(1)
+		return nil, 0, fmt.Errorf("replaceall requires -match (text to find)")
 	}
 	count := 0
+	result := make([]string, len(lines))
 	for i, line := range lines {
 		if strings.Contains(line, search) {
-			lines[i] = strings.ReplaceAll(line, search, replacement)
+			result[i] = strings.ReplaceAll(line, search, replacement)
 			count++
+		} else {
+			result[i] = line
 		}
 	}
 	if count == 0 {
-		fmt.Fprintf(os.Stderr, "No lines contain: %s\n", search)
+		return nil, 0, fmt.Errorf("No lines contain: %s", search)
+	}
+	return result, count, nil
+}
+
+func doReplaceAll(lines []string, path, search, replacement string) {
+	result, count, err := execReplaceAll(lines, search, replacement)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	if err := writeLines(path, lines); err != nil {
+	if err := writeLines(path, result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Fprintf(os.Stderr, "Replaced '%s' on %d line(s) (%d total)\n", search, count, len(lines))
+	fmt.Fprintf(os.Stderr, "Replaced '%s' on %d line(s) (%d total)\n", search, count, len(result))
 }
 
 // ════════════════════════════════════════════════════════════
