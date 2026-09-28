@@ -517,17 +517,27 @@ func mcpDoMap(file, lang string, start time.Time) mcpCallResult {
 	if lang == "" {
 		return mcpErrorResult("Cannot determine language. Use lang parameter.")
 	}
+	if !mapLangs[lang] {
+		return mcpErrorResult(fmt.Sprintf("Unknown language: %s", lang))
+	}
 	oldOut := os.Stdout
 	oldErr := os.Stderr
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 	os.Stderr = w
+	// Drain the pipe concurrently: doMap can write more than the pipe buffer holds,
+	// and a blocked write would otherwise hang the server forever.
+	var buf strings.Builder
+	copied := make(chan struct{})
+	go func() {
+		io.Copy(&buf, r)
+		close(copied)
+	}()
 	doMap(lines, file, lang)
 	w.Close()
 	os.Stdout = oldOut
 	os.Stderr = oldErr
-	var buf strings.Builder
-	io.Copy(&buf, r)
+	<-copied
 	r.Close()
 	return mcpOK(buf.String())
 }
