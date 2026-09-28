@@ -197,6 +197,16 @@ func main() {
 		return
 	}
 
+	// Multi -file (comma list or glob): read-only ops only, see multifile.go.
+	if *file != "" && isMultiSpec(*file) {
+		os.Exit(runMultiFile(multiOpts{
+			spec: *file, op: *op, match: *match, endmatch: *endmatch, nth: *nth,
+			x: *x, get: *get, extract: *extractFlag, wdelim: *wdelim,
+			block: *block, lang: *lang, line: *line, endLine: *endLine,
+			raw: *raw, stream: *stream,
+		}))
+	}
+
 	// -cleanfirst: truncate before reading so mutations start from an empty file.
 	if *cleanfirst && *file != "" {
 		if err := os.WriteFile(*file, []byte{}, 0644); err != nil {
