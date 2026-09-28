@@ -48,6 +48,8 @@ func main() {
 	col := flag.Int("col", 0, "Column number (1-based) for fields op")
 	delim := flag.String("delim", "\t", "Field delimiter for fields op (default: tab)")
 	texthex := flag.String("texthex", "", "Content as UTF-8 hex (fwencode output); bypasses -text and all escape expansion")
+	matchhex := flag.String("matchhex", "", "Hex-encoded UTF-8 for -match (fwencode output); use when the anchor contains double quotes")
+	endmatchhex := flag.String("endmatchhex", "", "Hex-encoded UTF-8 for -endmatch (fwencode output)")
 	cleanfirst := flag.Bool("cleanfirst", false, "Truncate -file to zero bytes before writing")
 	x := flag.Bool("x", false, "Machine-readable output: bare line numbers / counts, no labels")
 	extractFlag := flag.String("extract", "", "Extract from matched line: WN  WN[s:c]  WN[s:]  WN/DELIM/F")
@@ -57,6 +59,23 @@ func main() {
 	quiet := flag.Bool("quiet", false, "Suppress stdout on success; exit code signals result (-quiet wins over -v)")
 	flag.Parse()
 
+	// -matchhex/-endmatchhex: hex-encoded anchors, decoded into -match/-endmatch so PowerShell never mangles embedded double quotes.
+	if *matchhex != "" {
+		mb, mhErr := hex.DecodeString(*matchhex)
+		if mhErr != nil {
+			fmt.Fprintf(os.Stderr, "matchhex: invalid hex string: %v\n", mhErr)
+			os.Exit(1)
+		}
+		*match = string(mb)
+	}
+	if *endmatchhex != "" {
+		emb, emhErr := hex.DecodeString(*endmatchhex)
+		if emhErr != nil {
+			fmt.Fprintf(os.Stderr, "endmatchhex: invalid hex string: %v\n", emhErr)
+			os.Exit(1)
+		}
+		*endmatch = string(emb)
+	}
 	// -texthex: hex string is the content itself (produced by fwencode or PS hex encode).
 	// Decoded bytes bypass expandText entirely — no escape expansion, no backslash mangling.
 	// resolvedBytes is nil when -texthex is absent; all downstream code checks nil before use.
@@ -104,6 +123,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  -files GLOB   Apply replaceall to all files matching a glob")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "  -texthex      Treat -text as hex from fwencode (bypasses PS quoting entirely)")
+		fmt.Fprintln(os.Stderr, "  -matchhex     Hex-encoded -match (fwencode output); for anchors with double quotes")
+		fmt.Fprintln(os.Stderr, "  -endmatchhex  Hex-encoded -endmatch (fwencode output)")
 		fmt.Fprintln(os.Stderr, "  -cleanfirst   Truncate -file before writing (pair with insert for clean overwrite)")
 		fmt.Fprintln(os.Stderr, "  -x            Machine-readable output: bare line numbers / counts, no labels")
 		fmt.Fprintln(os.Stderr, "")
