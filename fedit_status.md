@@ -53,6 +53,7 @@ SESSION LOG (Sept 27, 2026, later):
   - The PATH entry is the repo folder itself, so go build -o fedit.exe . replaces the PATH binary. Always use the explicit -o build.
   - Task 4 DONE (c6442f7, 06b890e, c027e97, all pushed): -matchhex and -endmatchhex decode into -match/-endmatch right after flag.Parse via decodeHexAnchor(flagName, h). Tests in matchhex_test.go. Documented in README.md and SKILL.md. CLAUDE_DESKTOP.md and mcp.go deliberately skipped (mcp.go not yet checked for how it builds args).
   - LESSON: inline fwencode breaks on strings with many double quotes (argv mangling truncated a patch and broke main.go; restored with git checkout). Use a Notepad++ patch file plus -textfile. Trailing blank lines in patch files are dropped, so add a blank line separately with -texthex 0a.
+  - Task 5 DONE (bfaa0a3, pushed): -get was never broken on map, it was silently ignored by every op except find. main() now errors if -get is used with any other op and compiles the regex up front (invalid regex exits 1 with the parser error). find -get alone (no -extract) is valid and prints the filtered part of each matched line.
 
 ===============================================================
 FEDIT -- PENDING TASKS
@@ -69,7 +70,7 @@ IMMEDIATE (do in this order):
   [x] 4. DONE (c6442f7, 06b890e, c027e97). Fix -match with embedded double quotes: PowerShell mangles it before
          fedit sees it (e.g. -match 'case "replace":' searches for
          case replace:). Candidate: -matchhex mirroring -texthex.
-  [ ] 5. Fix -get REGEX: it did nothing on map -lang go (returned the full
+  [x] 5. DONE (bfaa0a3). Fix -get REGEX: it did nothing on map -lang go (returned the full
          map). Decide whether map should accept -get or only find should.
   [ ] 6. Multi-file work, LOCKED DESIGN (see below). Build order:
          a. multi -file (comma list or glob) for show/find/map, a simple loop
@@ -90,6 +91,7 @@ IMMEDIATE (do in this order):
          insertafter/insertbefore; CSS @media duplicate false positive;
          duplicate-detection for markdown and dockerfile; doMapHCL missing,
          so map -lang terraform still fails.
+         ALSO: MCP fedit_find bypasses main() so an invalid get regex still skips every line silently there. fedit_map description in mcp.go says 17 languages but map supports 19 (JSON and CSV added).
   [ ] 10. Tag v1.9.0 once the fixes and the first multi-file steps land.
 
 LOCKED DESIGN DECISION (Sept 27, 2026): multi -file and multi -dest are two
