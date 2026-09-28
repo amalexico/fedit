@@ -76,6 +76,19 @@ func main() {
 		}
 		*endmatch = decoded
 	}
+
+	// -get is only consumed by find; reject it elsewhere instead of silently ignoring it,
+	// and validate the regex up front so a typo is not a silent skip of every line.
+	if *get != "" {
+		if *op != "find" {
+			fmt.Fprintf(os.Stderr, "Error: -get is only supported with -op find (got -op %s)\n", *op)
+			os.Exit(1)
+		}
+		if _, reErr := regexp.Compile(*get); reErr != nil {
+			fmt.Fprintf(os.Stderr, "Error: -get: invalid regex: %v\n", reErr)
+			os.Exit(1)
+		}
+	}
 	// -texthex: hex string is the content itself (produced by fwencode or PS hex encode).
 	// Decoded bytes bypass expandText entirely — no escape expansion, no backslash mangling.
 	// resolvedBytes is nil when -texthex is absent; all downstream code checks nil before use.
