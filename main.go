@@ -61,20 +61,20 @@ func main() {
 
 	// -matchhex/-endmatchhex: hex-encoded anchors, decoded into -match/-endmatch so PowerShell never mangles embedded double quotes.
 	if *matchhex != "" {
-		mb, mhErr := hex.DecodeString(*matchhex)
+		decoded, mhErr := decodeHexAnchor("matchhex", *matchhex)
 		if mhErr != nil {
-			fmt.Fprintf(os.Stderr, "matchhex: invalid hex string: %v\n", mhErr)
+			fmt.Fprintln(os.Stderr, mhErr)
 			os.Exit(1)
 		}
-		*match = string(mb)
+		*match = decoded
 	}
 	if *endmatchhex != "" {
-		emb, emhErr := hex.DecodeString(*endmatchhex)
+		decoded, emhErr := decodeHexAnchor("endmatchhex", *endmatchhex)
 		if emhErr != nil {
-			fmt.Fprintf(os.Stderr, "endmatchhex: invalid hex string: %v\n", emhErr)
+			fmt.Fprintln(os.Stderr, emhErr)
 			os.Exit(1)
 		}
-		*endmatch = string(emb)
+		*endmatch = decoded
 	}
 	// -texthex: hex string is the content itself (produced by fwencode or PS hex encode).
 	// Decoded bytes bypass expandText entirely — no escape expansion, no backslash mangling.
@@ -467,6 +467,16 @@ func main() {
 			fmt.Fprintf(os.Stderr, "  elapsed: %s\n", elapsedStr)
 		}
 	}
+}
+
+// decodeHexAnchor decodes a -matchhex/-endmatchhex value into the anchor text.
+// flagName appears only in the error message, e.g. "matchhex: invalid hex string: ...".
+func decodeHexAnchor(flagName, h string) (string, error) {
+	b, err := hex.DecodeString(h)
+	if err != nil {
+		return "", fmt.Errorf("%s: invalid hex string: %v", flagName, err)
+	}
+	return string(b), nil
 }
 
 func resolveText(text, textFile string) []string {
