@@ -20,6 +20,7 @@
   ONE patch block per response. Never show a reference block AND a run-this block.
   NEVER provide two patch blocks in one message even with DO-NOT-RUN labels.
   Provide ONE canonical block only per turn.
+  When sending patch-file content, put the command that applies it (plus the verify chain) in the SAME response, right after the content. Never split them across two turns. Recon commands come in their own earlier turn.
 
 ---
 
@@ -139,6 +140,7 @@ Patch file location & naming:
            one session (July 14, 2026) from hand-computing end-start
            against a stale remembered total.
   Format:  gofmt on specific files only -- never on directories.
+  Args:    -line takes N:+M for a relative range. N:M is INVALID (error: expected +N after colon). A computed range must be ONE double-quoted string built with a subexpression, because an unquoted parenthesized expression followed by :+13 is split by PowerShell and fedit only sees the first part.
   NOTE:    replace and delete support -match/-endmatch for content-anchored ranges (v1.8.0).
            Anchor replace:  -op replace -match "start" -endmatch "end" -textfile f.txt -v
            Anchor delete:   -op delete -match "start" -endmatch "end" -v
