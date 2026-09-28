@@ -392,6 +392,9 @@ func main() {
 		// read-only ops, no verify
 		default:
 			center := lineN
+			if verifyCenter > 0 {
+				center = verifyCenter
+			}
 			if center == 0 {
 				searchFor := *match
 				if *op == "replaceall" && *text != "" {
@@ -783,10 +786,15 @@ func expandText(text string) []string {
 	return strings.Split(text, "\n")
 }
 
+var verifyCenter int
+
 func showVerify(path string, centerLine int) {
 	lines, err := readLines(path)
 	if err != nil {
 		return
+	}
+	if centerLine > len(lines) {
+		centerLine = len(lines)
 	}
 	start := centerLine - 3
 	end := centerLine + 7
@@ -973,6 +981,7 @@ func doInsertMatch(lines []string, path, match string, nth int, newLines []strin
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
 		os.Exit(1)
 	}
+	verifyCenter = insertAfter + 1
 	fmt.Fprintf(os.Stderr, "Inserted %d line(s) %s line %d (%d total now)\n",
 		len(newLines), direction, targetLine, len(result))
 }
@@ -1026,6 +1035,7 @@ func doInsert(lines []string, path string, afterLine int, newLines []string) {
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
 		os.Exit(1)
 	}
+	verifyCenter = afterLine + 1
 	fmt.Fprintf(os.Stderr, "Inserted %d line(s) after line %d (%d total now)\n",
 		len(newLines), afterLine, len(result))
 }
@@ -1043,6 +1053,7 @@ func doDelete(lines []string, path string, start, end int) {
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
 		os.Exit(1)
 	}
+	verifyCenter = start
 	fmt.Fprintf(os.Stderr, "Deleted lines %d-%d (%d total now)\n", start, end, len(result))
 }
 
@@ -1060,6 +1071,7 @@ func doReplace(lines []string, path string, start, end int, newLines []string) {
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
 		os.Exit(1)
 	}
+	verifyCenter = start
 	fmt.Fprintf(os.Stderr, "Replaced lines %d-%d with %d line(s) (%d total now)\n",
 		start, end, len(newLines), len(result))
 }
