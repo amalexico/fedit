@@ -51,9 +51,14 @@ SESSION LOG (Sept 27, 2026, later):
   - Block -lang names: javascript or typescript, rust, java, csharp or c#, ruby, php, hcl or terraform or tf, nix. NOT js.
   - Task 3 DONE (edea6c4, pushed): package var verifyCenter is set by doInsert, doInsertMatch, doDelete and doReplace; main() prefers it. replaceall keeps the first-hit search on purpose.
   - The PATH entry is the repo folder itself, so go build -o fedit.exe . replaces the PATH binary. Always use the explicit -o build.
-  - Task 4 DONE (c6442f7, 06b890e, c027e97, all pushed): -matchhex and -endmatchhex decode into -match/-endmatch right after flag.Parse via decodeHexAnchor(flagName, h). Tests in matchhex_test.go. Documented in README.md and SKILL.md. CLAUDE_DESKTOP.md and mcp.go deliberately skipped (mcp.go not yet checked for how it builds args).
+  - Task 4 DONE (c6442f7, 06b890e, c027e97, all pushed): -matchhex and -endmatchhex decode into -match/-endmatch right after flag.Parse via decodeHexAnchor(flagName, h). Tests in matchhex_test.go. Documented in README.md and SKILL.md. CLAUDE_DESKTOP.md and mcp.go deliberately skipped (mcp.go was checked later: its params are JSON and never pass through PowerShell, so it needs no change).
   - LESSON: inline fwencode breaks on strings with many double quotes (argv mangling truncated a patch and broke main.go; restored with git checkout). Use a Notepad++ patch file plus -textfile. Trailing blank lines in patch files are dropped, so add a blank line separately with -texthex 0a.
   - Task 5 DONE (bfaa0a3, pushed): -get was never broken on map, it was silently ignored by every op except find. main() now errors if -get is used with any other op and compiles the regex up front (invalid regex exits 1 with the parser error). find -get alone (no -extract) is valid and prints the filtered part of each matched line.
+  - Task 6a DONE (8f631c4, pushed): multi -file for show, find and map. -file accepts a comma list and/or globs (a real file with that exact name wins). Code is in multifile.go (runMultiFile, expandMultiSpec, detectLang) with a hook in main() just before the -cleanfirst block; tests in multifile_test.go (14 tests). Output has a header line per file (==> path <==). find skips files with no hits (grep-style) and exits 1 only if nothing matched anywhere; map skips unrecognized extensions with a SKIP line. Mutating ops and -stream are rejected with exit 1 before any file is read. CLI only: MCP handlers bypass main().
+  - MCP fix DONE (b82a626, pushed): mcpDoMap read its stdout pipe only after doMap finished, so large maps hung the server, and an explicit unknown lang made doMap call os.Exit and kill it. Now lang is validated against mapLangs first and the pipe is drained in a goroutine. Tests in mcpmap_test.go. Both bugs are in the released v1.8.0; tagging v1.8.1 is an open decision.
+  - MCP multi -file plan: mcpDoFind is its own implementation that returns strings, and mcpDoMap swaps os.Stdout, so runMultiFile cannot be reused as is. Do MCP multi-file together with 6b (pure exec* functions), then one batch layer serves the CLI and MCP.
+  - Patch files now cycle: _patch.txt, _patch1.txt ... _patch9.txt (max 10), overwrite contents each time. Next file to use is _patch3.txt.
+  - NEXT SESSION, in order: (1) decide on the v1.8.1 tag; (2) document multi -file in README.md and SKILL.md (same recon-then-patch pattern as -matchhex); (3) task 6b exec* extraction; (4) MCP multi-file with 6b; then tasks 7, 8, 9, 10.
 
 ===============================================================
 FEDIT -- PENDING TASKS
@@ -72,7 +77,7 @@ IMMEDIATE (do in this order):
          case replace:). Candidate: -matchhex mirroring -texthex.
   [x] 5. DONE (bfaa0a3). Fix -get REGEX: it did nothing on map -lang go (returned the full
          map). Decide whether map should accept -get or only find should.
-  [ ] 6. Multi-file work, LOCKED DESIGN (see below). Build order:
+  [ ] 6. (6a DONE 8f631c4) Multi-file work, LOCKED DESIGN (see below). Build order:
          a. multi -file (comma list or glob) for show/find/map, a simple loop
             with a per-file header
          b. multi -file for self-contained mutating ops. First extract pure
@@ -92,6 +97,7 @@ IMMEDIATE (do in this order):
          duplicate-detection for markdown and dockerfile; doMapHCL missing,
          so map -lang terraform still fails.
          ALSO: MCP fedit_find bypasses main() so an invalid get regex still skips every line silently there. fedit_map description in mcp.go says 17 languages but map supports 19 (JSON and CSV added).
+         ALSO: fedit_map schema advertises lang aliases (js, ts, cs, hcl, tf, terraform, nix) that doMap does not accept (now an error result, not a crash): make them work or fix the schema text. detectLang in multifile.go duplicates the doMap extension switch: make doMap call it.
   [ ] 10. Tag v1.9.0 once the fixes and the first multi-file steps land.
 
 LOCKED DESIGN DECISION (Sept 27, 2026): multi -file and multi -dest are two

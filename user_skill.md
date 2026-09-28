@@ -1,7 +1,7 @@
 # Amalex Brand -- Claude Working Preferences
 # Upload this file alongside the project status file at the start of every chat.
 # Applies to: fedit, amalex-handler, fwrite, website, and all Amalex Brand projects.
-# Last updated: July 17, 2026
+# Last updated: September 28, 2026
 
 ---
 
@@ -85,7 +85,7 @@ Multi-line content -- Notepad++ _patch.txt (PREFERRED when content has quotes/ba
 Patch file location & naming:
   ALWAYS create patch files in the CURRENT WORKING DIRECTORY (apps/fwrite),
   never in a subfolder like internal/builtins/ -- keeps cleanup to one folder.
-  Sequential numbering per session: _patch.txt, _patch1.txt, _patch2.txt, ...
+  Cycling numbering (max 10 temp files): _patch.txt, _patch1.txt ... _patch9.txt, then wrap to _patch.txt and overwrite.
   Do NOT Remove-Item after each command -- user runs a batch cleanup script
   at end of session instead.
 ---
