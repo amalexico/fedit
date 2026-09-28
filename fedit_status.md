@@ -44,18 +44,24 @@ LESSONS FROM THIS SESSION (Sept 27, 2026):
     single match it MUTATES the file. Use it only on files with many blocks.
   - -match with an embedded double quote is mangled by PowerShell (see
     bugs below). Use a quote-free anchor, or -block now that it works.
-  - -v verify display can show the wrong location. Confirm with show.
+  - -v verify display fixed in edea6c4 except replaceall (still first-hit search). Confirm with show if in doubt.
+
+SESSION LOG (Sept 27, 2026, later):
+  - Task 2 DONE: block scanner regression check passed for JS, Rust, Java, C#, PHP, HCL and Nix (unbalanced braces inside single-line strings, exact block ranges). Fixtures are in the _testsystem\blockfixtures folder (untracked). Multi-line strings still untested (task 8).
+  - Block -lang names: javascript or typescript, rust, java, csharp or c#, ruby, php, hcl or terraform or tf, nix. NOT js.
+  - Task 3 DONE (edea6c4, pushed): package var verifyCenter is set by doInsert, doInsertMatch, doDelete and doReplace; main() prefers it. replaceall keeps the first-hit search on purpose.
+  - Rebuild and replace the fedit on PATH before relying on the fix (verified with a temp build only).
 
 ===============================================================
 FEDIT -- PENDING TASKS
 ===============================================================
 
 IMMEDIATE (do in this order):
-  [ ] 1. Push commit 9050667, then commit this status file.
-  [ ] 2. Regression-check the block scanner on non-Go fixtures (Rust, Java,
+  [x] 1. DONE: commits pushed, status file committed.
+  [x] 2. DONE (see SESSION LOG). Regression-check the block scanner on non-Go fixtures (Rust, Java,
          C#, PHP, JS, HCL, Nix). The only test today was Python, which was
          inconclusive because Python has its own scanner.
-  [ ] 3. Fix -v verify display (showVerify): it shows context around the
+  [x] 3. DONE (edea6c4). Fix -v verify display (showVerify): it shows context around the
          FIRST match instead of the resolved -nth match, and after
          insertafter -block it shows line 1. The edit itself lands correctly.
   [ ] 4. Fix -match with embedded double quotes: PowerShell mangles it before
