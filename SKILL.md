@@ -311,4 +311,4 @@ Full results: https://amalexhandler.com/fedit#benchmark
   -end -N        end line relative to EOF (-1 = last line, -5 = fifth from end)
   -endmatch TEXT content-anchor end of range -- show, replace, delete, move, copy
   -quiet         suppress stdout on success; exit code signals result (wins over -v)
-  -file LIST     CLI only, show/find/map: comma list and/or glob, header per file (==> path <==); mutating ops and -stream rejected; MCP tools take one file
+  -file LIST     CLI only: comma list and/or glob; show/find/map, plus replaceall/insertafter/insertbefore/delete with -match only (per-file SKIP, never abort); other mutating ops and -stream rejected; MCP tools take one file

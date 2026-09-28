@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: September 27, 2026
+# Last updated: September 28, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -11,9 +11,9 @@ PATH:    C:\Users\kehsi\Desktop\amalex-brand\fedit\
 WEBSITE: amalexhandler.com/fedit (LIVE -- current: v1.8.0)
 INSTALL: go install github.com/amalexico/fedit@latest
 
-CURRENT TAG:  v1.8.0 (PUSHED)
-PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. No new tag
-  yet (v1.9.0 is the natural next number, not reserved). Code commit
+CURRENT TAG:  v1.8.1 (PUSHED)
+PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. v1.8.1 was tagged later (see the Sept 28 notes below).
+  Code commit
   touched .gitignore, CLAUDE_DESKTOP.md, main.go (~3920 lines), user_skill.md.
 IN THAT COMMIT:
   - JSON + CSV map support, Go import advisory (checkMissingGoImports is
@@ -55,10 +55,15 @@ SESSION LOG (Sept 27, 2026, later):
   - LESSON: inline fwencode breaks on strings with many double quotes (argv mangling truncated a patch and broke main.go; restored with git checkout). Use a Notepad++ patch file plus -textfile. Trailing blank lines in patch files are dropped, so add a blank line separately with -texthex 0a.
   - Task 5 DONE (bfaa0a3, pushed): -get was never broken on map, it was silently ignored by every op except find. main() now errors if -get is used with any other op and compiles the regex up front (invalid regex exits 1 with the parser error). find -get alone (no -extract) is valid and prints the filtered part of each matched line.
   - Task 6a DONE (8f631c4, pushed): multi -file for show, find and map. -file accepts a comma list and/or globs (a real file with that exact name wins). Code is in multifile.go (runMultiFile, expandMultiSpec, detectLang) with a hook in main() just before the -cleanfirst block; tests in multifile_test.go (14 tests). Output has a header line per file (==> path <==). find skips files with no hits (grep-style) and exits 1 only if nothing matched anywhere; map skips unrecognized extensions with a SKIP line. Mutating ops and -stream are rejected with exit 1 before any file is read. CLI only: MCP handlers bypass main().
-  - MCP fix DONE (b82a626, pushed): mcpDoMap read its stdout pipe only after doMap finished, so large maps hung the server, and an explicit unknown lang made doMap call os.Exit and kill it. Now lang is validated against mapLangs first and the pipe is drained in a goroutine. Tests in mcpmap_test.go. Both bugs are in the released v1.8.0; tagging v1.8.1 is an open decision.
+  - MCP fix DONE (b82a626, pushed): mcpDoMap read its stdout pipe only after doMap finished, so large maps hung the server, and an explicit unknown lang made doMap call os.Exit and kill it. Now lang is validated against mapLangs first and the pipe is drained in a goroutine. Tests in mcpmap_test.go. Both bugs are in the released v1.8.0; released as v1.8.1 on Sept 28.
   - MCP multi -file plan: mcpDoFind is its own implementation that returns strings, and mcpDoMap swaps os.Stdout, so runMultiFile cannot be reused as is. Do MCP multi-file together with 6b (pure exec* functions), then one batch layer serves the CLI and MCP.
   - Patch files now cycle: _patch.txt, _patch1.txt ... _patch9.txt (max 10), overwrite contents each time. Next file to use is _patch3.txt.
-  - NEXT SESSION, in order: (1) decide on the v1.8.1 tag; (2) document multi -file in README.md and SKILL.md (same recon-then-patch pattern as -matchhex); (3) task 6b exec* extraction; (4) MCP multi-file with 6b; then tasks 7, 8, 9, 10.
+  - v1.8.1 TAGGED AND PUSHED (Sept 28, 2026): includes the MCP map fix, task 6a, -matchhex and the -get guard. Docs for multi -file show/find/map pushed in c50a24f.
+  - Task 6b PARTLY DONE (1da049a, pushed): pure functions execInsert, execDelete, execReplace, execInsertMatch and execReplaceAll return errors and never write files or call os.Exit; the do* wrappers keep the exact old messages. New multimutate.go: runMultiMutate does replaceall, insertafter, insertbefore and delete (delete accepts -endmatch, inclusive) over a multi -file spec, reusing batchResult and printBatchReport, wired into main() next to the runMultiFile hook. Tests in multimutate_test.go (7 tests, including a read-only file). -match-regex, -block, -line, -cleanfirst, -stream, -files and the ops replace, write, move and copy are rejected with exit 1 before any file is read. Live-tested in a scratch folder under TEMP. README and SKILL updated (mutation marked unreleased).
+  - DECIDED: batch policy is report and continue, never abort. Every per-file problem is a SKIP line and that file is left unmodified. Exit code 0 if at least one file succeeded, 1 if none did.
+  - DECIDED (-dest move step): destination writes happen first. A destination that fails (read-only, no permission) is a SKIP, and the source text is removed ONLY if at least one destination write succeeded. If every destination fails, all are SKIP and the source stays intact, so text is never lost.
+  - Open items: execReplaceAllRegex is not wired into multi -file yet (-match-regex is rejected); replace, write, move and copy over multiple files are not built; MCP multi -file is not built. go build ./... does not refresh fedit.exe, so run go build -o fedit.exe . before any live test.
+  - NEXT SESSION, in order: (1) the -dest move/copy step of the locked design, obeying the no-loss rule above; (2) replace and write over multiple files, and regex replaceall through execReplaceAllRegex; (3) MCP multi-file on top of the exec functions and the batch layer; (4) tag the next release (v1.9.0 once mutation is documented as released); then tasks 7, 8, 9, 10.
 
 ===============================================================
 FEDIT -- PENDING TASKS
@@ -77,7 +82,7 @@ IMMEDIATE (do in this order):
          case replace:). Candidate: -matchhex mirroring -texthex.
   [x] 5. DONE (bfaa0a3). Fix -get REGEX: it did nothing on map -lang go (returned the full
          map). Decide whether map should accept -get or only find should.
-  [ ] 6. (6a DONE 8f631c4) Multi-file work, LOCKED DESIGN (see below). Build order:
+  [ ] 6. (6a DONE 8f631c4, 6b PARTLY DONE 1da049a) Multi-file work, LOCKED DESIGN (see below). Build order:
          a. multi -file (comma list or glob) for show/find/map, a simple loop
             with a per-file header
          b. multi -file for self-contained mutating ops. First extract pure
@@ -421,7 +426,7 @@ FEDIT -- FILES IN REPO (partial -- repo has accumulated many one-off
 patch scripts over time, see `ls` output for the full list)
 ═══════════════════════════════════════════════════════════════
 
-main.go              (~3850 lines -- primary source, was 3357 at v1.8.0)
+main.go              (~4050 lines -- primary source, was 3357 at v1.8.0)
 mcp.go               (845 lines)
 README.md, SKILL.md, CLAUDE_DESKTOP.md, user_skill.md
 go.mod, LICENSE, .gitignore

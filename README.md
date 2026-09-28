@@ -284,9 +284,11 @@ Invalid hex exits 1 with `matchhex: invalid hex string: ...` (or `endmatchhex: .
 
 ---
 
-### Multiple files -- comma list or glob (v1.8.1)
+### Multiple files -- comma list or glob (show/find/map v1.8.1, mutation unreleased)
 
-`-file` accepts a comma-separated list, a glob, or both, for the read-only ops show, find and map. Each file gets a `==> path <==` header, and a real file with that exact name wins over glob expansion.
+`-file` accepts a comma-separated list, a glob, or both. A real file with that exact name wins over glob expansion.
+
+Read-only ops (show, find, map) print a `==> path <==` header per file:
 
 ```bash
 # Find TODO in every Go file in the current folder
@@ -299,7 +301,23 @@ fedit -file main.go,mcp.go -op map -lang go
 - find skips files with no hits (grep-style) and exits 1 only if nothing matched in any file.
 - map skips unrecognized extensions with a SKIP line.
 - A summary line reports how many files had results.
-- Mutating ops and -stream are rejected with exit 1 before any file is read. For a global rename across files, use -files GLOB with replaceall.
+
+Mutating ops (replaceall, insertafter, insertbefore, delete) run on each file on its own:
+
+```bash
+# Replace in every matching file
+fedit -file '*.conf' -op replaceall -match 'old.example.com' -text 'new.example.com'
+
+# Insert after the first match in each file
+fedit -file a.yaml,b.yaml -op insertafter -match 'servers:' -text '  - new'
+
+# Delete from a start line through an end line in each file (-endmatch is inclusive)
+fedit -file '*.md' -op delete -match '<!-- start -->' -endmatch '<!-- end -->'
+```
+
+- A problem in one file (no match, unreadable, read-only, write failed) is reported as SKIP and never stops the batch. A skipped file is never modified.
+- The report lists OK or SKIP per file, then `N/M file(s) succeeded`. Exit code 0 if at least one file succeeded, 1 if none did.
+- Only -match (plus -endmatch for delete), -nth and -text/-textfile/-texthex are accepted. -match-regex, -block, -line, -cleanfirst, -stream and -files are rejected, and so are the other mutating ops (replace, write, move, copy), all before any file is read. For a global rename with regex across files, use -files GLOB with replaceall.
 - CLI only: the MCP tools still take a single file.
 
 ---
@@ -478,7 +496,7 @@ All mappers detect **duplicates** and flag them with warnings.
 
 | Flag | Description |
 |------------|------------------------------------------|
-| -file PATH | Target file (required); comma list or glob for show/find/map (v1.8.1) |
+| -file PATH | Target file (required); comma list or glob for show/find/map and replaceall/insertafter/insertbefore/delete (mutation unreleased) |
 | -op OP | Operation to perform (required) |
 | -line N | Starting line number (1-based); N:+M=range, -N=from end, -N:=last N lines, :=EOF |
 | -end N | Ending line (for ranges); -N counts from end of file |
