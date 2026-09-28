@@ -2,12 +2,16 @@ package main
 
 import (
 	"bufio"
+	"encoding/csv"
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -25,7 +29,7 @@ func main() {
 	endLine := flag.String("end", "", "End line for delete/replace range (inclusive)")
 	text := flag.String("text", "", "Text to insert/replace (use \\n for newlines, \\t for tabs)")
 	textFile := flag.String("textfile", "", "Read insert/replace text from this file instead of -text")
-	lang := flag.String("lang", "", "Language for map: go, html, sql")
+	lang := flag.String("lang", "", "Language for map: go, html, sql, python, javascript, typescript, css, rust, java, csharp, yaml, toml, markdown, ruby, php, dockerfile, makefile, json, csv")
 	match := flag.String("match", "", "Text to search for (find/insertafter/insertbefore)")
 	nth := flag.Int("nth", 1, "Which occurrence to match (default 1, use -1 for last)")
 	v := flag.Bool("v", false, "Verify: show affected lines after mutation")
@@ -221,6 +225,10 @@ func main() {
 		doDelete(lines, *file, delStart, delEnd)
 	case "replace":
 		newText := resolveTextFull(*text, *textFile, resolvedBytes)
+		if *text == "" && *textFile == "" && resolvedBytes == nil {
+			fmt.Fprintln(os.Stderr, "replace requires -text, -textfile, or -texthex (use 'delete' to remove a range)")
+			os.Exit(1)
+		}
 		replStart, replEnd := lineN, endN
 		if *block != "" {
 			var bErr error
@@ -1121,6 +1129,10 @@ func doMap(lines []string, filename, lang string) {
 			lang = "dockerfile"
 		case strings.HasSuffix(lower, "makefile") || strings.HasSuffix(lower, ".mk"):
 			lang = "makefile"
+		case strings.HasSuffix(lower, ".json"):
+			lang = "json"
+		case strings.HasSuffix(lower, ".csv"):
+			lang = "csv"
 		default:
 			fmt.Fprintln(os.Stderr, "Cannot auto-detect language. Use -lang flag.")
 			os.Exit(1)
@@ -1162,6 +1174,10 @@ func doMap(lines []string, filename, lang string) {
 		doMapDockerfile(lines)
 	case "makefile":
 		doMapMakefile(lines)
+	case "json":
+		doMapJSON(lines)
+	case "csv":
+		doMapCSV(lines)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown language: %s\n", lang)
 		os.Exit(1)
@@ -2230,6 +2246,368 @@ func doMapMakefile(lines []string) {
 }
 
 // ════════════════════════════════════════════════════════════
+// JSON / CSV — data-integrity mappers (v1.9.0)
+// ════════════════════════════════════════════════════════════
+
+type jsonDupKey struct {
+	key   string
+	count int
+	line  int
+}
+
+// findJSONDuplicateKeys walks the token stream (not the decoded map, which
+// silently collapses duplicates) so keys repeated within the SAME object
+// are caught even though json.Unmarshal would just keep the last one.
+func findJSONDuplicateKeys(content string) ([]jsonDupKey, error) {
+	dec := json.NewDecoder(strings.NewReader(content))
+	var results []jsonDupKey
+
+	lineOf := func(offset int64) int {
+		if offset < 0 {
+			offset = 0
+		}
+		if int(offset) > len(content) {
+			offset = int64(len(content))
+		}
+		return strings.Count(content[:offset], "\n") + 1
+	}
+
+	var parseObject func() error
+	var parseArray func() error
+	var dispatch func(tok json.Token, off int64) error
+
+	dispatch = func(tok json.Token, off int64) error {
+		if d, ok := tok.(json.Delim); ok {
+			switch d {
+			case '{':
+				return parseObject()
+			case '[':
+				return parseArray()
+			}
+		}
+		return nil // scalar value: string, number, bool, null
+	}
+
+	parseObject = func() error {
+		keys := map[string]int{}
+		firstLine := map[string]int{}
+		for {
+			tok, err := dec.Token()
+			if err != nil {
+				return err
+			}
+			off := dec.InputOffset() // offset AFTER this token; close enough for its line
+			if d, ok := tok.(json.Delim); ok && d == '}' {
+				break
+			}
+			key, _ := tok.(string)
+			if keys[key] == 0 {
+				firstLine[key] = lineOf(off)
+			}
+			keys[key]++
+			// consume the value that follows this key
+			voff := dec.InputOffset()
+			vtok, err := dec.Token()
+			if err != nil {
+				return err
+			}
+			if err := dispatch(vtok, voff); err != nil {
+				return err
+			}
+		}
+		for k, c := range keys {
+			if c > 1 {
+				results = append(results, jsonDupKey{key: k, count: c, line: firstLine[k]})
+			}
+		}
+		return nil
+	}
+
+	parseArray = func() error {
+		for {
+			off := dec.InputOffset()
+			tok, err := dec.Token()
+			if err != nil {
+				return err
+			}
+			if d, ok := tok.(json.Delim); ok && d == ']' {
+				return nil
+			}
+			if err := dispatch(tok, off); err != nil {
+				return err
+			}
+		}
+	}
+
+	off := dec.InputOffset()
+	tok, err := dec.Token()
+	if err != nil {
+		if err == io.EOF {
+			return results, nil
+		}
+		return nil, err
+	}
+	if err := dispatch(tok, off); err != nil {
+		return nil, err
+	}
+	sort.Slice(results, func(i, j int) bool { return results[i].line < results[j].line })
+	return results, nil
+}
+
+func jsonTypeName(v interface{}) string {
+	switch v.(type) {
+	case map[string]interface{}:
+		return "object"
+	case []interface{}:
+		return "array"
+	case string:
+		return "string"
+	case json.Number:
+		return "number"
+	case bool:
+		return "boolean"
+	case nil:
+		return "null"
+	default:
+		return "unknown"
+	}
+}
+
+func jsonWalk(v interface{}, depth int) (maxDepth, keys, objects, arrays, scalars int) {
+	maxDepth = depth
+	switch t := v.(type) {
+	case map[string]interface{}:
+		objects++
+		keys += len(t)
+		for _, cv := range t {
+			cd, ck, co, ca, cs := jsonWalk(cv, depth+1)
+			if cd > maxDepth {
+				maxDepth = cd
+			}
+			keys += ck
+			objects += co
+			arrays += ca
+			scalars += cs
+		}
+	case []interface{}:
+		arrays++
+		for _, cv := range t {
+			cd, ck, co, ca, cs := jsonWalk(cv, depth+1)
+			if cd > maxDepth {
+				maxDepth = cd
+			}
+			keys += ck
+			objects += co
+			arrays += ca
+			scalars += cs
+		}
+	default:
+		scalars++
+	}
+	return
+}
+
+func doMapJSON(lines []string) {
+	content := strings.Join(lines, "\n")
+
+	fmt.Println("── Integrity ──")
+	dec := json.NewDecoder(strings.NewReader(content))
+	dec.UseNumber()
+	var root interface{}
+	parseErr := dec.Decode(&root)
+	valid := parseErr == nil
+	if valid {
+		// Reject trailing garbage after the first value (e.g. two root objects).
+		if _, err := dec.Token(); err != io.EOF {
+			valid = false
+			if err == nil {
+				parseErr = fmt.Errorf("unexpected trailing content after root value")
+			} else {
+				parseErr = err
+			}
+		}
+	}
+	if valid {
+		fmt.Println("✓ Valid JSON syntax")
+	} else {
+		fmt.Printf("✗ Malformed JSON: %v\n", parseErr)
+	}
+
+	fmt.Println("\n── Structure ──")
+	if valid {
+		fmt.Printf("Root type: %s\n", jsonTypeName(root))
+		depth, totalKeys, objects, arrays, scalars := jsonWalk(root, 1)
+		if m, ok := root.(map[string]interface{}); ok {
+			topKeys := make([]string, 0, len(m))
+			for k := range m {
+				topKeys = append(topKeys, k)
+			}
+			sort.Strings(topKeys)
+			fmt.Printf("Top-level keys (%d): %s\n", len(topKeys), strings.Join(topKeys, ", "))
+		} else if arr, ok := root.([]interface{}); ok {
+			fmt.Printf("Top-level array length: %d\n", len(arr))
+		}
+		fmt.Printf("Max nesting depth: %d\n", depth)
+		fmt.Printf("Total keys: %d │ Objects: %d │ Arrays: %d │ Scalars: %d\n", totalKeys, objects, arrays, scalars)
+	} else {
+		fmt.Println("(skipped — file is not valid JSON)")
+	}
+
+	fmt.Println("\n── Duplicate Keys ──")
+	if valid {
+		dupes, dErr := findJSONDuplicateKeys(content)
+		if dErr != nil {
+			fmt.Printf("(could not scan for duplicates: %v)\n", dErr)
+		} else if len(dupes) == 0 {
+			fmt.Println("✓ No duplicate keys within any object")
+		} else {
+			fmt.Println("⚠ DUPLICATE KEYS (same object):")
+			for _, d := range dupes {
+				fmt.Printf("  %q appears %d times, first seen at line %d\n", d.key, d.count, d.line)
+			}
+		}
+	} else {
+		fmt.Println("(skipped — file is not valid JSON)")
+	}
+
+	fmt.Fprintf(os.Stderr, "\n--- %d total lines ---\n", len(lines))
+}
+
+func doMapCSV(lines []string) {
+	content := strings.Join(lines, "\n")
+	if len(lines) > 0 {
+		content += "\n"
+	}
+
+	fmt.Println("── Integrity ──")
+	// First pass: strict parse to catch quoting/escaping errors with a line number.
+	strictReader := csv.NewReader(strings.NewReader(content))
+	var malformedAt int
+	var malformedErr error
+	rowCount := 0
+	for {
+		_, err := strictReader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			malformedErr = err
+			malformedAt = rowCount + 1
+			break
+		}
+		rowCount++
+	}
+	valid := malformedErr == nil
+	if valid {
+		fmt.Println("✓ Valid CSV syntax")
+	} else {
+		fmt.Printf("✗ Malformed CSV near record %d: %v\n", malformedAt, malformedErr)
+	}
+
+	// Second pass: lenient parse (FieldsPerRecord = -1) so we can still report
+	// structure and ragged rows on a file with ragged rows. Read record-by-record
+	// (not ReadAll) so a hard quoting error partway through still leaves us the
+	// header and any good rows read before it, instead of discarding everything.
+	lenientReader := csv.NewReader(strings.NewReader(content))
+	lenientReader.FieldsPerRecord = -1
+	var records [][]string
+	for {
+		rec, err := lenientReader.Read()
+		if err != nil {
+			break // EOF, or a hard parse error already reported in Integrity above
+		}
+		records = append(records, rec)
+	}
+
+	fmt.Println("\n── Structure ──")
+	if len(records) == 0 {
+		fmt.Println("(empty file — no rows)")
+	} else {
+		header := records[0]
+		fmt.Printf("Rows: %d (including header) │ Data rows: %d │ Columns: %d\n", len(records), len(records)-1, len(header))
+		fmt.Printf("Header: %s\n", strings.Join(header, ", "))
+	}
+
+	fmt.Println("\n── Ragged Rows ──")
+	if len(records) > 1 {
+		width := len(header0(records))
+		var ragged []string
+		for i, row := range records[1:] {
+			if len(row) != width {
+				ragged = append(ragged, fmt.Sprintf("  Row %d (line %d): expected %d fields, got %d", i+2, i+2, width, len(row)))
+			}
+		}
+		if len(ragged) == 0 {
+			fmt.Println("✓ No ragged rows — every row matches the header column count")
+		} else {
+			fmt.Println("⚠ RAGGED ROWS:")
+			for _, r := range ragged {
+				fmt.Println(r)
+			}
+		}
+	} else {
+		fmt.Println("(no data rows to check)")
+	}
+
+	fmt.Println("\n── Duplicate Header Columns ──")
+	if len(records) > 0 {
+		header := records[0]
+		seen := map[string][]int{}
+		for i, h := range header {
+			seen[h] = append(seen[h], i+1)
+		}
+		dupNames := make([]string, 0)
+		for h, cols := range seen {
+			if len(cols) > 1 {
+				dupNames = append(dupNames, h)
+			}
+		}
+		sort.Strings(dupNames)
+		if len(dupNames) == 0 {
+			fmt.Println("✓ No duplicate header columns")
+		} else {
+			fmt.Println("⚠ DUPLICATE HEADER COLUMNS:")
+			for _, h := range dupNames {
+				cols := seen[h]
+				strs := make([]string, len(cols))
+				for i, c := range cols {
+					strs[i] = strconv.Itoa(c)
+				}
+				fmt.Printf("  %q at columns: %s\n", h, strings.Join(strs, ", "))
+			}
+		}
+	} else {
+		fmt.Println("(skipped — no header row available)")
+	}
+
+	fmt.Println("\n── Empty Fields ──")
+	emptyCount := 0
+	if len(records) > 1 {
+		for _, row := range records[1:] {
+			for _, field := range row {
+				if strings.TrimSpace(field) == "" {
+					emptyCount++
+				}
+			}
+		}
+	}
+	if emptyCount == 0 {
+		fmt.Println("✓ No empty fields")
+	} else {
+		fmt.Printf("⚠ %d empty field(s) found across data rows\n", emptyCount)
+	}
+
+	fmt.Fprintf(os.Stderr, "\n--- %d total lines ---\n", len(lines))
+}
+
+func header0(records [][]string) []string {
+	if len(records) == 0 {
+		return nil
+	}
+	return records[0]
+}
+
+// ════════════════════════════════════════════════════════════
 // MOVE / COPY — block relocation operations (v1.2.0)
 // ════════════════════════════════════════════════════════════
 
@@ -2440,6 +2818,22 @@ func printMoveCopyStats(op, path, destDesc string, srcStart, srcEnd, times, line
 	fmt.Fprintf(os.Stderr, "  elapsed: %s\n", elapsedStr)
 }
 
+type batchResult struct {
+	path   string
+	status string // "OK", "SKIP", "ERROR"
+	detail string
+}
+
+func printBatchReport(op string, results []batchResult) {
+	okCount := 0
+	for _, r := range results {
+		fmt.Fprintf(os.Stderr, "  %-6s %-40s %s\n", r.status, r.path, r.detail)
+		if r.status == "OK" {
+			okCount++
+		}
+	}
+	fmt.Fprintf(os.Stderr, "%s: %d/%d file(s) succeeded\n", op, okCount, len(results))
+}
 func doMoveOp(lines []string, path string, lineFlag, endFlag int, matchFlag, endmatchFlag string,
 	afterFlag, beforeFlag int, afterMatchFlag, beforeMatchFlag string,
 	nth, times, linesBefore int, startTime time.Time, verify bool) {
@@ -2589,6 +2983,54 @@ func getTopLevelBlocks(lines []string, lang string) ([]blockEntry, error) {
 
 // ── Go ────────────────────────────────────────────────────────────────────────
 
+// stripStringLiterals removes the contents of string literals from a line
+// before brace/bracket counting, so braces inside string literals (e.g. a
+// regexp.MustCompile pattern) don't corrupt block-depth tracking. Handles
+// double-quoted strings (backslash-escape aware) and single-quoted strings
+// fully within one line. Backtick raw strings can span multiple physical
+// lines in Go source, so inBacktick carries that state between calls across
+// a scan; callers must thread the returned bool back in on the next line.
+// Known limitation: multi-line double-quoted/verbatim string constructs in
+// other languages (C# @"...", Java """...""", Python """...""") are not
+// tracked -- single-line-only for those, tracked separately as a follow-up.
+func stripStringLiterals(line string, inBacktick bool) (string, bool) {
+	var b strings.Builder
+	i := 0
+	if inBacktick {
+		idx := strings.IndexByte(line, '`')
+		if idx == -1 {
+			return "", true
+		}
+		i = idx + 1
+	}
+	inStr, quote := false, byte(0)
+	for ; i < len(line); i++ {
+		c := line[i]
+		if inStr {
+			if c == '\\' && i+1 < len(line) {
+				i++
+				continue
+			}
+			if c == quote {
+				inStr = false
+			}
+			continue
+		}
+		switch c {
+		case '"', '\'':
+			inStr, quote = true, c
+		case '`':
+			if end := strings.IndexByte(line[i+1:], '`'); end != -1 {
+				i += end + 1
+			} else {
+				return b.String(), true
+			}
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String(), false
+}
 func getGoBlocks(lines []string) []blockEntry {
 	reFn := regexp.MustCompile(`^func\s+(\(.*?\)\s*)?(\w+)\s*[\(\[]`)
 	reType := regexp.MustCompile(`^type\s+(\w+)\s+`)
@@ -2599,6 +3041,7 @@ func getGoBlocks(lines []string) []blockEntry {
 	depth := 0
 	curName, curKey := "", ""
 	curStart := 0
+	inBacktick := false
 
 	for i, line := range lines {
 		ln := i + 1
@@ -2636,7 +3079,9 @@ func getGoBlocks(lines []string) []blockEntry {
 		}
 
 		if inBlock {
-			depth += strings.Count(t, "{") - strings.Count(t, "}")
+			stripped, nb := stripStringLiterals(t, inBacktick)
+			inBacktick = nb
+			depth += strings.Count(stripped, "{") - strings.Count(stripped, "}")
 			if depth <= 0 && ln > curStart {
 				entries = append(entries, blockEntry{curName, curKey, curStart, ln})
 				inBlock = false
@@ -2833,6 +3278,7 @@ func braceTrackedBlocks(lines []string, matchFn func(string) (string, string, bo
 	depth := 0
 	curName, curKey := "", ""
 	curStart := 0
+	inBacktick := false
 
 	for i, line := range lines {
 		ln := i + 1
@@ -2847,7 +3293,9 @@ func braceTrackedBlocks(lines []string, matchFn func(string) (string, string, bo
 		}
 
 		if inBlock {
-			depth += strings.Count(t, "{") - strings.Count(t, "}")
+			stripped, nb := stripStringLiterals(t, inBacktick)
+			inBacktick = nb
+			depth += strings.Count(stripped, "{") - strings.Count(stripped, "}")
 			if depth <= 0 && ln > curStart {
 				entries = append(entries, blockEntry{curName, curKey, curStart, ln})
 				inBlock = false
@@ -3240,6 +3688,7 @@ func getHCLBlocks(lines []string) []blockEntry {
 	depth := 0
 	curName, curKey := "", ""
 	curStart := 0
+	inBacktick := false
 
 	for i, line := range lines {
 		ln := i + 1
@@ -3277,9 +3726,11 @@ func getHCLBlocks(lines []string) []blockEntry {
 		}
 
 		if inBlock {
-			depth += strings.Count(t, "{") - strings.Count(t, "}")
+			stripped, nb := stripStringLiterals(t, inBacktick)
+			inBacktick = nb
+			depth += strings.Count(stripped, "{") - strings.Count(stripped, "}")
 			// Close when balanced. Allow single-line blocks (ln == curStart + brace close).
-			if depth <= 0 && (ln > curStart || strings.Contains(t, "}")) {
+			if depth <= 0 && (ln > curStart || strings.Contains(stripped, "}")) {
 				entries = append(entries, blockEntry{curName, curKey, curStart, ln})
 				inBlock = false
 				curName, curKey = "", ""
@@ -3308,6 +3759,7 @@ func getNixBlocks(lines []string) []blockEntry {
 	listDepth := 0 // tracks [ ]
 	curName, curKey := "", ""
 	curStart := 0
+	inBacktick := false
 
 	for i, line := range lines {
 		ln := i + 1
@@ -3340,8 +3792,10 @@ func getNixBlocks(lines []string) []blockEntry {
 		}
 
 		if inBlock {
-			depth += strings.Count(t, "{") - strings.Count(t, "}")
-			listDepth += strings.Count(t, "[") - strings.Count(t, "]")
+			stripped, nb := stripStringLiterals(t, inBacktick)
+			inBacktick = nb
+			depth += strings.Count(stripped, "{") - strings.Count(stripped, "}")
+			listDepth += strings.Count(stripped, "[") - strings.Count(stripped, "]")
 			closed := depth <= 0 && listDepth <= 0
 			if closed && (ln > curStart || strings.ContainsAny(t, "}]")) {
 				entries = append(entries, blockEntry{curName, curKey, curStart, ln})
@@ -3354,4 +3808,115 @@ func getNixBlocks(lines []string) []blockEntry {
 		entries = append(entries, blockEntry{curName, curKey, curStart, len(lines)})
 	}
 	return entries
+}
+
+// ════════════════════════════════════════════════════════════
+// GO IMPORT ADVISORY -- guided-mode cross-file transfer hint (design phase)
+// ════════════════════════════════════════════════════════════
+//
+// checkMissingGoImports is advisory only. It never blocks an operation and
+// never claims certainty -- it exists purely to surface a hint in a guided
+// report after a cross-file block transfer. Deliberately scoped to standard
+// library packages only:
+//   - Third-party packages have no fixed list to check against, so they're
+//     out of scope entirely (silently skipped, never a false claim).
+//   - A stdlib package imported under an alias in the SOURCE file (e.g.
+//     `import f "fmt"`, then code uses `f.Println`) won't be recognized,
+//     since the whitelist matches canonical package names. This is a
+//     documented false-negative risk, accepted because false negatives
+//     (missing a real gap) are safe for an advisory hint, while false
+//     positives (crying wolf) are the failure mode that makes people ignore
+//     the hint entirely -- confirmed empirically: an unscoped version of
+//     this check hit a ~20% false-positive rate against fedit's own source
+//     (local variables like `scanner`, `dec`, `src` calling exported methods
+//     look identical at the text level to package.Call() syntax).
+//   - A stdlib package aliased in the DESTINATION file's own imports (rare)
+//     could produce a false positive the other direction -- flagging "fmt"
+//     as missing when it's actually present under a different local alias.
+//     Also accepted as a rare, documented edge case.
+
+// stdlibPackages is a curated, intentionally non-exhaustive set of Go
+// standard library package identifiers (the name code actually qualifies
+// calls with, e.g. "json" for "encoding/json"). Third-party packages are
+// never included -- there's no fixed list for those.
+var stdlibPackages = map[string]bool{
+	"bufio": true, "bytes": true, "context": true, "errors": true,
+	"flag": true, "fmt": true, "io": true, "log": true, "math": true,
+	"os": true, "path": true, "reflect": true, "regexp": true,
+	"runtime": true, "sort": true, "strconv": true, "strings": true,
+	"sync": true, "syscall": true, "testing": true, "time": true,
+	"unicode": true, "unsafe": true, "json": true, "xml": true,
+	"csv": true, "hex": true, "base64": true, "filepath": true,
+	"http": true, "url": true, "rand": true, "atomic": true,
+	"utf8": true, "template": true, "tabwriter": true, "exec": true,
+	"signal": true, "user": true, "big": true, "net": true,
+}
+
+var reQualifiedCall = regexp.MustCompile(`\b([a-z][a-zA-Z0-9]*)\.[A-Z][a-zA-Z0-9]*\(`)
+var reImportSingle = regexp.MustCompile(`^import\s+(?:(\w+|_|\.)\s+)?"([^"]+)"`)
+var reImportBlockLine = regexp.MustCompile(`^(?:(\w+|_|\.)\s+)?"([^"]+)"`)
+
+// importIdentifier returns the identifier a given import makes available:
+// the alias if one is given, otherwise the import path's last segment --
+// which matches the declared package name for every standard library
+// package (no exceptions in the stdlib, unlike some third-party modules).
+func importIdentifier(alias, path string) string {
+	if alias == "_" {
+		return "_" // blank import: for side effects only, never a usable identifier
+	}
+	if alias != "" && alias != "." {
+		return alias
+	}
+	parts := strings.Split(path, "/")
+	return parts[len(parts)-1]
+}
+
+// parseGoImports extracts the set of identifiers a Go file's import block
+// (single-line or parenthesized) makes available.
+func parseGoImports(lines []string) map[string]bool {
+	available := map[string]bool{}
+	inBlock := false
+	for _, line := range lines {
+		t := strings.TrimSpace(line)
+		if !inBlock {
+			if t == "import (" {
+				inBlock = true
+				continue
+			}
+			if m := reImportSingle.FindStringSubmatch(t); m != nil {
+				available[importIdentifier(m[1], m[2])] = true
+			}
+			continue
+		}
+		if t == ")" {
+			inBlock = false
+			continue
+		}
+		if m := reImportBlockLine.FindStringSubmatch(t); m != nil {
+			available[importIdentifier(m[1], m[2])] = true
+		}
+	}
+	return available
+}
+
+// checkMissingGoImports scans transferredLines (content about to be moved
+// or copied into a destination file) for calls qualified with a known Go
+// standard-library package name, and returns any such package not already
+// available via destLines' own import block. Sorted, deduplicated, and
+// empty (never nil-vs-empty-ambiguous for callers) when nothing is flagged.
+func checkMissingGoImports(transferredLines, destLines []string) []string {
+	destAvailable := parseGoImports(destLines)
+	content := strings.Join(transferredLines, "\n")
+	seen := map[string]bool{}
+	missing := []string{}
+	for _, m := range reQualifiedCall.FindAllStringSubmatch(content, -1) {
+		pkg := m[1]
+		if !stdlibPackages[pkg] || destAvailable[pkg] || seen[pkg] {
+			continue
+		}
+		seen[pkg] = true
+		missing = append(missing, pkg)
+	}
+	sort.Strings(missing)
+	return missing
 }

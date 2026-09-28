@@ -36,7 +36,7 @@ If the file does not exist, create it.
   "mcpServers": {
     "fedit": {
       "command": "fedit",
-      "args": ["-mcp"]
+      "args": ["mcp"]
     }
   }
 }
@@ -49,7 +49,7 @@ If the file does not exist, create it.
   "mcpServers": {
     "fedit": {
       "command": "fedit.exe",
-      "args": ["-mcp"]
+      "args": ["mcp"]
     }
   }
 }
@@ -187,7 +187,7 @@ whichever config file your editor reads (usually `.cursor/mcp.json` or
   "mcpServers": {
     "fedit": {
       "command": "fedit",
-      "args": ["-mcp"]
+      "args": ["mcp"]
     }
   }
 }
@@ -200,7 +200,7 @@ Restart the editor after saving.
 ## 9. Troubleshooting
 
 **fedit does not appear in the tool list**  
-- Confirm `fedit -mcp` exits cleanly (Ctrl-C after launch — no error output)  
+- Confirm `fedit mcp` exits cleanly (Ctrl-C after launch — no error output)  
 - Check the config file is valid JSON (`python3 -m json.tool claude_desktop_config.json`)  
 - Fully quit Claude Desktop (not just close the window) and relaunch  
 

@@ -1,7 +1,7 @@
 # Amalex Brand -- Claude Working Preferences
 # Upload this file alongside the project status file at the start of every chat.
 # Applies to: fedit, amalex-handler, fwrite, website, and all Amalex Brand projects.
-# Last updated: June 1, 2026
+# Last updated: July 17, 2026
 
 ---
 
@@ -61,7 +61,10 @@ Multi-line content -- Notepad++ _patch.txt (PREFERRED when content has quotes/ba
     WORKS:   $h = fwencode "line one`nline two"   -- PS expands `n to newline before fwencode sees it
     BROKEN:  $h = fwencode "line one\nline two"   -- \n is literal backslash-n, NOT a newline
     CORRECT for complex multi-line: Notepad++ _patch.txt + -textfile (avoids all escaping)
+    BROKEN:  $h = fwencode "C:\...\builtins\"              -- a fwencode arg ENDING in a backslash right before the closing quote collapses via Windows argv-escaping into a literal embedded quote, silently dropping the backslash (hit July 17, 2026 on a trailing-backslash path arg -- "...builtins\" arrived as "...builtins" with a stray quote, backslash gone)
+    FIX for content ending in a backslash: route through Notepad++ _patch.txt + -textfile instead of fwencode.
   NEVER use Set-Content.
+  NEVER put a literal tab character in a fedit -text value on the command line -- PowerShell's console interprets a mid-line tab as a tab-completion trigger, not a literal character. Symptom: the command hangs or the -text value gets replaced/garbled with a tab-completed filename, requiring Ctrl+C. Fix: use a space for inline indentation instead (gofmt -w normalizes it to a real tab afterward). Reserve literal tabs/complex whitespace for -textfile or -texthex content only -- never -text. AFTER any fedit command that hangs or produces garbled output, re-run fedit -op find on the intended anchor before assuming a retry is the only change -- an interrupted command may have already partially or fully executed (caused a duplicate reg.Register line in fwrite's main.go on July 16, 2026).
   NEVER chain write + fedit in the same command block (separate commands).
   Double-quotes in -text/-match: use -texthex (see fwencode section below).
   .ps1 scripts must be 100% ASCII -- no em-dashes, box-drawing chars, or arrows.
@@ -79,6 +82,12 @@ Multi-line content -- Notepad++ _patch.txt (PREFERRED when content has quotes/ba
   PS execution policy for .ps1 scripts:
     powershell -ExecutionPolicy Bypass -File .\script.ps1
 
+Patch file location & naming:
+  ALWAYS create patch files in the CURRENT WORKING DIRECTORY (apps/fwrite),
+  never in a subfolder like internal/builtins/ -- keeps cleanup to one folder.
+  Sequential numbering per session: _patch.txt, _patch1.txt, _patch2.txt, ...
+  Do NOT Remove-Item after each command -- user runs a batch cleanup script
+  at end of session instead.
 ---
 
 ## fwencode / fwdecode
@@ -121,6 +130,14 @@ Multi-line content -- Notepad++ _patch.txt (PREFERRED when content has quotes/ba
   Seq:     When mixing delete/replace-line WITH insertafter/insertbefore in one
            sequence: run the LINE-NUMBER ops FIRST. Insertions shift all
            subsequent line numbers -- delete -line N hits the wrong line after.
+  Range:   Before any -line N:+M or line-number range for a replace/
+           delete spanning to EOF or a known endpoint, get a FRESH
+           -op show -line N: (open-ended) or explicit total-line-count
+           check immediately before computing the range -- don't reuse
+           a line count from earlier in the conversation/session, even
+           a few turns back. Two off-by-one range errors happened in
+           one session (July 14, 2026) from hand-computing end-start
+           against a stale remembered total.
   Format:  gofmt on specific files only -- never on directories.
   NOTE:    replace and delete support -match/-endmatch for content-anchored ranges (v1.8.0).
            Anchor replace:  -op replace -match "start" -endmatch "end" -textfile f.txt -v
@@ -130,10 +147,13 @@ Multi-line content -- Notepad++ _patch.txt (PREFERRED when content has quotes/ba
            PS -x CAST RULE: fedit -x returns STRING -- wrap in [int]() before arithmetic.
              WRONG:   $n = fedit ... -x  →  ($n+3) concatenates: "2443" not 247
              CORRECT: $n = [int](fedit ... -x)  →  ($n+3) = 247
-           Paste-safe pattern: one $var = cmd ; cmd per line -- reversal does not break same-line chains.
-           BRACE NESTING RISK: replacing } with } else if -- verify indentation level in verify block.
-           gofmt nests else if inside inner block if patch indentation places it at wrong brace depth.
-
+   Paste-safe pattern: one $var = cmd ; cmd per line -- reversal does not break same-line chains.
+   Chained find+insert: combine into ONE line for paste safety:
+     $n = [int](fedit -op find -match X -x) ; fedit -op insert -line $n -textfile f.txt -v
+   Chained format+verify: after any Go file edit, one line covers everything:
+     gofmt -w file.go ; gofmt -l file.go ; go build ./... ; go test ./... ; go vet ./...
+     gofmt -l prints nothing on success -- silence there means formatting is clean.
+   gofmt nests else if inside inner block if patch indentation places it at wrong brace depth.
 
   Operations (15):
     show, find, map, insert, insertafter, insertbefore,
@@ -188,6 +208,18 @@ Multi-line content -- Notepad++ _patch.txt (PREFERRED when content has quotes/ba
   TERMINOLOGY: UI says "Jobs", DB/code says "pairs".
   Build: `go build -o <name>.exe ./cmd/<name>` -- never `go run`.
   audit_log table uses INTEGER PRIMARY KEY AUTOINCREMENT (not TEXT UUID).
+  VERIFY-CHAIN GOTCHA: `go build ./...` (used in the standard four/five-
+  command verify chain) NEVER produces or updates a binary -- it only
+  checks that every package compiles, then discards the output. The
+  binary on disk is whatever it was from the last EXPLICIT
+  `go build -o <name>.exe .` (or ./cmd/<name>). A "manual sanity check"
+  against a stale binary can look like a full regression (wrong parse
+  errors, phantom tokens, etc.) when the actual code is fine -- cost a
+  full debugging detour in fwrite on July 13, 2026 before the binary
+  itself turned out to be the problem. ALWAYS run the explicit -o build
+  fresh, immediately before any manual/interactive test, on ANY project
+  in this workspace -- do not treat `go build ./...` passing as
+  sufficient prep for a live run.
 
 ---
 
@@ -211,6 +243,10 @@ Multi-line content -- Notepad++ _patch.txt (PREFERRED when content has quotes/ba
 
   status file     C:\Users\kehsi\Desktop\amalex-brand\Amalex_handler_current_status.txt
 
+  user_skill.md    C:\Users\kehsi\Desktop\amalex-brand\fedit\user_skill.md
+  fwrite_status.md C:\Users\kehsi\Desktop\amalex-brand\fwrite\fwrite_status.md
+  fwrite_design.md C:\Users\kehsi\Desktop\amalex-brand\fwrite\fwrite_design.md
+  fwrite builtins  C:\Users\kehsi\Desktop\amalex-brand\fwrite\apps\fwrite\internal\builtins\
 ---
 
 ## Release Workflows
