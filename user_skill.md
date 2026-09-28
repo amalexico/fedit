@@ -148,6 +148,11 @@ Patch file location & naming:
            Single-line match-delete: $n = [int](fedit -op find -match X -x) ; fedit -op delete -line $n -v
            PS -x CAST RULE: fedit -x returns STRING -- wrap in [int]() before arithmetic.
              WRONG:   $n = fedit ... -x  →  ($n+3) concatenates: "2443" not 247
+   NOTE:    replaceall -v always prints "lines: 0 (unchanged, N total)" in its
+            STATS section even when the substitution succeeded -- this is a
+            display quirk of that op's stats line, not a failure signal.
+            Confirm a replaceall actually applied with a separate -op find
+            or -op show on the same anchor, never by reading the STATS line.
              CORRECT: $n = [int](fedit ... -x)  →  ($n+3) = 247
    Paste-safe pattern: one $var = cmd ; cmd per line -- reversal does not break same-line chains.
    Chained find+insert: combine into ONE line for paste safety:
