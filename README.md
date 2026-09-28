@@ -268,7 +268,7 @@ fedit -file deploy.sh -op write -texthex 23212f62696e2f62617368
 
 ---
 
-### -matchhex / -endmatchhex — Hex-encoded anchors (unreleased)
+### -matchhex / -endmatchhex — Hex-encoded anchors (v1.8.1)
 
 Same idea as `-texthex`, but for the search anchors. PowerShell mangles a double quote
 inside `-match` before fedit sees it, so `case "replace":` silently becomes `case replace:`
@@ -281,6 +281,26 @@ fedit -file main.go -op find -matchhex 6361736520227265706c616365223a
 ```
 
 Invalid hex exits 1 with `matchhex: invalid hex string: ...` (or `endmatchhex: ...`).
+
+---
+
+### Multiple files -- comma list or glob (v1.8.1)
+
+`-file` accepts a comma-separated list, a glob, or both, for the read-only ops show, find and map. Each file gets a `==> path <==` header, and a real file with that exact name wins over glob expansion.
+
+```bash
+# Find TODO in every Go file in the current folder
+fedit -file '*.go' -op find -match 'TODO'
+
+# Map two files at once
+fedit -file main.go,mcp.go -op map -lang go
+```
+
+- find skips files with no hits (grep-style) and exits 1 only if nothing matched in any file.
+- map skips unrecognized extensions with a SKIP line.
+- A summary line reports how many files had results.
+- Mutating ops and -stream are rejected with exit 1 before any file is read. For a global rename across files, use -files GLOB with replaceall.
+- CLI only: the MCP tools still take a single file.
 
 ---
 
@@ -458,7 +478,7 @@ All mappers detect **duplicates** and flag them with warnings.
 
 | Flag | Description |
 |------------|------------------------------------------|
-| -file PATH | Target file (required) |
+| -file PATH | Target file (required); comma list or glob for show/find/map (v1.8.1) |
 | -op OP | Operation to perform (required) |
 | -line N | Starting line number (1-based); N:+M=range, -N=from end, -N:=last N lines, :=EOF |
 | -end N | Ending line (for ranges); -N counts from end of file |
