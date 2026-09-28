@@ -50,7 +50,9 @@ SESSION LOG (Sept 27, 2026, later):
   - Task 2 DONE: block scanner regression check passed for JS, Rust, Java, C#, PHP, HCL and Nix (unbalanced braces inside single-line strings, exact block ranges). Fixtures are in the _testsystem\blockfixtures folder (untracked). Multi-line strings still untested (task 8).
   - Block -lang names: javascript or typescript, rust, java, csharp or c#, ruby, php, hcl or terraform or tf, nix. NOT js.
   - Task 3 DONE (edea6c4, pushed): package var verifyCenter is set by doInsert, doInsertMatch, doDelete and doReplace; main() prefers it. replaceall keeps the first-hit search on purpose.
-  - Rebuild and replace the fedit on PATH before relying on the fix (verified with a temp build only).
+  - The PATH entry is the repo folder itself, so go build -o fedit.exe . replaces the PATH binary. Always use the explicit -o build.
+  - Task 4 DONE (c6442f7, 06b890e, c027e97, all pushed): -matchhex and -endmatchhex decode into -match/-endmatch right after flag.Parse via decodeHexAnchor(flagName, h). Tests in matchhex_test.go. Documented in README.md and SKILL.md. CLAUDE_DESKTOP.md and mcp.go deliberately skipped (mcp.go not yet checked for how it builds args).
+  - LESSON: inline fwencode breaks on strings with many double quotes (argv mangling truncated a patch and broke main.go; restored with git checkout). Use a Notepad++ patch file plus -textfile. Trailing blank lines in patch files are dropped, so add a blank line separately with -texthex 0a.
 
 ===============================================================
 FEDIT -- PENDING TASKS
@@ -64,7 +66,7 @@ IMMEDIATE (do in this order):
   [x] 3. DONE (edea6c4). Fix -v verify display (showVerify): it shows context around the
          FIRST match instead of the resolved -nth match, and after
          insertafter -block it shows line 1. The edit itself lands correctly.
-  [ ] 4. Fix -match with embedded double quotes: PowerShell mangles it before
+  [x] 4. DONE (c6442f7, 06b890e, c027e97). Fix -match with embedded double quotes: PowerShell mangles it before
          fedit sees it (e.g. -match 'case "replace":' searches for
          case replace:). Candidate: -matchhex mirroring -texthex.
   [ ] 5. Fix -get REGEX: it did nothing on map -lang go (returned the full
