@@ -12,39 +12,86 @@ WEBSITE: amalexhandler.com/fedit (LIVE -- current: v1.8.0)
 INSTALL: go install github.com/amalexico/fedit@latest
 
 CURRENT TAG:  v1.8.0 (PUSHED)
-UNCOMMITTED LOCAL WORK (not yet tagged/released):
-  - JSON + CSV map support (doMapJSON, doMapCSV) -- patched, applied, tested
-  - Go import advisory check (checkMissingGoImports) -- patched, applied, tested
-  - main.go now ~3850 lines (was 3357 at v1.8.0)
-  - Design docs in repo root: design_cross_file_ops.md, guide_mode_examples.md
-    (fedit 2.0 / "guided" mode -- design phase, not yet implemented in code)
+LOCAL COMMIT, NOT YET PUSHED (as of Sept 27, 2026): 9050667 on main
+  Contains .gitignore, CLAUDE_DESKTOP.md, fedit_status.md (older version),
+  main.go (~3920 lines), user_skill.md. Run `git push` when ready. No new
+  tag yet (v1.9.0 is the natural next number, not reserved).
+IN THAT COMMIT:
+  - JSON + CSV map support, Go import advisory (checkMissingGoImports is
+    written and tested but still called from nowhere)
+  - FIXED: replace with no -text/-textfile/-texthex now errors with exit 1
+    (guard at the top of case "replace" in main()). The first entry in the
+    BUGS section below is RESOLVED -- ignore it.
+  - FIXED: block scanner undercount. Naive brace counting in five scanners
+    (getGoBlocks, braceTrackedBlocks, getNixBlocks, getHCLBlocks) was thrown
+    off by braces inside string literals. New helper stripStringLiterals
+    (line, inBacktick) fixes it. main.go went from 27 to 67 blocks found.
+  - NEW, unused so far: batchResult struct + printBatchReport(op, results)
+    (shared OK/SKIP/ERROR per-file report for multi-file ops and guided)
+UNTRACKED, NOT COMMITTED (repo is PUBLIC, decide before adding): _testsystem/,
+  design_cross_file_ops.md, guide_mode_examples.md, description 1.9/2.0.txt,
+  guided notes.txt, import_advisory.patch, import_advisory_test.go,
+  map_json_csv_test.go, add_fedit_to_goose.ps1, download_cli.ps1,
+  fedit-mcp.md, server.json. The two *_test.go files test shipped code and
+  probably should be committed.
+  .gitignore now covers .mcpregistry_* (token files, NEVER commit),
+  _funding_patch.txt and _test_*.txt.
 
-═══════════════════════════════════════════════════════════════
+LESSONS FROM THIS SESSION (Sept 27, 2026):
+  - Never git add -A here. Run git status -s first and add files by name.
+  - A patch file keeps its old content. Overwrite _patch.txt fully before
+    every use, and never write "do not run this" next to a command.
+  - The -block "o" ambiguity trick lists blocks only when 2+ match. With a
+    single match it MUTATES the file. Use it only on files with many blocks.
+  - -match with an embedded double quote is mangled by PowerShell (see
+    bugs below). Use a quote-free anchor, or -block now that it works.
+  - -v verify display can show the wrong location. Confirm with show.
+
+===============================================================
 FEDIT -- PENDING TASKS
-═══════════════════════════════════════════════════════════════
+===============================================================
 
 IMMEDIATE (do in this order):
-  [ ] 1. Fix HIGH-PRIORITY bug: replace with no -text/-textfile/-texthex
-         silently deletes the target range (exit 0, no warning). See BUGS
-         section below. Highest priority of anything outstanding.
-  [ ] 2. Decide + implement -dest/-sourceblock/-destblock/-sourcefile for
-         copy/move/replace/insertbefore/insertafter (see FEDIT 2.0 section)
-  [ ] 3. Wire checkMissingGoImports into the new cross-file engine once (2)
-         exists -- code is written and tested, just not called from anywhere
-         yet
-  [ ] 4. Build the `guided` entry point (git-style bypass like `mcp`, see
-         FEDIT 2.0 section)
-  [ ] 5. Consider fixing: -afterblock/-beforeblock silently do nothing for
-         insertafter/insertbefore (only wired to move/copy) -- error message
-         is misleading ("-match is required") rather than naming the real
-         problem
-  [ ] 6. Consider fixing: CSS duplicate-detection false positive on nested
-         @media selectors (see BUGS)
-  [ ] 7. Consider adding: duplicate-detection to markdown and dockerfile
-         mappers (currently the only two map languages with no dup-check
-         section at all)
-  [ ] 8. Tag a new version once (1)-(4) land -- v1.9.0 is the natural next
-         number but not yet confirmed/reserved
+  [ ] 1. Push commit 9050667, then commit this status file.
+  [ ] 2. Regression-check the block scanner on non-Go fixtures (Rust, Java,
+         C#, PHP, JS, HCL, Nix). The only test today was Python, which was
+         inconclusive because Python has its own scanner.
+  [ ] 3. Fix -v verify display (showVerify): it shows context around the
+         FIRST match instead of the resolved -nth match, and after
+         insertafter -block it shows line 1. The edit itself lands correctly.
+  [ ] 4. Fix -match with embedded double quotes: PowerShell mangles it before
+         fedit sees it (e.g. -match 'case "replace":' searches for
+         case replace:). Candidate: -matchhex mirroring -texthex.
+  [ ] 5. Fix -get REGEX: it did nothing on map -lang go (returned the full
+         map). Decide whether map should accept -get or only find should.
+  [ ] 6. Multi-file work, LOCKED DESIGN (see below). Build order:
+         a. multi -file (comma list or glob) for show/find/map, a simple loop
+            with a per-file header
+         b. multi -file for self-contained mutating ops. First extract pure
+            execInsert/execDelete/execReplace/execInsertMatch (return an
+            error, no os.Exit) from doInsert/doDelete/doReplace/
+            doInsertMatch, keep the do* wrappers unchanged, then loop with
+            batchResult + printBatchReport. Partial failure is report and
+            continue, never abort the batch (ASSUMED, not yet confirmed).
+         c. -dest fan-out for copy/move/replace
+         d. -sourceblock/-sourcefile/-destblock
+         e. wire checkMissingGoImports into cross-file Go transfers
+  [ ] 7. Build the guided entry point (git-style bypass like mcp).
+  [ ] 8. Phase 2 of the scanner fix: multi-line string constructs (C#
+         verbatim, Java text blocks, Rust raw strings, HCL heredocs).
+  [ ] 9. Older items: -afterblock/-beforeblock misleading error for
+         insertafter/insertbefore; CSS @media duplicate false positive;
+         duplicate-detection for markdown and dockerfile; doMapHCL missing,
+         so map -lang terraform still fails.
+  [ ] 10. Tag v1.9.0 once the fixes and the first multi-file steps land.
+
+LOCKED DESIGN DECISION (Sept 27, 2026): multi -file and multi -dest are two
+SEPARATE mechanisms that NEVER combine. Multi -file = self-contained
+per-file operations (show/find/map plus delete/write/replace/replaceall/
+insertafter/insertbefore with the match and content inside each file).
+Multi -dest = cross-file transfer only (copy/move, and replace/insertafter/
+insertbefore sourced from -sourceblock/-sourcefile). No fan-in, no
+cross-product. replace -dest DOES fan out to multiple destinations.
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- OPERATIONS & FLAGS
