@@ -204,6 +204,16 @@ For Terraform resource reordering, use block-aware move:
 
 **Move overlap rule:** destination inside source range is always rejected.
 
+**Cross-file copy/move (CLI only, unreleased):** `-dest F1,F2` copies or moves the source block into other files. Each destination needs its own anchor flag (-after, -before, -aftermatch, -beforematch, -afterblock, -beforeblock; the block anchors need -lang), resolved inside that destination file:
+
+    fedit -file a.go -op copy -block Helper -lang go -dest b.go,c.go -afterblock Init -v
+    fedit -file base.conf -op move -match '[cache]' -endmatch '[/cache]' -dest x.conf,y.conf -beforematch '[logging]'
+
+- Per-destination policy: a problem in one destination is a SKIP for that file and never aborts the batch. Exit code 0 if at least one destination succeeded, 1 if none did.
+- move writes all destinations first and removes the source only if at least one write succeeded. If every destination fails the source stays intact.
+- Only copy and move accept -dest. It is rejected with -match-regex, -cleanfirst, -stream, -files or a multi -file list. The MCP tools do not support it.
+- It moves text, not dependencies. After a Go transfer, check imports in the destination.
+
 ### Duplicate a block N times (scaffolding / test fixtures)
 
     fedit_copy (line=N, end=M, after=InsertPoint, times=10)
@@ -312,3 +322,4 @@ Full results: https://amalexhandler.com/fedit#benchmark
   -endmatch TEXT content-anchor end of range -- show, replace, delete, move, copy
   -quiet         suppress stdout on success; exit code signals result (wins over -v)
   -file LIST     CLI only: comma list and/or glob; show/find/map, plus replaceall/insertafter/insertbefore/delete with -match only (per-file SKIP, never abort); other mutating ops and -stream rejected; MCP tools take one file
+  -dest F1,F2    CLI only, unreleased: copy/move into other files; each destination needs its own anchor flag; per-destination SKIP, source removed only if a write succeeded; not in MCP tools

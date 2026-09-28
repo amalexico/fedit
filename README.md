@@ -320,6 +320,29 @@ fedit -file '*.md' -op delete -match '<!-- start -->' -endmatch '<!-- end -->'
 - Only -match (plus -endmatch for delete), -nth and -text/-textfile/-texthex are accepted. -match-regex, -block, -line, -cleanfirst, -stream and -files are rejected, and so are the other mutating ops (replace, write, move, copy), all before any file is read. For a global rename with regex across files, use -files GLOB with replaceall.
 - CLI only: the MCP tools still take a single file.
 
+### Cross-file copy and move -- -dest (unreleased)
+
+`-dest` copies or moves a block from `-file` into one or more other files. It takes a comma-separated list of existing files (no globs). The source is chosen the usual way: `-line`/`-end`, `-match`/`-endmatch`, or `-block` with `-lang`. The destination anchor is resolved separately inside each destination file, using one of `-after`, `-before`, `-aftermatch`, `-beforematch`, `-afterblock` or `-beforeblock` (the block anchors need `-lang`).
+
+```bash
+# Copy a function into two other files, right after a named block in each
+fedit -file a.go -op copy -block Helper -lang go -dest b.go,c.go -afterblock Init
+
+# Move a config section into two files, before a marker line in each
+fedit -file base.conf -op move -match '[cache]' -endmatch '[/cache]' -dest x.conf,y.conf -beforematch '[logging]'
+
+# Paste 2 copies in each destination
+fedit -file src.txt -op copy -line 5:+3 -dest a.txt,b.txt -aftermatch ANCHOR -times 2
+```
+
+- Each destination is handled on its own. A problem in one (missing file, anchor not found, read-only, write failed) is reported as SKIP and that file is never modified. The batch never aborts.
+- move writes all the destinations first. The source text is removed only if at least one destination write succeeded. If every destination fails, the source is left intact, so text is never lost.
+- The report lists OK or SKIP per destination, then `N/M file(s) succeeded`. Exit code 0 if at least one destination succeeded, 1 if none did.
+- A destination that is the source file itself is a SKIP, and a file listed twice is used once.
+- Only copy and move accept -dest. It is rejected with any other op, and with -match-regex, -cleanfirst, -stream or -files, before any file is read. It does not combine with a multi -file list: -file must be the single source file.
+- Cross-file transfer moves text, not dependencies. A Go function that calls fmt.Println lands textually perfect in a file with no fmt import, and that file will not compile until you add the import.
+- CLI only: the MCP tools still take a single file.
+
 ---
 
 ### -cleanfirst — Truncate before writing (v1.6.0)
@@ -497,6 +520,7 @@ All mappers detect **duplicates** and flag them with warnings.
 | Flag | Description |
 |------------|------------------------------------------|
 | -file PATH | Target file (required); comma list or glob for show/find/map and replaceall/insertafter/insertbefore/delete (mutation unreleased) |
+| -dest PATH,PATH | Cross-file copy/move: comma list of destination files, each needs one anchor flag (-after, -before, -aftermatch, -beforematch, -afterblock, -beforeblock); unreleased |
 | -op OP | Operation to perform (required) |
 | -line N | Starting line number (1-based); N:+M=range, -N=from end, -N:=last N lines, :=EOF |
 | -end N | Ending line (for ranges); -N counts from end of file |
