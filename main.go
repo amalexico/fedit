@@ -228,6 +228,37 @@ func main() {
 		}))
 	}
 
+	// -dest: cross-file copy/move (multidest.go). Runs before -cleanfirst so a rejected combination never truncates anything.
+	if *destFlag != "" {
+		if *op != "copy" && *op != "move" {
+			fmt.Fprintln(os.Stderr, "Error: -dest is only supported with copy and move")
+			os.Exit(1)
+		}
+		if *file == "" {
+			fmt.Fprintln(os.Stderr, "Error: -dest needs -file as the source file")
+			os.Exit(1)
+		}
+		if *matchRegex != "" || *cleanfirst || *stream || *files != "" {
+			fmt.Fprintln(os.Stderr, "Error: -dest does not combine with -match-regex, -cleanfirst, -stream or -files")
+			os.Exit(1)
+		}
+		srcAll, dRdErr := readLines(*file)
+		if dRdErr != nil {
+			fmt.Fprintf(os.Stderr, "Error reading file: %v\n", dRdErr)
+			os.Exit(1)
+		}
+		dLine, dEnd, dLnErr := parseAndResolveLines(*line, *endLine, len(srcAll))
+		if dLnErr != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", dLnErr)
+			os.Exit(1)
+		}
+		os.Exit(runMultiDest(multiDestOpts{
+			op: *op, srcFile: *file, dests: *destFlag, lang: *lang, block: *block,
+			line: dLine, end: dEnd, match: *match, endmatch: *endmatch, nth: *nth, times: *times,
+			after: *after, before: *before, aftermatch: *aftermatch, beforematch: *beforematch,
+			afterblock: *afterblock, beforeblock: *beforeblock,
+		}))
+	}
 	// -cleanfirst: truncate before reading so mutations start from an empty file.
 	if *cleanfirst && *file != "" {
 		if err := os.WriteFile(*file, []byte{}, 0644); err != nil {
