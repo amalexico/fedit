@@ -268,6 +268,22 @@ fedit -file deploy.sh -op write -texthex 23212f62696e2f62617368
 
 ---
 
+### -matchhex / -endmatchhex — Hex-encoded anchors (unreleased)
+
+Same idea as `-texthex`, but for the search anchors. PowerShell mangles a double quote
+inside `-match` before fedit sees it, so `case "replace":` silently becomes `case replace:`
+and matches nothing. Pass the anchor as hex instead; fedit decodes it into `-match`
+(or `-endmatch`) once, so every op that takes an anchor works unchanged.
+
+```bash
+# Find a line containing double quotes (hex of: case "replace":)
+fedit -file main.go -op find -matchhex 6361736520227265706c616365223a
+```
+
+Invalid hex exits 1 with `matchhex: invalid hex string: ...` (or `endmatchhex: ...`).
+
+---
+
 ### -cleanfirst — Truncate before writing (v1.6.0)
 
 ```bash

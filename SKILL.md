@@ -126,6 +126,17 @@ use `-texthex` directly. This is pure fedit -- no temp files needed.
 NOTE: WriteAllBytes + textfile is only needed when the hex string exceeds PS
 argument length limits (rare, >32KB). For all normal patches, use -texthex directly.
 
+### Anchors that contain double quotes (matchhex)
+
+PowerShell mangles a double quote inside -match/-endmatch before fedit sees it
+(-match 'case "replace":' searches for: case replace:). On the CLI, use -matchhex
+and -endmatchhex: the anchor goes in as hex and is decoded into -match/-endmatch.
+
+    $m = [BitConverter]::ToString([Text.Encoding]::UTF8.GetBytes('case "replace":')).Replace('-','').ToLower()
+    fedit -file main.go -op find -matchhex $m -x
+
+A quote-free anchor is still fine when one exists.
+
 ### Anchor selection for insertbefore/insertafter
 
 Always anchor on the LAST LINE OF CONTENT in a section, not on headings or separators.
@@ -285,6 +296,8 @@ Full results: https://amalexhandler.com/fedit#benchmark
   -raw           show: bare content, no line numbers, no footer
   -x             find: bare line numbers only / fields: suppress stats footer
   -texthex HEX   hex-encoded content, bypasses shell quoting -- PREFERRED over -textfile for patches
+  -matchhex HEX  hex-encoded -match anchor, for anchors containing double quotes
+  -endmatchhex HEX  hex-encoded -endmatch anchor
   -extract SPEC  sub-line extraction -- WN, WN[s:c], WN[s:], WN/DELIM/F
   -get REGEX     pre-filter: extract regex match from line before -extract
   -wdelim CHAR   word delimiter for -extract (default: normalized whitespace)
