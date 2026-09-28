@@ -12,10 +12,9 @@ WEBSITE: amalexhandler.com/fedit (LIVE -- current: v1.8.0)
 INSTALL: go install github.com/amalexico/fedit@latest
 
 CURRENT TAG:  v1.8.0 (PUSHED)
-LOCAL COMMIT, NOT YET PUSHED (as of Sept 27, 2026): 9050667 on main
-  Contains .gitignore, CLAUDE_DESKTOP.md, fedit_status.md (older version),
-  main.go (~3920 lines), user_skill.md. Run `git push` when ready. No new
-  tag yet (v1.9.0 is the natural next number, not reserved).
+PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. No new tag
+  yet (v1.9.0 is the natural next number, not reserved). Code commit
+  touched .gitignore, CLAUDE_DESKTOP.md, main.go (~3920 lines), user_skill.md.
 IN THAT COMMIT:
   - JSON + CSV map support, Go import advisory (checkMissingGoImports is
     written and tested but still called from nowhere)
