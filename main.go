@@ -146,6 +146,18 @@ func main() {
 	}
 
 	if *op == "write" || *op == "writeraw" || *op == "writelines" {
+		if *op == "write" && *file != "" && isMultiSpec(*file) {
+			if *block != "" || *line != "" || *cleanfirst || *stream || *files != "" {
+				fmt.Fprintln(os.Stderr, "Error: multi -file write takes only the content flags (-text/-textfile/-texthex); -block, -line, -cleanfirst, -stream and -files are not supported with it")
+				os.Exit(1)
+			}
+			mo := multiMutOpts{spec: *file, op: "write", newLines: resolveTextFull(*text, *textFile, resolvedBytes)}
+			if len(mo.newLines) == 0 {
+				fmt.Fprintln(os.Stderr, "Nothing to write")
+				os.Exit(1)
+			}
+			os.Exit(runMultiMutate(mo))
+		}
 		var content []string
 		switch *op {
 		case "writelines":
@@ -201,12 +213,16 @@ func main() {
 	// replaceall/insertafter/insertbefore/delete go to runMultiMutate (multimutate.go).
 	if *file != "" && isMultiSpec(*file) {
 		switch *op {
-		case "replaceall", "insertafter", "insertbefore", "delete":
-			if *matchRegex != "" || *block != "" || *line != "" || *cleanfirst || *stream || *files != "" {
-				fmt.Fprintln(os.Stderr, "Error: multi -file mutation takes -match (plus -endmatch for delete) only; -match-regex, -block, -line, -cleanfirst, -stream and -files are not supported with it")
+		case "replaceall", "insertafter", "insertbefore", "delete", "replace":
+			if *block != "" || *line != "" || *cleanfirst || *stream || *files != "" {
+				fmt.Fprintln(os.Stderr, "Error: multi -file mutation takes -match (plus -endmatch for delete) or -match-regex (replaceall only); -block, -line, -cleanfirst, -stream and -files are not supported with it")
 				os.Exit(1)
 			}
-			mo := multiMutOpts{spec: *file, op: *op, match: *match, endmatch: *endmatch, nth: *nth}
+			if *matchRegex != "" && *op != "replaceall" {
+				fmt.Fprintln(os.Stderr, "Error: -match-regex is only supported with replaceall")
+				os.Exit(1)
+			}
+			mo := multiMutOpts{spec: *file, op: *op, match: *match, endmatch: *endmatch, nth: *nth, matchRegex: *matchRegex}
 			switch *op {
 			case "replaceall":
 				mo.replacement = *text
@@ -215,7 +231,7 @@ func main() {
 				} else if *textFile != "" {
 					mo.replacement = strings.Join(resolveText("", *textFile), "\n")
 				}
-			case "insertafter", "insertbefore":
+			case "replace", "insertafter", "insertbefore":
 				mo.newLines = resolveTextFull(*text, *textFile, resolvedBytes)
 			}
 			os.Exit(runMultiMutate(mo))

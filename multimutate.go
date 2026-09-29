@@ -16,6 +16,7 @@ type multiMutOpts struct {
 	nth         int
 	newLines    []string
 	replacement string
+	matchRegex  string
 }
 
 // multiMutateOne applies the op to one file's lines using the pure exec*
@@ -23,6 +24,13 @@ type multiMutOpts struct {
 func multiMutateOne(o multiMutOpts, lines []string) ([]string, string, error) {
 	switch o.op {
 	case "replaceall":
+		if o.matchRegex != "" {
+			result, count, err := execReplaceAllRegex(lines, o.matchRegex, o.replacement)
+			if err != nil {
+				return nil, "", err
+			}
+			return result, fmt.Sprintf("replaced on %d line(s) (regex)", count), nil
+		}
 		result, count, err := execReplaceAll(lines, o.match, o.replacement)
 		if err != nil {
 			return nil, "", err
@@ -55,6 +63,29 @@ func multiMutateOne(o multiMutOpts, lines []string) ([]string, string, error) {
 			return nil, "", err
 		}
 		return result, fmt.Sprintf("deleted lines %d-%d", start, end), nil
+	case "replace":
+		var start, end int
+		if o.endmatch == "" {
+			hits := findMatches(lines, o.match)
+			target, err := resolveNth(hits, o.nth)
+			if err != nil {
+				return nil, "", err
+			}
+			start, end = target, target
+		} else {
+			s, e, err := resolveSourceLines(lines, 0, 0, o.match, o.endmatch, o.nth)
+			if err != nil {
+				return nil, "", err
+			}
+			start, end = s, e
+		}
+		result, err := execReplace(lines, start, end, o.newLines)
+		if err != nil {
+			return nil, "", err
+		}
+		return result, fmt.Sprintf("replaced lines %d-%d", start, end), nil
+	case "write":
+		return o.newLines, fmt.Sprintf("wrote %d line(s)", len(o.newLines)), nil
 	}
 	return nil, "", fmt.Errorf("unsupported op %s", o.op)
 }
@@ -65,16 +96,20 @@ func multiMutateOne(o multiMutOpts, lines []string) ([]string, string, error) {
 // 1 if the request is invalid or no file succeeded.
 func runMultiMutate(o multiMutOpts) int {
 	switch o.op {
-	case "replaceall", "insertafter", "insertbefore", "delete":
+	case "replaceall", "insertafter", "insertbefore", "delete", "replace", "write":
 	default:
-		fmt.Fprintf(os.Stderr, "Error: multi -file mutation supports replaceall, insertafter, insertbefore and delete (got -op %s)\n", o.op)
+		fmt.Fprintf(os.Stderr, "Error: multi -file mutation supports replaceall, insertafter, insertbefore, delete, replace and write (got -op %s)\n", o.op)
 		return 1
 	}
-	if o.match == "" {
-		fmt.Fprintf(os.Stderr, "Error: -match is required for %s\n", o.op)
+	if o.op != "write" && o.match == "" && o.matchRegex == "" {
+		fmt.Fprintf(os.Stderr, "Error: -match or -match-regex is required for %s\n", o.op)
 		return 1
 	}
-	if (o.op == "insertafter" || o.op == "insertbefore") && len(o.newLines) == 0 {
+	if o.matchRegex != "" && o.op != "replaceall" {
+		fmt.Fprintln(os.Stderr, "Error: -match-regex is only supported with replaceall")
+		return 1
+	}
+	if (o.op == "insertafter" || o.op == "insertbefore" || o.op == "replace" || o.op == "write") && len(o.newLines) == 0 {
 		fmt.Fprintln(os.Stderr, "Nothing to insert (-text or -textfile is empty)")
 		return 1
 	}
