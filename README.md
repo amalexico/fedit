@@ -318,7 +318,7 @@ fedit -file '*.md' -op delete -match '<!-- start -->' -endmatch '<!-- end -->'
 - A problem in one file (no match, unreadable, read-only, write failed) is reported as SKIP and never stops the batch. A skipped file is never modified.
 - The report lists OK or SKIP per file, then `N/M file(s) succeeded`. Exit code 0 if at least one file succeeded, 1 if none did.
 - Only -match (plus -endmatch for delete), -nth and -text/-textfile/-texthex are accepted. -match-regex, -block, -line, -cleanfirst, -stream and -files are rejected, and so are the other mutating ops (replace, write, move, copy), all before any file is read. For a global rename with regex across files, use -files GLOB with replaceall.
-- CLI only: the MCP tools still take a single file.
+- CLI only for mutation. fedit_show, fedit_find and fedit_map also take a comma list or glob in the MCP file parameter (unreleased); the other MCP tools still take a single file.
 
 ### Cross-file copy and move -- -dest (unreleased)
 
@@ -742,15 +742,15 @@ This starts a JSON-RPC 2.0 server on stdin/stdout. The server exposes all 14 edi
 
 | Tool | Description |
 |------|-------------|
-| `fedit_show` | Display file contents (full or line range) |
+| `fedit_show` | Display file contents (full or line range); comma list or glob in file (unreleased) |
 | `fedit_insert` | Insert content after a line number |
 | `fedit_delete` | Delete one or more lines |
 | `fedit_replace` | Replace a line range with new content |
 | `fedit_replaceall` | Global find-and-replace; regex capture groups; multi-file glob; `-stream` for large files |
 | `fedit_write` | Create or overwrite a file |
 | `fedit_writeraw` | Create or overwrite a file with no escape expansion (backslashes literal) |
-| `fedit_map` | Structural overview (17 languages) |
-| `fedit_find` | Find lines matching a substring |
+| `fedit_map` | Structural overview (17 languages); comma list or glob in file (unreleased) |
+| `fedit_find` | Find lines matching a substring; comma list or glob in file (unreleased) |
 | `fedit_insertafter` | Insert after a matching line |
 | `fedit_insertbefore` | Insert before a matching line |
 | `fedit_move` | Move a line range to a new position; destination-overlap rejected |
