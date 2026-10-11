@@ -1,1 +1,0 @@
-	got := mustResolveTextFull(t, "ignored_text", f, nil)

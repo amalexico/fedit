@@ -11,8 +11,19 @@ roadmap_insert*.ps1
 _mcp_*.go
 fedit.exe
 fedit_mcp_v*.ps1
-_patch.txt
+_patch*.txt
 _doc_*.md
 .mcpregistry_*
 _funding_patch.txt
 _test_*.txt
+_msg.txt
+description 1.9.txt
+description 2.0.txt
+guided notes.txt
+import_advisory.patch
+import_advisory_test.go
+map_json_csv_test.go
+server.json
+add_fedit_to_goose.ps1
+download_cli.ps1
+fedit-mcp.md
