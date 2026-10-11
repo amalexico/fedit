@@ -284,7 +284,7 @@ Invalid hex exits 1 with `matchhex: invalid hex string: ...` (or `endmatchhex: .
 
 ---
 
-### Multiple files -- comma list or glob (show/find/map v1.8.1, mutation unreleased)
+### Multiple files -- comma list or glob (show/find/map since v1.8.1, mutation and MCP since v1.9.0)
 
 `-file` accepts a comma-separated list, a glob, or both. A real file with that exact name wins over glob expansion.
 
@@ -318,7 +318,7 @@ fedit -file '*.md' -op delete -match '<!-- start -->' -endmatch '<!-- end -->'
 - A problem in one file (no match, unreadable, read-only, write failed) is reported as SKIP and never stops the batch. A skipped file is never modified.
 - The report lists OK or SKIP per file, then `N/M file(s) succeeded`. Exit code 0 if at least one file succeeded, 1 if none did.
 - Only -match (plus -endmatch for delete and replace), -nth and -text/-textfile/-texthex are accepted. -match-regex works with replaceall, and write needs no -match and writes the same content to every file. -block, -line, -cleanfirst, -stream and -files are rejected, and so are move and copy, all before any file is read.
-- MCP (unreleased): fedit_replaceall, fedit_insertafter, fedit_insertbefore, fedit_delete and fedit_replace take a comma list or glob in file, with the same rules and a per-file report; block, line, stream and files are rejected. fedit_write always treats file as one path. fedit_show, fedit_find and fedit_map also take a list.
+- MCP: fedit_replaceall, fedit_insertafter, fedit_insertbefore, fedit_delete and fedit_replace take a comma list or glob in file, with the same rules and a per-file report; block, line, stream and files are rejected. fedit_write always treats file as one path. fedit_show, fedit_find and fedit_map also take a list.
 
 ### Cross-file copy and move -- -dest (unreleased)
 
@@ -519,7 +519,7 @@ All mappers detect **duplicates** and flag them with warnings.
 
 | Flag | Description |
 |------------|------------------------------------------|
-| -file PATH | Target file (required); comma list or glob for show/find/map and replaceall/insertafter/insertbefore/delete (mutation unreleased) |
+| -file PATH | Target file (required); comma list or glob for show/find/map and replaceall/insertafter/insertbefore/delete/replace/write |
 | -dest PATH,PATH | Cross-file copy/move: comma list of destination files, each needs one anchor flag (-after, -before, -aftermatch, -beforematch, -afterblock, -beforeblock); unreleased |
 | -op OP | Operation to perform (required) |
 | -line N | Starting line number (1-based); N:+M=range, -N=from end, -N:=last N lines, :=EOF |
@@ -742,15 +742,15 @@ This starts a JSON-RPC 2.0 server on stdin/stdout. The server exposes all 14 edi
 
 | Tool | Description |
 |------|-------------|
-| `fedit_show` | Display file contents (full or line range); comma list or glob in file (unreleased) |
+| `fedit_show` | Display file contents (full or line range); comma list or glob in file |
 | `fedit_insert` | Insert content after a line number |
 | `fedit_delete` | Delete one or more lines |
 | `fedit_replace` | Replace a line range with new content |
 | `fedit_replaceall` | Global find-and-replace; regex capture groups; multi-file glob; `-stream` for large files |
 | `fedit_write` | Create or overwrite a file |
 | `fedit_writeraw` | Create or overwrite a file with no escape expansion (backslashes literal) |
-| `fedit_map` | Structural overview (17 languages); comma list or glob in file (unreleased) |
-| `fedit_find` | Find lines matching a substring; comma list or glob in file (unreleased) |
+| `fedit_map` | Structural overview (17 languages); comma list or glob in file |
+| `fedit_find` | Find lines matching a substring; comma list or glob in file |
 | `fedit_insertafter` | Insert after a matching line |
 | `fedit_insertbefore` | Insert before a matching line |
 | `fedit_move` | Move a line range to a new position; destination-overlap rejected |
