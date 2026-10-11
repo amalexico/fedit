@@ -321,5 +321,5 @@ Full results: https://amalexhandler.com/fedit#benchmark
   -end -N        end line relative to EOF (-1 = last line, -5 = fifth from end)
   -endmatch TEXT content-anchor end of range -- show, replace, delete, move, copy
   -quiet         suppress stdout on success; exit code signals result (wins over -v)
-  -file LIST     CLI only: comma list and/or glob; show/find/map, plus replaceall/insertafter/insertbefore/delete with -match only (per-file SKIP, never abort); other mutating ops and -stream rejected; MCP fedit_show/fedit_find/fedit_map also take a list (unreleased), other MCP tools take one file
+  -file LIST     CLI: comma list and/or glob; show/find/map, plus replaceall (also -match-regex), insertafter, insertbefore, delete and replace with -match, and write (per-file SKIP, never abort); -block, -line, move, copy and -stream rejected. MCP (unreleased): fedit_show/find/map/replaceall/insertafter/insertbefore/delete/replace take a list too; fedit_write and the other tools take one file
   -dest F1,F2    CLI only, unreleased: copy/move into other files; each destination needs its own anchor flag; per-destination SKIP, source removed only if a write succeeded; not in MCP tools

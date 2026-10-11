@@ -302,7 +302,7 @@ fedit -file main.go,mcp.go -op map -lang go
 - map skips unrecognized extensions with a SKIP line.
 - A summary line reports how many files had results.
 
-Mutating ops (replaceall, insertafter, insertbefore, delete) run on each file on its own:
+Mutating ops (replaceall, insertafter, insertbefore, delete, replace, write) run on each file on its own:
 
 ```bash
 # Replace in every matching file
@@ -317,8 +317,8 @@ fedit -file '*.md' -op delete -match '<!-- start -->' -endmatch '<!-- end -->'
 
 - A problem in one file (no match, unreadable, read-only, write failed) is reported as SKIP and never stops the batch. A skipped file is never modified.
 - The report lists OK or SKIP per file, then `N/M file(s) succeeded`. Exit code 0 if at least one file succeeded, 1 if none did.
-- Only -match (plus -endmatch for delete), -nth and -text/-textfile/-texthex are accepted. -match-regex, -block, -line, -cleanfirst, -stream and -files are rejected, and so are the other mutating ops (replace, write, move, copy), all before any file is read. For a global rename with regex across files, use -files GLOB with replaceall.
-- CLI only for mutation. fedit_show, fedit_find and fedit_map also take a comma list or glob in the MCP file parameter (unreleased); the other MCP tools still take a single file.
+- Only -match (plus -endmatch for delete and replace), -nth and -text/-textfile/-texthex are accepted. -match-regex works with replaceall, and write needs no -match and writes the same content to every file. -block, -line, -cleanfirst, -stream and -files are rejected, and so are move and copy, all before any file is read.
+- MCP (unreleased): fedit_replaceall, fedit_insertafter, fedit_insertbefore, fedit_delete and fedit_replace take a comma list or glob in file, with the same rules and a per-file report; block, line, stream and files are rejected. fedit_write always treats file as one path. fedit_show, fedit_find and fedit_map also take a list.
 
 ### Cross-file copy and move -- -dest (unreleased)
 
