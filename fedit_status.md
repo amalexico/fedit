@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: September 29, 2026
+# Last updated: October 11, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -11,8 +11,7 @@ PATH:    C:\Users\kehsi\Desktop\amalex-brand\fedit\
 WEBSITE: amalexhandler.com/fedit (LIVE -- current: v1.8.0)
 INSTALL: go install github.com/amalexico/fedit@latest
 
-CURRENT TAG:  v1.8.1 (PUSHED); -dest cross-file copy/move/replace, -destblock,
-  and -sourcefile/-sourceblock (6a5470e, edcceb7) all on main, unreleased, not yet tagged
+CURRENT TAG:  v1.8.1 (tagged). main (7fb1491) holds everything for v1.9.0, documented and not yet tagged: multi -file mutation, -dest copy/move/replace, -destblock, -sourcefile/-sourceblock, MCP multi-file.
 PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. v1.8.1 was tagged later (see the Sept 28 notes below).
   Code commit
   touched .gitignore, CLAUDE_DESKTOP.md, main.go (~3920 lines), user_skill.md.
@@ -120,8 +119,18 @@ SESSION LOG (Sept 27, 2026, later):
     docs are legitimate tracked content; the 10 loose scratch files stay local-only.
     LESSON (already in this file above, reconfirmed): never git add -A blind -- run git
     status first and review before every commit, every time, no exceptions.
-  - Open items: execReplaceAllRegex is not wired into multi -file yet (-match-regex is rejected); replace and write over multiple files are not built; replace -dest is not built; MCP multi-file and MCP -dest are not built. go build ./... does not refresh fedit.exe, so run go build -o fedit.exe . before any live test.
-  - NEXT SESSION, in order: (1) MCP multi-file and MCP -dest on top of the exec functions and the batch layer; (2) tag v1.9.0 once mutation, -dest and -sourceblock/-sourcefile are documented as released (drop "unreleased" from README and SKILL); then tasks 7, 8, 9, 10.
+  - SESSION Oct 11, 2026 (v1.9.0 prep): MCP multi-file and docs, all pushed.
+    7455f2e: fedit_show/fedit_find/fedit_map take a comma list or glob. New mcpmulti.go (mcpRunMulti: one ==> path <== header per file, find skips files with no hits, report-and-continue, error only if no file produced results); hook in mcpExecTool above the filepath.Abs line. Tests in mcpmulti_test.go (8).
+    a8da65c: collectMultiMutate split out of runMultiMutate (returns []batchResult and the OK count, prints nothing); the CLI wrapper keeps its exact messages and exit codes.
+    c346752: MCP multi-file mutation for fedit_replaceall, insertafter, insertbefore, delete and replace. New mcpmultimut.go (mcpMultiMutTools, mcpMultiMutOpts, mcpRunMultiMutate), second hook in mcpExecTool. DECIDED: fedit_write is NOT in the list, so a write to a path with a comma still creates that file. match is required; block, line/end, stream and files are rejected before any file is read. Tests in mcpmultimut_test.go (13 incl. a real read-only file).
+    1288847, 3ab8353: MCP tool descriptions mention multi-file. f7fa423, 55e283e, 230eaa3, 7fb1491: README and SKILL brought in line with the code (replace and write over a list, -match-regex over a list, replace -dest with -destblock, -sourcefile/-sourceblock, all unreleased markers dropped; MCP -dest still marked not supported).
+    Smoke test (scratch folder under TEMP) of the documented replace -dest and insertafter -sourcefile examples passed, incl. the missing-block SKIP and both rejections.
+    LESSON: fedit find without -x prints its report to the console, not stdout, so a -match test on its output silently fails; guard with find -x and count lines.
+    LESSON: a patch-file guard must check the file CONTENT, not just Test-Path; a stale _patch8.txt put 27 junk lines into SKILL.md (repaired).
+    LESSON: new test helpers need a unique prefix (mmRead clashed with multimutate_test.go; renamed mcpMMRead).
+    KNOWN: single-file fedit_replaceall ignores match_regex, files, stream and textfile although its schema advertises them (task 9).
+  - Open items: MCP -dest/-destblock/-sourcefile/-sourceblock are not built; the Go import advisory (6e) is not wired in; single-file fedit_replaceall ignores match_regex, files, stream and textfile. go build ./... does not refresh fedit.exe, so run go build -o fedit.exe . before any live test.
+  - NEXT SESSION, in order: (1) tag v1.9.0 (git tag v1.9.0 ; git push ; git push --tags, then update the website version and the fedit page); (2) MCP -dest, -destblock, -sourcefile and -sourceblock (mcpDoReplace, mcpDoInsertMatch and the rest bypass main(), so they need their own wiring), and the Go import advisory wiring (6e); (3) task 9, including the single-file fedit_replaceall params its schema advertises but does not handle; then tasks 7, 8, 10.
 
 ===============================================================
 FEDIT -- PENDING TASKS
