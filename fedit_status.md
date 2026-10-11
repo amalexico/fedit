@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: September 28, 2026
+# Last updated: September 29, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -63,10 +63,24 @@ SESSION LOG (Sept 27, 2026, later):
   - DECIDED: batch policy is report and continue, never abort. Every per-file problem is a SKIP line and that file is left unmodified. Exit code 0 if at least one file succeeded, 1 if none did.
   - DECIDED (-dest move step): destination writes happen first. A destination that fails (read-only, no permission) is a SKIP, and the source text is removed ONLY if at least one destination write succeeded. If every destination fails, all are SKIP and the source stays intact, so text is never lost.
   - Task 6c PARTLY DONE (6a5470e, pushed; docs d12be7f): -dest cross-file copy and move. New multidest.go (multiDestOpts, multiDestOne, runMultiDest) and dest_flag.go (package-level destFlag = flag.String, registered at init so main()'s flag block is untouched). The hook in main() sits just before the -cleanfirst block, so a rejected combination never truncates anything; it rejects -dest with any op other than copy/move, with no -file, and with -match-regex, -cleanfirst, -stream or -files. Source comes from -line/-end (parseAndResolveLines), -match/-endmatch or -block/-lang. Destination anchors are resolved inside each destination file: -after, -before, -aftermatch, -beforematch, -afterblock, -beforeblock. Per-destination SKIP for a missing file, missing anchor, read-only file, failed write, or a destination that is the source itself; a file listed twice is used once. move follows the no-loss rule: all destination writes first, source trimmed only if at least one succeeded; if every destination fails the source stays untouched and the exit code is 1. Exit 0 if at least one destination succeeded. Tests in multidest_test.go (10 tests, all passing, including a genuine read-only destination). Live-tested in scratch folders under TEMP, including -afterblock and -beforeblock on Go fixtures. README and SKILL updated (-dest marked unreleased).
+  - Task 1 (of NEXT SESSION plan) DONE (95f2407, pushed): multi -file -match-regex wired into
+    multiMutateOne's replaceall case (new matchRegex field on multiMutOpts); multi -file replace
+    added to runMultiMutate/multiMutateOne, reusing delete's match/endmatch range-resolution
+    then execReplace; multi -file write added as a special case inside main()'s previously-
+    unconditional single-file write block (that block ran before the isMultiSpec check and would
+    have silently mis-written to a literal comma-joined filename -- real latent bug, now fixed,
+    write is exempt from the multi -file -match requirement). All live-tested in TEMP scratch
+    (regex replace across 2 files, write-then-replace on 2 files, single-file write/replace
+    regression). Not yet tagged.
+  - LESSON: fwencode itself is subject to PowerShell argv mangling before it produces hex --
+    wrapping a -match/-matchhex anchor with embedded double quotes in an inline fwencode "..."
+    call can still corrupt it (quotes silently stripped), even though -matchhex protects the
+    PowerShell-to-fedit hop. For anchors with embedded quotes, prefer a fresh -op show + -line
+    N:+M range, or route through Notepad++ _patch.txt + -textfile.
   - -dest with a multi -file list is rejected by the multi -file path ("multi -file supports show, find and map only"), exit 1, nothing modified (live-tested).
   - NOT built for -dest: replace -dest, insertafter/insertbefore -dest, -sourceblock/-sourcefile/-destblock (6d), the Go import advisory wiring (6e), MCP support. Cosmetic: no blank line between the -dest hook's closing brace and the -cleanfirst comment in main().
   - Open items: execReplaceAllRegex is not wired into multi -file yet (-match-regex is rejected); replace and write over multiple files are not built; replace -dest is not built; MCP multi-file and MCP -dest are not built. go build ./... does not refresh fedit.exe, so run go build -o fedit.exe . before any live test.
-  - NEXT SESSION, in order: (1) replace and write over multiple files, and regex replaceall through execReplaceAllRegex; (2) replace -dest (fan out, -destblock, SKIP with a report line when the target block is missing) and the -sourceblock/-sourcefile step (6d); (3) MCP multi-file and MCP -dest on top of the exec functions and the batch layer; (4) tag v1.9.0 once mutation and -dest are documented as released (drop "unreleased" from README and SKILL); then tasks 7, 8, 9, 10.
+  - NEXT SESSION, in order: (1) replace -dest (fan out, -destblock, SKIP with a report line when the target block is missing) and the -sourceblock/-sourcefile step (6d); (2) MCP multi-file and MCP -dest on top of the exec functions and the batch layer; (3) tag v1.9.0 once mutation and -dest are documented as released (drop "unreleased" from README and SKILL); then tasks 7, 8, 9, 10.
 
 ===============================================================
 FEDIT -- PENDING TASKS

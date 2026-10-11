@@ -6,13 +6,14 @@ import (
 	"strings"
 )
 
-// multiDestOpts holds the flags for cross-file copy and move (-dest fan-out).
+// multiDestOpts holds the flags for cross-file copy, move and replace (-dest fan-out).
 type multiDestOpts struct {
 	op          string
 	srcFile     string
 	dests       string
 	lang        string
 	block       string
+	destBlock   string
 	line        int
 	end         int
 	match       string
@@ -59,6 +60,23 @@ func multiDestOne(lines []string, o multiDestOpts, block []string) ([]string, st
 	return out, desc, nil
 }
 
+// parseDestList splits and dedupes a comma-separated -dest value, trimming
+// whitespace and dropping empties and repeats. Shared by runMultiDest and
+// runMultiDestReplace.
+func parseDestList(dests string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, d := range strings.Split(dests, ",") {
+		d = strings.TrimSpace(d)
+		if d == "" || seen[d] {
+			continue
+		}
+		seen[d] = true
+		out = append(out, d)
+	}
+	return out
+}
+
 // runMultiDest copies or moves a block from srcFile into every file in the
 // comma-separated dests list. Policy: report and continue, never abort. For
 // move, destination writes happen first and the source text is removed only
@@ -73,16 +91,7 @@ func runMultiDest(o multiDestOpts) int {
 		fmt.Fprintln(os.Stderr, "Error: -times must be >= 1")
 		return 1
 	}
-	var dests []string
-	seen := map[string]bool{}
-	for _, d := range strings.Split(o.dests, ",") {
-		d = strings.TrimSpace(d)
-		if d == "" || seen[d] {
-			continue
-		}
-		seen[d] = true
-		dests = append(dests, d)
-	}
+	dests := parseDestList(o.dests)
 	if len(dests) == 0 {
 		fmt.Fprintln(os.Stderr, "Error: -dest needs at least one file")
 		return 1
@@ -155,6 +164,87 @@ func runMultiDest(o multiDestOpts) int {
 			return 1
 		}
 		fmt.Fprintf(os.Stderr, "move: removed lines %d-%d from %s\n", srcStart, srcEnd, o.srcFile)
+	}
+	return 0
+}
+
+// runMultiDestReplace overwrites -destblock in every file in the
+// comma-separated dests list with the block resolved from srcFile (via
+// -block, or -line/-match like the other ops). Unlike copy/move, a missing
+// target block is always a SKIP with a report line -- there is no sensible
+// "insert instead" fallback for "overwrite this thing that isn't there".
+// Policy: report and continue, never abort. Returns the process exit code:
+// 0 if at least one destination succeeded.
+func runMultiDestReplace(o multiDestOpts) int {
+	if o.destBlock == "" {
+		fmt.Fprintln(os.Stderr, "Error: replace -dest requires -destblock")
+		return 1
+	}
+	dests := parseDestList(o.dests)
+	if len(dests) == 0 {
+		fmt.Fprintln(os.Stderr, "Error: -dest needs at least one file")
+		return 1
+	}
+
+	srcLines, err := readLines(o.srcFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+	var srcStart, srcEnd int
+	if o.block != "" {
+		srcStart, srcEnd, err = resolveBlock(srcLines, o.lang, o.block)
+	} else {
+		srcStart, srcEnd, err = resolveSourceLines(srcLines, o.line, o.end, o.match, o.endmatch, o.nth)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+	if srcStart < 1 || srcEnd > len(srcLines) || srcStart > srcEnd {
+		fmt.Fprintf(os.Stderr, "Error: source range %d-%d invalid (file has %d lines)\n", srcStart, srcEnd, len(srcLines))
+		return 1
+	}
+	srcBlock := make([]string, srcEnd-srcStart+1)
+	copy(srcBlock, srcLines[srcStart-1:srcEnd])
+
+	srcInfo, srcStatErr := os.Stat(o.srcFile)
+
+	var results []batchResult
+	okCount := 0
+	for _, d := range dests {
+		if srcStatErr == nil {
+			if di, e := os.Stat(d); e == nil && os.SameFile(srcInfo, di) {
+				results = append(results, batchResult{d, "SKIP", "destination is the source file (use plain replace)"})
+				continue
+			}
+		}
+		dl, e := readLines(d)
+		if e != nil {
+			results = append(results, batchResult{d, "SKIP", e.Error()})
+			continue
+		}
+		bs, be, e := resolveBlock(dl, o.lang, o.destBlock)
+		if e != nil {
+			results = append(results, batchResult{d, "SKIP", fmt.Sprintf("target block %q not found: %v", o.destBlock, e)})
+			continue
+		}
+		out, e := execReplace(dl, bs, be, srcBlock)
+		if e != nil {
+			results = append(results, batchResult{d, "SKIP", e.Error()})
+			continue
+		}
+		if e := writeLines(d, out); e != nil {
+			results = append(results, batchResult{d, "SKIP", e.Error()})
+			continue
+		}
+		okCount++
+		results = append(results, batchResult{d, "OK", fmt.Sprintf("block %q replaced with %d line(s)", o.destBlock, len(srcBlock))})
+	}
+	printBatchReport("replace", results)
+
+	if okCount == 0 {
+		return 1
 	}
 	return 0
 }

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard</title>
+</head>
+<body>
+  <header>
+    <nav id="main-nav">
+      <a href="/">Home</a>
+      <a href="/reports">Reports</a>
+    </nav>
+  </header>
+  <main>
+    <section class="panel">
+      <h1>Weekly Summary</h1>
+      <p>Traffic is up 12% week over week.</p>
+    </section>
+  </main>
+  <footer>
+    <p>&copy; 2026 Amalex Corp</p>
+  </footer>
+  <script>
+    function initNav1() {
+      document.getElementById("main-nav").classList.add("ready");
+    }
+
+    function toggleMenu1() {
+      document.body.classList.toggle("menu-open");
+    }
+
+    function closeMenu1() {
+      document.body.classList.remove("menu-open");
+    }
+
+    initNav1();
+  </script>
+</body>
+</html>

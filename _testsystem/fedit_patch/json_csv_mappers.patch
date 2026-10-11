@@ -1,0 +1,421 @@
+diff --git a/main.go b/main.go
+index 482fd4c..8f11bc9 100644
+--- a/main.go
++++ b/main.go
+@@ -2,12 +2,16 @@ package main
+ 
+ import (
+ 	"bufio"
++	"encoding/csv"
+ 	"encoding/hex"
++	"encoding/json"
+ 	"flag"
+ 	"fmt"
++	"io"
+ 	"os"
+ 	"path/filepath"
+ 	"regexp"
++	"sort"
+ 	"strconv"
+ 	"strings"
+ 	"time"
+@@ -25,7 +29,7 @@ func main() {
+ 	endLine := flag.String("end", "", "End line for delete/replace range (inclusive)")
+ 	text := flag.String("text", "", "Text to insert/replace (use \\n for newlines, \\t for tabs)")
+ 	textFile := flag.String("textfile", "", "Read insert/replace text from this file instead of -text")
+-	lang := flag.String("lang", "", "Language for map: go, html, sql")
++	lang := flag.String("lang", "", "Language for map: go, html, sql, python, javascript, typescript, css, rust, java, csharp, yaml, toml, markdown, ruby, php, dockerfile, makefile, json, csv")
+ 	match := flag.String("match", "", "Text to search for (find/insertafter/insertbefore)")
+ 	nth := flag.Int("nth", 1, "Which occurrence to match (default 1, use -1 for last)")
+ 	v := flag.Bool("v", false, "Verify: show affected lines after mutation")
+@@ -1121,6 +1125,10 @@ func doMap(lines []string, filename, lang string) {
+ 			lang = "dockerfile"
+ 		case strings.HasSuffix(lower, "makefile") || strings.HasSuffix(lower, ".mk"):
+ 			lang = "makefile"
++		case strings.HasSuffix(lower, ".json"):
++			lang = "json"
++		case strings.HasSuffix(lower, ".csv"):
++			lang = "csv"
+ 		default:
+ 			fmt.Fprintln(os.Stderr, "Cannot auto-detect language. Use -lang flag.")
+ 			os.Exit(1)
+@@ -1162,6 +1170,10 @@ func doMap(lines []string, filename, lang string) {
+ 		doMapDockerfile(lines)
+ 	case "makefile":
+ 		doMapMakefile(lines)
++	case "json":
++		doMapJSON(lines)
++	case "csv":
++		doMapCSV(lines)
+ 	default:
+ 		fmt.Fprintf(os.Stderr, "Unknown language: %s\n", lang)
+ 		os.Exit(1)
+@@ -2229,6 +2241,368 @@ func doMapMakefile(lines []string) {
+ 	fmt.Fprintf(os.Stderr, "\n--- %d total lines ---\n", len(lines))
+ }
+ 
++// ════════════════════════════════════════════════════════════
++// JSON / CSV — data-integrity mappers (v1.9.0)
++// ════════════════════════════════════════════════════════════
++
++type jsonDupKey struct {
++	key   string
++	count int
++	line  int
++}
++
++// findJSONDuplicateKeys walks the token stream (not the decoded map, which
++// silently collapses duplicates) so keys repeated within the SAME object
++// are caught even though json.Unmarshal would just keep the last one.
++func findJSONDuplicateKeys(content string) ([]jsonDupKey, error) {
++	dec := json.NewDecoder(strings.NewReader(content))
++	var results []jsonDupKey
++
++	lineOf := func(offset int64) int {
++		if offset < 0 {
++			offset = 0
++		}
++		if int(offset) > len(content) {
++			offset = int64(len(content))
++		}
++		return strings.Count(content[:offset], "\n") + 1
++	}
++
++	var parseObject func() error
++	var parseArray func() error
++	var dispatch func(tok json.Token, off int64) error
++
++	dispatch = func(tok json.Token, off int64) error {
++		if d, ok := tok.(json.Delim); ok {
++			switch d {
++			case '{':
++				return parseObject()
++			case '[':
++				return parseArray()
++			}
++		}
++		return nil // scalar value: string, number, bool, null
++	}
++
++	parseObject = func() error {
++		keys := map[string]int{}
++		firstLine := map[string]int{}
++		for {
++			tok, err := dec.Token()
++			if err != nil {
++				return err
++			}
++			off := dec.InputOffset() // offset AFTER this token; close enough for its line
++			if d, ok := tok.(json.Delim); ok && d == '}' {
++				break
++			}
++			key, _ := tok.(string)
++			if keys[key] == 0 {
++				firstLine[key] = lineOf(off)
++			}
++			keys[key]++
++			// consume the value that follows this key
++			voff := dec.InputOffset()
++			vtok, err := dec.Token()
++			if err != nil {
++				return err
++			}
++			if err := dispatch(vtok, voff); err != nil {
++				return err
++			}
++		}
++		for k, c := range keys {
++			if c > 1 {
++				results = append(results, jsonDupKey{key: k, count: c, line: firstLine[k]})
++			}
++		}
++		return nil
++	}
++
++	parseArray = func() error {
++		for {
++			off := dec.InputOffset()
++			tok, err := dec.Token()
++			if err != nil {
++				return err
++			}
++			if d, ok := tok.(json.Delim); ok && d == ']' {
++				return nil
++			}
++			if err := dispatch(tok, off); err != nil {
++				return err
++			}
++		}
++	}
++
++	off := dec.InputOffset()
++	tok, err := dec.Token()
++	if err != nil {
++		if err == io.EOF {
++			return results, nil
++		}
++		return nil, err
++	}
++	if err := dispatch(tok, off); err != nil {
++		return nil, err
++	}
++	sort.Slice(results, func(i, j int) bool { return results[i].line < results[j].line })
++	return results, nil
++}
++
++func jsonTypeName(v interface{}) string {
++	switch v.(type) {
++	case map[string]interface{}:
++		return "object"
++	case []interface{}:
++		return "array"
++	case string:
++		return "string"
++	case json.Number:
++		return "number"
++	case bool:
++		return "boolean"
++	case nil:
++		return "null"
++	default:
++		return "unknown"
++	}
++}
++
++func jsonWalk(v interface{}, depth int) (maxDepth, keys, objects, arrays, scalars int) {
++	maxDepth = depth
++	switch t := v.(type) {
++	case map[string]interface{}:
++		objects++
++		keys += len(t)
++		for _, cv := range t {
++			cd, ck, co, ca, cs := jsonWalk(cv, depth+1)
++			if cd > maxDepth {
++				maxDepth = cd
++			}
++			keys += ck
++			objects += co
++			arrays += ca
++			scalars += cs
++		}
++	case []interface{}:
++		arrays++
++		for _, cv := range t {
++			cd, ck, co, ca, cs := jsonWalk(cv, depth+1)
++			if cd > maxDepth {
++				maxDepth = cd
++			}
++			keys += ck
++			objects += co
++			arrays += ca
++			scalars += cs
++		}
++	default:
++		scalars++
++	}
++	return
++}
++
++func doMapJSON(lines []string) {
++	content := strings.Join(lines, "\n")
++
++	fmt.Println("── Integrity ──")
++	dec := json.NewDecoder(strings.NewReader(content))
++	dec.UseNumber()
++	var root interface{}
++	parseErr := dec.Decode(&root)
++	valid := parseErr == nil
++	if valid {
++		// Reject trailing garbage after the first value (e.g. two root objects).
++		if _, err := dec.Token(); err != io.EOF {
++			valid = false
++			if err == nil {
++				parseErr = fmt.Errorf("unexpected trailing content after root value")
++			} else {
++				parseErr = err
++			}
++		}
++	}
++	if valid {
++		fmt.Println("✓ Valid JSON syntax")
++	} else {
++		fmt.Printf("✗ Malformed JSON: %v\n", parseErr)
++	}
++
++	fmt.Println("\n── Structure ──")
++	if valid {
++		fmt.Printf("Root type: %s\n", jsonTypeName(root))
++		depth, totalKeys, objects, arrays, scalars := jsonWalk(root, 1)
++		if m, ok := root.(map[string]interface{}); ok {
++			topKeys := make([]string, 0, len(m))
++			for k := range m {
++				topKeys = append(topKeys, k)
++			}
++			sort.Strings(topKeys)
++			fmt.Printf("Top-level keys (%d): %s\n", len(topKeys), strings.Join(topKeys, ", "))
++		} else if arr, ok := root.([]interface{}); ok {
++			fmt.Printf("Top-level array length: %d\n", len(arr))
++		}
++		fmt.Printf("Max nesting depth: %d\n", depth)
++		fmt.Printf("Total keys: %d │ Objects: %d │ Arrays: %d │ Scalars: %d\n", totalKeys, objects, arrays, scalars)
++	} else {
++		fmt.Println("(skipped — file is not valid JSON)")
++	}
++
++	fmt.Println("\n── Duplicate Keys ──")
++	if valid {
++		dupes, dErr := findJSONDuplicateKeys(content)
++		if dErr != nil {
++			fmt.Printf("(could not scan for duplicates: %v)\n", dErr)
++		} else if len(dupes) == 0 {
++			fmt.Println("✓ No duplicate keys within any object")
++		} else {
++			fmt.Println("⚠ DUPLICATE KEYS (same object):")
++			for _, d := range dupes {
++				fmt.Printf("  %q appears %d times, first seen at line %d\n", d.key, d.count, d.line)
++			}
++		}
++	} else {
++		fmt.Println("(skipped — file is not valid JSON)")
++	}
++
++	fmt.Fprintf(os.Stderr, "\n--- %d total lines ---\n", len(lines))
++}
++
++func doMapCSV(lines []string) {
++	content := strings.Join(lines, "\n")
++	if len(lines) > 0 {
++		content += "\n"
++	}
++
++	fmt.Println("── Integrity ──")
++	// First pass: strict parse to catch quoting/escaping errors with a line number.
++	strictReader := csv.NewReader(strings.NewReader(content))
++	var malformedAt int
++	var malformedErr error
++	rowCount := 0
++	for {
++		_, err := strictReader.Read()
++		if err == io.EOF {
++			break
++		}
++		if err != nil {
++			malformedErr = err
++			malformedAt = rowCount + 1
++			break
++		}
++		rowCount++
++	}
++	valid := malformedErr == nil
++	if valid {
++		fmt.Println("✓ Valid CSV syntax")
++	} else {
++		fmt.Printf("✗ Malformed CSV near record %d: %v\n", malformedAt, malformedErr)
++	}
++
++	// Second pass: lenient parse (FieldsPerRecord = -1) so we can still report
++	// structure and ragged rows on a file with ragged rows. Read record-by-record
++	// (not ReadAll) so a hard quoting error partway through still leaves us the
++	// header and any good rows read before it, instead of discarding everything.
++	lenientReader := csv.NewReader(strings.NewReader(content))
++	lenientReader.FieldsPerRecord = -1
++	var records [][]string
++	for {
++		rec, err := lenientReader.Read()
++		if err != nil {
++			break // EOF, or a hard parse error already reported in Integrity above
++		}
++		records = append(records, rec)
++	}
++
++	fmt.Println("\n── Structure ──")
++	if len(records) == 0 {
++		fmt.Println("(empty file — no rows)")
++	} else {
++		header := records[0]
++		fmt.Printf("Rows: %d (including header) │ Data rows: %d │ Columns: %d\n", len(records), len(records)-1, len(header))
++		fmt.Printf("Header: %s\n", strings.Join(header, ", "))
++	}
++
++	fmt.Println("\n── Ragged Rows ──")
++	if len(records) > 1 {
++		width := len(header0(records))
++		var ragged []string
++		for i, row := range records[1:] {
++			if len(row) != width {
++				ragged = append(ragged, fmt.Sprintf("  Row %d (line %d): expected %d fields, got %d", i+2, i+2, width, len(row)))
++			}
++		}
++		if len(ragged) == 0 {
++			fmt.Println("✓ No ragged rows — every row matches the header column count")
++		} else {
++			fmt.Println("⚠ RAGGED ROWS:")
++			for _, r := range ragged {
++				fmt.Println(r)
++			}
++		}
++	} else {
++		fmt.Println("(no data rows to check)")
++	}
++
++	fmt.Println("\n── Duplicate Header Columns ──")
++	if len(records) > 0 {
++		header := records[0]
++		seen := map[string][]int{}
++		for i, h := range header {
++			seen[h] = append(seen[h], i+1)
++		}
++		dupNames := make([]string, 0)
++		for h, cols := range seen {
++			if len(cols) > 1 {
++				dupNames = append(dupNames, h)
++			}
++		}
++		sort.Strings(dupNames)
++		if len(dupNames) == 0 {
++			fmt.Println("✓ No duplicate header columns")
++		} else {
++			fmt.Println("⚠ DUPLICATE HEADER COLUMNS:")
++			for _, h := range dupNames {
++				cols := seen[h]
++				strs := make([]string, len(cols))
++				for i, c := range cols {
++					strs[i] = strconv.Itoa(c)
++				}
++				fmt.Printf("  %q at columns: %s\n", h, strings.Join(strs, ", "))
++			}
++		}
++	} else {
++		fmt.Println("(skipped — no header row available)")
++	}
++
++	fmt.Println("\n── Empty Fields ──")
++	emptyCount := 0
++	if len(records) > 1 {
++		for _, row := range records[1:] {
++			for _, field := range row {
++				if strings.TrimSpace(field) == "" {
++					emptyCount++
++				}
++			}
++		}
++	}
++	if emptyCount == 0 {
++		fmt.Println("✓ No empty fields")
++	} else {
++		fmt.Printf("⚠ %d empty field(s) found across data rows\n", emptyCount)
++	}
++
++	fmt.Fprintf(os.Stderr, "\n--- %d total lines ---\n", len(lines))
++}
++
++func header0(records [][]string) []string {
++	if len(records) == 0 {
++		return nil
++	}
++	return records[0]
++}
++
+ // ════════════════════════════════════════════════════════════
+ // MOVE / COPY — block relocation operations (v1.2.0)
+ // ════════════════════════════════════════════════════════════

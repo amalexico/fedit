@@ -1,0 +1,9 @@
+[package]
+name = "fedit-variant"
+version = "1.9.0"
+
+[dependencies1]
+regex = "1"
+
+[dev-dependencies1]
+tempfile = "3"

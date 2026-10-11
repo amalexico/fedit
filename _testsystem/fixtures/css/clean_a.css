@@ -1,0 +1,11 @@
+.header {
+  color: red;
+}
+
+.footer {
+  color: blue;
+}
+
+@media (max-width: 600px) {
+  .header-mobile { color: green; }
+}

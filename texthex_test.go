@@ -105,7 +105,7 @@ func TestBytesToLines_TabsPreserved(t *testing.T) {
 
 func TestBytesToLines_DoubleQuotesPreserved(t *testing.T) {
 	// The key use case: Go source with string literals.
-	got := bytesToLines([]byte(`fmt.Println("hello")`+"\n"))
+	got := bytesToLines([]byte(`fmt.Println("hello")` + "\n"))
 	if len(got) != 1 || got[0] != `fmt.Println("hello")` {
 		t.Errorf("got %v", got)
 	}
@@ -125,10 +125,22 @@ func TestBytesToLines_BackslashesNotExpanded(t *testing.T) {
 	}
 }
 
+// mustResolveTextFull wraps resolveTextFull for tests that don't exercise
+// -sourcefile/-sourceblock: it always passes empty source/lang, and fails
+// the test immediately if resolveTextFull ever returns a non-nil error.
+func mustResolveTextFull(t *testing.T, text, textFile string, resolvedBytes []byte) []string {
+	t.Helper()
+	got, err := resolveTextFull(text, textFile, resolvedBytes, "", "", "")
+	if err != nil {
+		t.Fatalf("resolveTextFull: unexpected error: %v", err)
+	}
+	return got
+}
+
 // ── resolveTextFull unit tests ────────────────────────────────────────────────
 
 func TestResolveTextFull_NilBytesUsesText(t *testing.T) {
-	got := resolveTextFull("hello\\nworld", "", nil)
+	got := mustResolveTextFull(t, "hello\nworld", "", nil)
 	// expandText expands \n → real newline
 	if len(got) != 2 || got[0] != "hello" || got[1] != "world" {
 		t.Errorf("expected [hello world], got %v", got)
@@ -138,7 +150,7 @@ func TestResolveTextFull_NilBytesUsesText(t *testing.T) {
 func TestResolveTextFull_BytesOverrideText(t *testing.T) {
 	// Even when -text has content, resolvedBytes takes priority.
 	b := []byte("from_hex\n")
-	got := resolveTextFull("from_text", "", b)
+	got := mustResolveTextFull(t, "from_text", "", b)
 	if len(got) != 1 || got[0] != "from_hex" {
 		t.Errorf("got %v, want [from_hex]", got)
 	}
@@ -148,7 +160,7 @@ func TestResolveTextFull_BytesOverrideTextFile(t *testing.T) {
 	// resolvedBytes also overrides -textfile.
 	f := thTempFile(t, "from_file")
 	b := []byte("from_hex\n")
-	got := resolveTextFull("", f, b)
+	got := mustResolveTextFull(t, "", f, b)
 	if len(got) != 1 || got[0] != "from_hex" {
 		t.Errorf("got %v, want [from_hex]", got)
 	}
@@ -156,7 +168,7 @@ func TestResolveTextFull_BytesOverrideTextFile(t *testing.T) {
 
 func TestResolveTextFull_NilBytesUsesTextFile(t *testing.T) {
 	f := thTempFile(t, "from_file")
-	got := resolveTextFull("ignored_text", f, nil)
+	got := mustResolveTextFull(t, "ignored_text", f, nil)
 	if len(got) == 0 || !strings.Contains(strings.Join(got, ""), "from_file") {
 		t.Errorf("expected textfile content, got %v", got)
 	}
@@ -167,7 +179,7 @@ func TestResolveTextFull_DoubleQuotesInHexContent(t *testing.T) {
 	// and decoded without any shell-escaping issues.
 	src := `	ClientID: "my-client-id",`
 	b, _ := thDecode(thEncode(src + "\n"))
-	got := resolveTextFull("", "", b)
+	got := mustResolveTextFull(t, "", "", b)
 	if len(got) != 1 || got[0] != src {
 		t.Errorf("got %q, want %q", got, src)
 	}
@@ -179,7 +191,7 @@ func TestResolveTextFull_BackslashNotExpanded(t *testing.T) {
 	// currently, but \\ → \ would be). Ensure bytesToLines path is safe.
 	src := `path = "C:\\Users\\admin\\file.txt"`
 	b, _ := thDecode(thEncode(src + "\n"))
-	got := resolveTextFull("", "", b)
+	got := mustResolveTextFull(t, "", "", b)
 	if len(got) != 1 || got[0] != src {
 		t.Errorf("got %q, want %q", got[0], src)
 	}
@@ -189,7 +201,7 @@ func TestResolveTextFull_MultilineGoSource(t *testing.T) {
 	// A realistic multi-line Go snippet with tabs, quotes, and braces.
 	src := "// GoogleDrive provider configuration.\nvar GoogleDrive = Provider{\n\tName: \"googledrive\",\n}\n"
 	b, _ := thDecode(thEncode(src))
-	got := resolveTextFull("", "", b)
+	got := mustResolveTextFull(t, "", "", b)
 	if len(got) != 4 {
 		t.Fatalf("len = %d, want 4: %v", len(got), got)
 	}
@@ -231,10 +243,10 @@ func TestThEncodeDecode_ASCII(t *testing.T) {
 
 func TestThDecode_InvalidHex(t *testing.T) {
 	cases := []string{
-		"zz",       // non-hex chars
-		"0",        // odd length
-		"0g",       // invalid char
-		"hello",    // not hex
+		"zz",    // non-hex chars
+		"0",     // odd length
+		"0g",    // invalid char
+		"hello", // not hex
 	}
 	for _, c := range cases {
 		if _, err := thDecode(c); err == nil {
@@ -351,7 +363,7 @@ func TestTexthex_Insert_AfterLine(t *testing.T) {
 	path := thTempFile(t, "line1\nline3\nline4")
 	src := "line2\n"
 	b, _ := thDecode(thEncode(src))
-	newText := resolveTextFull("", "", b)
+	newText := mustResolveTextFull(t, "", "", b)
 	lines, _ := readLines(path)
 	doInsert(lines, path, 1, newText)
 	got, _ := readLines(path)
@@ -367,7 +379,7 @@ func TestTexthex_Insert_WithDoubleQuotes(t *testing.T) {
 	path := thTempFile(t, "before\nafter")
 	src := `	ClientID: "test-client",` + "\n"
 	b, _ := thDecode(thEncode(src))
-	newText := resolveTextFull("", "", b)
+	newText := mustResolveTextFull(t, "", "", b)
 	lines, _ := readLines(path)
 	doInsert(lines, path, 1, newText)
 	got, _ := readLines(path)
@@ -387,7 +399,7 @@ func TestTexthex_InsertAfter_WithDoubleQuotes(t *testing.T) {
 	// Insert GoogleDrive var before ProviderByName
 	src := "var GoogleDrive = Provider{\n\tName: \"googledrive\",\n}\n\n"
 	b, _ := thDecode(thEncode(src))
-	newText := resolveTextFull("", "", b)
+	newText := mustResolveTextFull(t, "", "", b)
 	lines, _ := readLines(path)
 	doInsertMatch(lines, path, "}", 1, newText, false) // insertafter first "}"
 	got, _ := readLines(path)
@@ -412,7 +424,7 @@ func TestTexthex_InsertBefore_WithDoubleQuotes(t *testing.T) {
 	path := thTempFile(t, "var Dropbox = Provider{\n\tName: \"dropbox\",\n}\n\nfunc ProviderByName() {}")
 	src := "var GoogleDrive = Provider{\n\tName: \"googledrive\",\n}\n\n"
 	b, _ := thDecode(thEncode(src))
-	newText := resolveTextFull("", "", b)
+	newText := mustResolveTextFull(t, "", "", b)
 	lines, _ := readLines(path)
 	doInsertMatch(lines, path, "func ProviderByName", 1, newText, true) // insertbefore
 	got, _ := readLines(path)
@@ -443,7 +455,7 @@ func TestTexthex_InsertBefore_CaseStatement(t *testing.T) {
 	path := thTempFile(t, "func ProviderByName(name string) (Provider, bool) {\n\tswitch name {\n\tcase \"dropbox\":\n\t\treturn Dropbox, true\n\t}\n\treturn Provider{}, false\n}")
 	src := "\tcase \"googledrive\":\n\t\treturn GoogleDrive, true\n"
 	b, _ := thDecode(thEncode(src))
-	newText := resolveTextFull("", "", b)
+	newText := mustResolveTextFull(t, "", "", b)
 	lines, _ := readLines(path)
 	doInsertMatch(lines, path, "return Dropbox, true", 1, newText, false)
 	got, _ := readLines(path)
@@ -474,7 +486,7 @@ func TestTexthex_Replace_WithDoubleQuotes(t *testing.T) {
 	path := thTempFile(t, "line1\nOLD_LINE\nline3")
 	src := `NEW: "quoted content"` + "\n"
 	b, _ := thDecode(thEncode(src))
-	newText := resolveTextFull("", "", b)
+	newText := mustResolveTextFull(t, "", "", b)
 	lines, _ := readLines(path)
 	doReplace(lines, path, 2, 2, newText)
 	got, _ := readLines(path)
@@ -495,7 +507,7 @@ func TestTexthex_ServerRegistrationSnippet(t *testing.T) {
 	path := thTempFile(t, "package main\n\nfunc init() {\n\ts.registry.Register(protocol.NewDropbox(s.oauthStore, oauth.Config{ClientID: \"bihqc9zghmhhgcr\", Provider: oauth.Dropbox}, log.Logger))\n}")
 	insert := "\ts.registry.Register(protocol.NewGoogleDrive(s.oauthStore, oauth.Config{ClientID: \"GDRIVE_CLIENT_ID_HERE\", Provider: oauth.GoogleDrive}, log.Logger))\n"
 	b, _ := thDecode(thEncode(insert))
-	newText := resolveTextFull("", "", b)
+	newText := mustResolveTextFull(t, "", "", b)
 	lines, _ := readLines(path)
 	doInsertMatch(lines, path, "NewDropbox", 1, newText, false)
 	got, _ := readLines(path)
@@ -543,10 +555,10 @@ func TestTexthex_ProvidersGoSnippet(t *testing.T) {
 	}
 	// Spot-check lines with double quotes
 	checks := map[int]string{
-		2:  "\tName:        \"googledrive\",",
-		3:  "\tDisplayName: \"Google Drive\",",
-		8:  "\t\t\"access_type\": \"offline\",",
-		9:  "\t\t\"prompt\":      \"consent\",",
+		2: "\tName:        \"googledrive\",",
+		3: "\tDisplayName: \"Google Drive\",",
+		8: "\t\t\"access_type\": \"offline\",",
+		9: "\t\t\"prompt\":      \"consent\",",
 	}
 	for lineIdx, want := range checks {
 		if got[lineIdx] != want {

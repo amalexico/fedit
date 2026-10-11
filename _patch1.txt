@@ -1,0 +1,12 @@
+
+// mustResolveTextFull wraps resolveTextFull for tests that don't exercise
+// -sourcefile/-sourceblock: it always passes empty source/lang, and fails
+// the test immediately if resolveTextFull ever returns a non-nil error.
+func mustResolveTextFull(t *testing.T, text, textFile string, resolvedBytes []byte) []string {
+	t.Helper()
+	got, err := resolveTextFull(text, textFile, resolvedBytes, "", "", "")
+	if err != nil {
+		t.Fatalf("resolveTextFull: unexpected error: %v", err)
+	}
+	return got
+}

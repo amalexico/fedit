@@ -1,0 +1,8 @@
+FROM golang:1.24-alpine AS builder1
+WORKDIR /app
+COPY . .
+RUN go build -o fedit .
+
+FROM debian:bookworm-slim AS runtime1
+COPY --from=builder /app/fedit /usr/local/bin/fedit
+ENTRYPOINT ["fedit"]

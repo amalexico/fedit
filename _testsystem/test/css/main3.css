@@ -1,0 +1,21 @@
+.card1 {
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.button1 {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 4px;
+  background: #2563eb;
+  color: white;
+}
+
+.modal1 {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

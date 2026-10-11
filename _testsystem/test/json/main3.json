@@ -1,0 +1,9 @@
+{
+  "name": "fedit-variant",
+  "version": "1.9.0",
+  "scripts": {
+    "build1": "go build -o fedit .",
+    "test1": "go test ./..."
+  },
+  "dependencies": {}
+}

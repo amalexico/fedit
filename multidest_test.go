@@ -219,3 +219,135 @@ func TestMultiDestRejectsBadInput(t *testing.T) {
 		t.Errorf("source changed by a rejected call: %q", got)
 	}
 }
+
+const mrdSrcContent = "package main\n\nfunc SrcFunc() {\n\tx := 1\n\ty := 2\n}\n"
+
+// mrdSetup creates src.go (SrcFunc block) plus d1.go/d2.go (with a Target
+// block to overwrite) and d3.go (no Target block).
+func mrdSetup(t *testing.T) (dir string) {
+	t.Helper()
+	dir = t.TempDir()
+	mdtWrite(t, filepath.Join(dir, "src.go"), mrdSrcContent)
+	mdtWrite(t, filepath.Join(dir, "d1.go"), "package main\n\nfunc Target() {\n\told := true\n}\n")
+	mdtWrite(t, filepath.Join(dir, "d2.go"), "package main\n\nfunc Target() {\n\tother := false\n}\n")
+	mdtWrite(t, filepath.Join(dir, "d3.go"), "package main\n\nfunc Other() {\n\tz := 0\n}\n")
+	return dir
+}
+
+func mrdOpts(src, dests string) multiDestOpts {
+	return multiDestOpts{
+		op: "replace", srcFile: src, dests: dests, lang: "go", block: "SrcFunc", destBlock: "Target",
+	}
+}
+
+func TestMultiDestReplaceFanOut(t *testing.T) {
+	d := mrdSetup(t)
+	p := func(n string) string { return filepath.Join(d, n) }
+	code := runMultiDestReplace(mrdOpts(p("src.go"), p("d1.go")+","+p("d2.go")+","+p("d3.go")+","+p("missing.go")))
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	if got := mdtRead(t, p("d1.go")); got != mrdSrcContent {
+		t.Errorf("d1.go = %q", got)
+	}
+	if got := mdtRead(t, p("d2.go")); got != mrdSrcContent {
+		t.Errorf("d2.go = %q", got)
+	}
+	if got := mdtRead(t, p("d3.go")); got != "package main\n\nfunc Other() {\n\tz := 0\n}\n" {
+		t.Errorf("d3.go should be untouched (no Target block): %q", got)
+	}
+	if got := mdtRead(t, p("src.go")); got != mrdSrcContent {
+		t.Errorf("source changed by replace -dest: %q", got)
+	}
+}
+
+func TestMultiDestReplaceMissingBlockAllFail(t *testing.T) {
+	d := mrdSetup(t)
+	p := func(n string) string { return filepath.Join(d, n) }
+	code := runMultiDestReplace(mrdOpts(p("src.go"), p("d3.go")))
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if got := mdtRead(t, p("d3.go")); got != "package main\n\nfunc Other() {\n\tz := 0\n}\n" {
+		t.Errorf("d3.go changed despite missing target block: %q", got)
+	}
+}
+
+func TestMultiDestReplaceSameFileAsDestSkipped(t *testing.T) {
+	d := mrdSetup(t)
+	p := func(n string) string { return filepath.Join(d, n) }
+	code := runMultiDestReplace(mrdOpts(p("src.go"), p("src.go")+","+p("d1.go")))
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	if got := mdtRead(t, p("src.go")); got != mrdSrcContent {
+		t.Errorf("source (also listed as dest) must be untouched: %q", got)
+	}
+	if got := mdtRead(t, p("d1.go")); got != mrdSrcContent {
+		t.Errorf("d1.go = %q", got)
+	}
+}
+
+func TestMultiDestReplaceRequiresDestBlock(t *testing.T) {
+	d := mrdSetup(t)
+	p := func(n string) string { return filepath.Join(d, n) }
+	o := mrdOpts(p("src.go"), p("d1.go"))
+	o.destBlock = ""
+	code := runMultiDestReplace(o)
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	if got := mdtRead(t, p("d1.go")); got != "package main\n\nfunc Target() {\n\told := true\n}\n" {
+		t.Errorf("d1.go changed despite missing -destblock: %q", got)
+	}
+}
+
+func TestMultiDestReplaceEmptyDests(t *testing.T) {
+	d := mrdSetup(t)
+	p := func(n string) string { return filepath.Join(d, n) }
+	code := runMultiDestReplace(mrdOpts(p("src.go"), ""))
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+}
+
+func TestMultiDestReplaceLineRangeSource(t *testing.T) {
+	d := mrdSetup(t)
+	p := func(n string) string { return filepath.Join(d, n) }
+	o := mrdOpts(p("src.go"), p("d1.go"))
+	o.block = ""
+	o.line, o.end = 3, 6
+	code := runMultiDestReplace(o)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	if got := mdtRead(t, p("d1.go")); got != mrdSrcContent {
+		t.Errorf("d1.go = %q", got)
+	}
+}
+
+func TestMultiDestReplaceReadOnlyDestSkipped(t *testing.T) {
+	d := mrdSetup(t)
+	p := func(n string) string { return filepath.Join(d, n) }
+	ro := p("ro.go")
+	roContent := "package main\n\nfunc Target() {\n\troFlag := true\n}\n"
+	mdtWrite(t, ro, roContent)
+	if err := os.Chmod(ro, 0444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(ro, 0644) })
+	if f, err := os.OpenFile(ro, os.O_WRONLY, 0); err == nil {
+		f.Close()
+		t.Skip("read-only file is writable here (running privileged); permission behavior cannot be tested")
+	}
+	code := runMultiDestReplace(mrdOpts(p("src.go"), p("d1.go")+","+ro))
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	if got := mdtRead(t, ro); got != roContent {
+		t.Errorf("read-only file changed: %q", got)
+	}
+	if got := mdtRead(t, p("d1.go")); got != mrdSrcContent {
+		t.Errorf("d1.go = %q", got)
+	}
+}

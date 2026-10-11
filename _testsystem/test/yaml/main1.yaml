@@ -1,0 +1,8 @@
+name: amalex-handler
+version: 1.4.0
+database:
+  host: localhost
+  port: 5432
+cache:
+  driver: redis
+  ttl: 300

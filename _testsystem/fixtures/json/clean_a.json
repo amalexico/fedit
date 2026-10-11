@@ -1,0 +1,9 @@
+{
+  "name": "fedit",
+  "version": "1.9.0",
+  "languages": ["go", "python", "json", "csv"],
+  "meta": {
+    "org": "Amalex Corp",
+    "since": 2023
+  }
+}

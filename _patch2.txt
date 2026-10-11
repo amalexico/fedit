@@ -1,0 +1,1 @@
+	got := mustResolveTextFull(t, "hello\nworld", "", nil)

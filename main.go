@@ -145,13 +145,45 @@ func main() {
 		os.Exit(1)
 	}
 
+	// -sourcefile/-sourceblock: pull content from a named block in another
+	// file, for insertafter/insertbefore only (design: RESOLVED section,
+	// design_cross_file_ops.md). Validated before any dispatch so the
+	// error always fires regardless of -file shape or -op combination.
+	if *sourceFileFlag != "" || *sourceBlockFlag != "" {
+		if *sourceFileFlag == "" || *sourceBlockFlag == "" {
+			fmt.Fprintln(os.Stderr, "Error: -sourcefile and -sourceblock must be used together")
+			os.Exit(1)
+		}
+		if *op != "insertafter" && *op != "insertbefore" {
+			fmt.Fprintln(os.Stderr, "Error: -sourcefile/-sourceblock are only supported with insertafter and insertbefore")
+			os.Exit(1)
+		}
+		if *file != "" && isMultiSpec(*file) {
+			fmt.Fprintln(os.Stderr, "Error: -sourcefile/-sourceblock do not support multi -file targets")
+			os.Exit(1)
+		}
+		if *lang == "" {
+			fmt.Fprintln(os.Stderr, "Error: -sourcefile/-sourceblock require -lang")
+			os.Exit(1)
+		}
+		if *text != "" || *textFile != "" || resolvedBytes != nil {
+			fmt.Fprintln(os.Stderr, "Error: -sourcefile/-sourceblock cannot combine with -text, -textfile or -texthex")
+			os.Exit(1)
+		}
+	}
+
 	if *op == "write" || *op == "writeraw" || *op == "writelines" {
 		if *op == "write" && *file != "" && isMultiSpec(*file) {
 			if *block != "" || *line != "" || *cleanfirst || *stream || *files != "" {
 				fmt.Fprintln(os.Stderr, "Error: multi -file write takes only the content flags (-text/-textfile/-texthex); -block, -line, -cleanfirst, -stream and -files are not supported with it")
 				os.Exit(1)
 			}
-			mo := multiMutOpts{spec: *file, op: "write", newLines: resolveTextFull(*text, *textFile, resolvedBytes)}
+			newLines, rtErr := resolveTextFull(*text, *textFile, resolvedBytes, *sourceFileFlag, *sourceBlockFlag, *lang)
+			if rtErr != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", rtErr)
+				os.Exit(1)
+			}
+			mo := multiMutOpts{spec: *file, op: "write", newLines: newLines}
 			if len(mo.newLines) == 0 {
 				fmt.Fprintln(os.Stderr, "Nothing to write")
 				os.Exit(1)
@@ -232,7 +264,12 @@ func main() {
 					mo.replacement = strings.Join(resolveText("", *textFile), "\n")
 				}
 			case "replace", "insertafter", "insertbefore":
-				mo.newLines = resolveTextFull(*text, *textFile, resolvedBytes)
+				newLines, rtErr := resolveTextFull(*text, *textFile, resolvedBytes, *sourceFileFlag, *sourceBlockFlag, *lang)
+				if rtErr != nil {
+					fmt.Fprintf(os.Stderr, "Error: %v\n", rtErr)
+					os.Exit(1)
+				}
+				mo.newLines = newLines
 			}
 			os.Exit(runMultiMutate(mo))
 		}
@@ -244,10 +281,10 @@ func main() {
 		}))
 	}
 
-	// -dest: cross-file copy/move (multidest.go). Runs before -cleanfirst so a rejected combination never truncates anything.
+	// -dest: cross-file copy/move/replace (multidest.go). Runs before -cleanfirst so a rejected combination never truncates anything.
 	if *destFlag != "" {
-		if *op != "copy" && *op != "move" {
-			fmt.Fprintln(os.Stderr, "Error: -dest is only supported with copy and move")
+		if *op != "copy" && *op != "move" && *op != "replace" {
+			fmt.Fprintln(os.Stderr, "Error: -dest is only supported with copy, move and replace")
 			os.Exit(1)
 		}
 		if *file == "" {
@@ -256,6 +293,14 @@ func main() {
 		}
 		if *matchRegex != "" || *cleanfirst || *stream || *files != "" {
 			fmt.Fprintln(os.Stderr, "Error: -dest does not combine with -match-regex, -cleanfirst, -stream or -files")
+			os.Exit(1)
+		}
+		if *op == "replace" && *destBlockFlag == "" {
+			fmt.Fprintln(os.Stderr, "Error: replace -dest requires -destblock")
+			os.Exit(1)
+		}
+		if *op != "replace" && *destBlockFlag != "" {
+			fmt.Fprintln(os.Stderr, "Error: -destblock is only supported with replace -dest")
 			os.Exit(1)
 		}
 		srcAll, dRdErr := readLines(*file)
@@ -268,12 +313,16 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", dLnErr)
 			os.Exit(1)
 		}
-		os.Exit(runMultiDest(multiDestOpts{
-			op: *op, srcFile: *file, dests: *destFlag, lang: *lang, block: *block,
+		opts := multiDestOpts{
+			op: *op, srcFile: *file, dests: *destFlag, lang: *lang, block: *block, destBlock: *destBlockFlag,
 			line: dLine, end: dEnd, match: *match, endmatch: *endmatch, nth: *nth, times: *times,
 			after: *after, before: *before, aftermatch: *aftermatch, beforematch: *beforematch,
 			afterblock: *afterblock, beforeblock: *beforeblock,
-		}))
+		}
+		if *op == "replace" {
+			os.Exit(runMultiDestReplace(opts))
+		}
+		os.Exit(runMultiDest(opts))
 	}
 	// -cleanfirst: truncate before reading so mutations start from an empty file.
 	if *cleanfirst && *file != "" {
@@ -322,7 +371,11 @@ func main() {
 		}
 		doShow(lines, showStart, showEnd, *raw)
 	case "insert":
-		newText := resolveTextFull(*text, *textFile, resolvedBytes)
+		newText, rtErr := resolveTextFull(*text, *textFile, resolvedBytes, *sourceFileFlag, *sourceBlockFlag, *lang)
+		if rtErr != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", rtErr)
+			os.Exit(1)
+		}
 		doInsert(lines, *file, lineN, newText)
 	case "delete":
 		delStart, delEnd := lineN, endN
@@ -336,7 +389,11 @@ func main() {
 		}
 		doDelete(lines, *file, delStart, delEnd)
 	case "replace":
-		newText := resolveTextFull(*text, *textFile, resolvedBytes)
+		newText, rtErr := resolveTextFull(*text, *textFile, resolvedBytes, *sourceFileFlag, *sourceBlockFlag, *lang)
+		if rtErr != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", rtErr)
+			os.Exit(1)
+		}
 		if *text == "" && *textFile == "" && resolvedBytes == nil {
 			fmt.Fprintln(os.Stderr, "replace requires -text, -textfile, or -texthex (use 'delete' to remove a range)")
 			os.Exit(1)
@@ -367,7 +424,11 @@ func main() {
 			doFind(lines, *match, *nth, *x, *get, *extractFlag, *wdelim)
 		}
 	case "insertafter":
-		newText := resolveTextFull(*text, *textFile, resolvedBytes)
+		newText, rtErr := resolveTextFull(*text, *textFile, resolvedBytes, *sourceFileFlag, *sourceBlockFlag, *lang)
+		if rtErr != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", rtErr)
+			os.Exit(1)
+		}
 		if *block != "" {
 			_, blockEnd, bErr := resolveBlock(lines, *lang, *block)
 			if bErr != nil {
@@ -379,7 +440,11 @@ func main() {
 			doInsertMatch(lines, *file, *match, *nth, newText, false)
 		}
 	case "insertbefore":
-		newText := resolveTextFull(*text, *textFile, resolvedBytes)
+		newText, rtErr := resolveTextFull(*text, *textFile, resolvedBytes, *sourceFileFlag, *sourceBlockFlag, *lang)
+		if rtErr != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", rtErr)
+			os.Exit(1)
+		}
 		if *block != "" {
 			blockStart, _, bErr := resolveBlock(lines, *lang, *block)
 			if bErr != nil {
@@ -586,11 +651,24 @@ func resolveText(text, textFile string) []string {
 // Priority: resolvedBytes (from -texthex) > textFile > text.
 // When resolvedBytes is non-nil the content is used as-is — no escape expansion,
 // no backslash processing. This is intentional: hex-encoded bytes are already exact.
-func resolveTextFull(text, textFile string, resolvedBytes []byte) []string {
-	if resolvedBytes != nil {
-		return bytesToLines(resolvedBytes)
+func resolveTextFull(text, textFile string, resolvedBytes []byte, sourceFile, sourceBlock, lang string) ([]string, error) {
+	if sourceFile != "" && sourceBlock != "" {
+		srcLines, err := readLines(sourceFile)
+		if err != nil {
+			return nil, fmt.Errorf("Error reading -sourcefile: %v", err)
+		}
+		start, end, err := resolveBlock(srcLines, lang, sourceBlock)
+		if err != nil {
+			return nil, err
+		}
+		block := make([]string, end-start+1)
+		copy(block, srcLines[start-1:end])
+		return block, nil
 	}
-	return resolveText(text, textFile)
+	if resolvedBytes != nil {
+		return bytesToLines(resolvedBytes), nil
+	}
+	return resolveText(text, textFile), nil
 }
 
 // bytesToLines splits raw bytes on newline and strips the trailing empty element

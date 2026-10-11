@@ -1,0 +1,75 @@
+Let's do a full description for fedit 2.0
+
+fedit current commands:
+Operations:
+  show          Show file with line numbers (-line/-end to limit range)
+  insert        Insert text AFTER line N (use -line 0 for top)
+  delete        Delete line N (or range N to -end)
+  replace       Replace line N (or range N to -end) with text
+  write         Write text to -file (creates/overwrites)
+  writeraw      Write -text raw (no escape expansion; backslashes are literal)
+  writelines    Write lines interactively from stdin (Ctrl+Z/D to finish)
+  map           Show structure map (-lang go|html|sql)
+  find          Find lines containing -match text, print line numbers
+  insertafter   Find -match text, insert -textfile content AFTER matched line
+  insertbefore  Find -match text, insert -textfile content BEFORE matched line
+  replaceall    Replace ALL occurrences of -match text with -text (-match-regex for regex, -files for glob)
+  move          Move a line range (-line/-end or -match/-endmatch + -after/-before/-aftermatch/-beforematch)
+  copy          Copy a line range (same flags as move; -times N for N copies)
+  fields        Extract column N from delimited file (-col N -delim CHAR, outputs to stdout)
+
+Match flags (for find/insertafter/insertbefore):
+  -match TEXT   Substring to search for (required)
+  -nth N        Which occurrence (default 1, -1 for last)
+  -stream       Line-by-line I/O for large files (replaceall, find)
+  -col N        Column for fields op (1-based)
+  -delim CHAR   Field delimiter (default: tab)
+  -block TEXT   Source block name for move/copy (requires -lang)
+  -match-regex  Regex for replaceall with capture groups
+  -files GLOB   Apply replaceall to all files matching a glob
+
+  -texthex      Treat -text as hex from fwencode (bypasses PS quoting entirely)
+  -cleanfirst   Truncate -file before writing (pair with insert for clean overwrite)
+  -x            Machine-readable output: bare line numbers / counts, no labels
+  
+  
+  fedit transformed commands:
+Operations:
+  show          Show file with line numbers (-line/-end to limit range) and -line xx:+yy will do the range in the same line and don't need to use -end, both ways can be done
+  insert        Insert text AFTER line N (use -line 0 for top)
+  delete        Delete line N (or range N to -end) and -line xx:+yy will do the range in the same line and don't need to use -end, both ways can be done
+  replace       Replace line N (or range N to -end) with text or textfile and can use -line xx:+yy
+  write         Write text to -file (creates/overwrites) (can create a new file)
+  writeraw      Write -text raw (no escape expansion; backslashes are literal) (can create a new file)
+  writelines    Write lines interactively from stdin (Ctrl+Z/D to finish) It's always a new file
+  map           Show structure map (-lang go|html|sql)
+  find          Find lines containing -match text, print line numbers
+  insertafter   Find -match text, insert -textfile content AFTER matched line can use block (lang) insertbefore  Find -match text, insert -textfile content BEFORE matched line can use block (lang)
+  replaceall    Replace ALL occurrences of -match text with -text (-match-regex for regex, -files for glob)
+  move          Move a line range (-line/-end or -match/-endmatch + -after/-before/-aftermatch/-beforematch) can use block (lang)
+  copy          Copy a line range (same flags as move; -times N for N copies) can use block (lang)
+  fields        Extract column N from delimited file (-col N -delim CHAR, outputs to stdout)
+
+Match flags (for find/insertafter/insertbefore):
+  -match TEXT   Substring to search for (required)
+  -nth N        Which occurrence (default 1, -1 for last)
+  -stream       Line-by-line I/O for large files (replaceall, find)
+  -col N        Column for fields op (1-based)
+  -delim CHAR   Field delimiter (default: tab)
+  -block TEXT   Source block name for move/copy (requires -lang)
+  -match-regex  Regex for replaceall with capture groups
+  -files GLOB   Apply replaceall to all files matching a glob
+
+  -texthex      Treat -text as hex from fwencode (bypasses PS quoting entirely)
+  -cleanfirst   Truncate -file before writing (pair with insert for clean overwrite)
+  -x            Machine-readable output: bare line numbers / counts, no labels
+
+Notes:
+1- -file can be used for one file (a.go) -files can be used for multiple files (*.go) or (a.go,b.py)
+validations are important to avoid halted commands, like trying to edit a read-only file or creating a new file in a directory without writing permissions.
+2- Asking before editing or creating a file must be standard, creating a -force flag will skip it and do it.
+3- When doing multiple files show by example, the filename must be showed first before the content until it finish and next will be the next filename followed by the contents, etc.
+4- replace/replaceall can be used for single or multiple files.
+5- the introduction of the -dest flag is important for copy/move/insertbefore/insertafter/replace. That flag is used when we are transporting data from one file to another.
+
+
