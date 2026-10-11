@@ -11,7 +11,8 @@ PATH:    C:\Users\kehsi\Desktop\amalex-brand\fedit\
 WEBSITE: amalexhandler.com/fedit (LIVE -- current: v1.8.0)
 INSTALL: go install github.com/amalexico/fedit@latest
 
-CURRENT TAG:  v1.8.1 (PUSHED); -dest cross-file copy/move on main (6a5470e, docs d12be7f) is unreleased, not yet tagged
+CURRENT TAG:  v1.8.1 (PUSHED); -dest cross-file copy/move/replace, -destblock,
+  and -sourcefile/-sourceblock (6a5470e, edcceb7) all on main, unreleased, not yet tagged
 PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. v1.8.1 was tagged later (see the Sept 28 notes below).
   Code commit
   touched .gitignore, CLAUDE_DESKTOP.md, main.go (~3920 lines), user_skill.md.
@@ -27,14 +28,19 @@ IN THAT COMMIT:
     (line, inBacktick) fixes it. main.go went from 27 to 67 blocks found.
   - NEW, unused so far: batchResult struct + printBatchReport(op, results)
     (shared OK/SKIP/ERROR per-file report for multi-file ops and guided)
-UNTRACKED, NOT COMMITTED (repo is PUBLIC, decide before adding): _testsystem/,
-  design_cross_file_ops.md, guide_mode_examples.md, description 1.9/2.0.txt,
-  guided notes.txt, import_advisory.patch, import_advisory_test.go,
-  map_json_csv_test.go, add_fedit_to_goose.ps1, download_cli.ps1,
-  fedit-mcp.md, server.json. The two *_test.go files test shipped code and
-  probably should be committed.
+TRACKED (decided Oct 11, 2026): _testsystem/, design_cross_file_ops.md and
+  guide_mode_examples.md are committed and tracked going forward.
+GITIGNORED, NOT COMMITTED (kept on local disk only, Oct 11, 2026 decision):
+  description 1.9/2.0.txt, guided notes.txt, import_advisory.patch,
+  import_advisory_test.go, map_json_csv_test.go, add_fedit_to_goose.ps1,
+  download_cli.ps1, fedit-mcp.md, server.json -- untracked via git rm
+  --cached (fc7d6b6) and added to .gitignore by exact name.
   .gitignore now covers .mcpregistry_* (token files, NEVER commit),
-  _funding_patch.txt and _test_*.txt.
+  _funding_patch.txt, _test_*.txt, and _patch*.txt (widened from the
+  singular _patch.txt pattern -- the numbered cycling files
+  _patch1.txt..._patch9.txt and _patch_status.txt were NOT covered by
+  the old pattern and leaked into commit edcceb7 on Oct 11, 2026;
+  caught and cleaned up same session in fc7d6b6, see SESSION LOG).
 
 LESSONS FROM THIS SESSION (Sept 27, 2026):
   - Never git add -A here. Run git status -s first and add files by name.
@@ -78,9 +84,44 @@ SESSION LOG (Sept 27, 2026, later):
     PowerShell-to-fedit hop. For anchors with embedded quotes, prefer a fresh -op show + -line
     N:+M range, or route through Notepad++ _patch.txt + -textfile.
   - -dest with a multi -file list is rejected by the multi -file path ("multi -file supports show, find and map only"), exit 1, nothing modified (live-tested).
-  - NOT built for -dest: replace -dest, insertafter/insertbefore -dest, -sourceblock/-sourcefile/-destblock (6d), the Go import advisory wiring (6e), MCP support. Cosmetic: no blank line between the -dest hook's closing brace and the -cleanfirst comment in main().
+  - NOT built for -dest: MCP support (mcpDoReplace/mcpDoInsertAfter/mcpDoInsertBefore need their own -dest wiring since they bypass main()), the Go import advisory wiring (6e). Cosmetic: no blank line between the -dest hook's closing brace and the -cleanfirst comment in main().
+  - Task 6d DONE (edcceb7, pushed): replace -dest fans out via new runMultiDestReplace
+    (multidest.go) -- requires -destblock, overwrites that block in every destination with
+    the source block/range; missing target block is a per-destination SKIP, never an insert
+    fallback (locked design decision, confirmed in design_cross_file_ops.md RESOLVED section).
+    parseDestList factored out of runMultiDest for reuse. New destblock_flag.go. main()'s
+    -dest validation extended to allow replace alongside copy/move.
+    insertafter/insertbefore -sourcefile/-sourceblock also DONE: pulls a named block from
+    another file as insert content, -file stays the file being edited (NOT a -dest fan-out --
+    confirmed against RESOLVED section, which supersedes an earlier draft that suggested
+    -sourcefile/-sourceblock might pair with -dest). New sourcefile_flag.go,
+    sourceblock_flag.go. resolveTextFull signature extended with (sourceFile, sourceBlock,
+    lang string) and now returns ([]string, error) instead of []string -- touched all 6
+    call sites in main.go plus 14 call sites in texthex_test.go (new mustResolveTextFull
+    test helper added there). New tests: 7 in multidest_test.go (runMultiDestReplace), 6 in
+    new sourceblock_test.go (resolveTextFull's source path + one full doInsertMatch
+    integration test). All live-verified in TEMP scratch folders. go test ./... and gofmt -l
+    clean throughout.
+  - LESSON (repeat, now with a concrete cost): -match/-text containing embedded double quotes
+    cannot be typed inline as -texthex $(fwencode "...") in PowerShell -- the argv mangling
+    corrupts multi-quote strings worse than the single-anchor case documented earlier; five
+    separate replaceall attempts with embedded-quote replacement text all silently failed
+    ("No lines contain" with visibly mangled search strings) before switching to
+    line-numbered -texthex (single-quote content, safe) and finally Notepad++ _patch.txt +
+    -textfile for the multi-quote cases. Default to _patch.txt + -textfile for ANY content
+    with more than one embedded double quote; don't attempt inline fwencode for it.
+  - Git cleanup (fc7d6b6, pushed): a plain git add -A before 6d's commit swept in 152
+    unrelated files -- the entire untracked _testsystem/ tree (now intentionally tracked,
+    see below), all 9 numbered _patch*.txt cycling files plus _patch_status.txt (NOT caught
+    by the old singular _patch.txt gitignore pattern), and 10 loose scratch files. Commit
+    edcceb7 (6d itself) already carried this debris before it was caught -- cleaned up in
+    the very next commit (fc7d6b6) via git rm --cached (files kept on local disk) plus a
+    widened .gitignore (_patch.txt -> _patch*.txt). DECIDED: _testsystem/ and the two design
+    docs are legitimate tracked content; the 10 loose scratch files stay local-only.
+    LESSON (already in this file above, reconfirmed): never git add -A blind -- run git
+    status first and review before every commit, every time, no exceptions.
   - Open items: execReplaceAllRegex is not wired into multi -file yet (-match-regex is rejected); replace and write over multiple files are not built; replace -dest is not built; MCP multi-file and MCP -dest are not built. go build ./... does not refresh fedit.exe, so run go build -o fedit.exe . before any live test.
-  - NEXT SESSION, in order: (1) replace -dest (fan out, -destblock, SKIP with a report line when the target block is missing) and the -sourceblock/-sourcefile step (6d); (2) MCP multi-file and MCP -dest on top of the exec functions and the batch layer; (3) tag v1.9.0 once mutation and -dest are documented as released (drop "unreleased" from README and SKILL); then tasks 7, 8, 9, 10.
+  - NEXT SESSION, in order: (1) MCP multi-file and MCP -dest on top of the exec functions and the batch layer; (2) tag v1.9.0 once mutation, -dest and -sourceblock/-sourcefile are documented as released (drop "unreleased" from README and SKILL); then tasks 7, 8, 9, 10.
 
 ===============================================================
 FEDIT -- PENDING TASKS
