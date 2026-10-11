@@ -204,15 +204,27 @@ For Terraform resource reordering, use block-aware move:
 
 **Move overlap rule:** destination inside source range is always rejected.
 
-**Cross-file copy/move (CLI only, unreleased):** `-dest F1,F2` copies or moves the source block into other files. Each destination needs its own anchor flag (-after, -before, -aftermatch, -beforematch, -afterblock, -beforeblock; the block anchors need -lang), resolved inside that destination file:
+**Cross-file copy/move (CLI only):** `-dest F1,F2` copies or moves the source block into other files. Each destination needs its own anchor flag (-after, -before, -aftermatch, -beforematch, -afterblock, -beforeblock; the block anchors need -lang), resolved inside that destination file:
 
     fedit -file a.go -op copy -block Helper -lang go -dest b.go,c.go -afterblock Init -v
     fedit -file base.conf -op move -match '[cache]' -endmatch '[/cache]' -dest x.conf,y.conf -beforematch '[logging]'
 
 - Per-destination policy: a problem in one destination is a SKIP for that file and never aborts the batch. Exit code 0 if at least one destination succeeded, 1 if none did.
 - move writes all destinations first and removes the source only if at least one write succeeded. If every destination fails the source stays intact.
-- Only copy and move accept -dest. It is rejected with -match-regex, -cleanfirst, -stream, -files or a multi -file list. The MCP tools do not support it.
+- copy and move take -dest with an anchor flag; replace takes -dest with -destblock (below). It is rejected with -match-regex, -cleanfirst, -stream, -files or a multi -file list. The MCP tools do not support it.
 - It moves text, not dependencies. After a Go transfer, check imports in the destination.
+
+**Replace a block in other files (CLI only):** `replace -dest` overwrites a named block in each destination with the source block or range from `-file`. `-destblock` is required:
+
+    fedit -file a.go -op replace -block Helper -lang go -dest b.go,c.go -destblock Helper -v
+
+- A destination without that block is a SKIP, never an insert. -destblock is only accepted with replace -dest.
+
+**Insert a block from another file (CLI only):** insertafter and insertbefore can take their content from a block in another file. -file stays the file being edited:
+
+    fedit -file b.go -op insertafter -match '// helpers' -sourcefile a.go -sourceblock Helper -lang go -v
+
+- -sourcefile and -sourceblock must be used together and need -lang. They cannot combine with -text, -textfile or -texthex, or with a multi -file target.
 
 ### Duplicate a block N times (scaffolding / test fixtures)
 
@@ -322,4 +334,6 @@ Full results: https://amalexhandler.com/fedit#benchmark
   -endmatch TEXT content-anchor end of range -- show, replace, delete, move, copy
   -quiet         suppress stdout on success; exit code signals result (wins over -v)
   -file LIST     CLI: comma list and/or glob; show/find/map, plus replaceall (also -match-regex), insertafter, insertbefore, delete and replace with -match, and write (per-file SKIP, never abort); -block, -line, move, copy and -stream rejected. MCP: fedit_show/find/map/replaceall/insertafter/insertbefore/delete/replace take a list too; fedit_write and the other tools take one file
-  -dest F1,F2    CLI only, unreleased: copy/move into other files; each destination needs its own anchor flag; per-destination SKIP, source removed only if a write succeeded; not in MCP tools
+  -dest F1,F2    CLI only: copy/move into other files; each destination needs its own anchor flag; per-destination SKIP, source removed only if a write succeeded; not in MCP tools
+  -destblock NAME  replace -dest only: block in each destination to overwrite (required); a destination without it is a SKIP
+  -sourcefile F    CLI only: with -sourceblock NAME and -lang, insertafter/insertbefore take content from that block of F; not with -text/-textfile/-texthex or a multi -file target

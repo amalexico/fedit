@@ -320,7 +320,7 @@ fedit -file '*.md' -op delete -match '<!-- start -->' -endmatch '<!-- end -->'
 - Only -match (plus -endmatch for delete and replace), -nth and -text/-textfile/-texthex are accepted. -match-regex works with replaceall, and write needs no -match and writes the same content to every file. -block, -line, -cleanfirst, -stream and -files are rejected, and so are move and copy, all before any file is read.
 - MCP: fedit_replaceall, fedit_insertafter, fedit_insertbefore, fedit_delete and fedit_replace take a comma list or glob in file, with the same rules and a per-file report; block, line, stream and files are rejected. fedit_write always treats file as one path. fedit_show, fedit_find and fedit_map also take a list.
 
-### Cross-file copy and move -- -dest (unreleased)
+### Cross-file copy, move and replace -- -dest (v1.9.0)
 
 `-dest` copies or moves a block from `-file` into one or more other files. It takes a comma-separated list of existing files (no globs). The source is chosen the usual way: `-line`/`-end`, `-match`/`-endmatch`, or `-block` with `-lang`. The destination anchor is resolved separately inside each destination file, using one of `-after`, `-before`, `-aftermatch`, `-beforematch`, `-afterblock` or `-beforeblock` (the block anchors need `-lang`).
 
@@ -339,9 +339,34 @@ fedit -file src.txt -op copy -line 5:+3 -dest a.txt,b.txt -aftermatch ANCHOR -ti
 - move writes all the destinations first. The source text is removed only if at least one destination write succeeded. If every destination fails, the source is left intact, so text is never lost.
 - The report lists OK or SKIP per destination, then `N/M file(s) succeeded`. Exit code 0 if at least one destination succeeded, 1 if none did.
 - A destination that is the source file itself is a SKIP, and a file listed twice is used once.
-- Only copy and move accept -dest. It is rejected with any other op, and with -match-regex, -cleanfirst, -stream or -files, before any file is read. It does not combine with a multi -file list: -file must be the single source file.
+- copy and move take -dest with an anchor flag, and replace takes -dest with -destblock (below). It is rejected with any other op, and with -match-regex, -cleanfirst, -stream or -files, before any file is read. It does not combine with a multi -file list: -file must be the single source file.
 - Cross-file transfer moves text, not dependencies. A Go function that calls fmt.Println lands textually perfect in a file with no fmt import, and that file will not compile until you add the import.
-- CLI only: the MCP tools still take a single file.
+- CLI only: the MCP tools do not support -dest, -destblock, -sourcefile or -sourceblock.
+
+**Replace a block in other files -- `replace -dest` with `-destblock`**
+
+`replace -dest` overwrites a named block in each destination with the source block or range from `-file`. `-destblock` names the block to overwrite and is required. The source is chosen as for copy and move, and `-lang` lets block names resolve.
+
+```bash
+# Overwrite Helper in two files with the Helper from a.go
+fedit -file a.go -op replace -block Helper -lang go -dest b.go,c.go -destblock Helper -v
+```
+
+- A destination that does not have that block is a SKIP, never an insert. Each destination is handled on its own, like copy and move.
+- -destblock is only accepted with replace -dest.
+
+**Insert a block from another file -- `-sourcefile` and `-sourceblock`**
+
+`insertafter` and `insertbefore` can take their content from a named block in another file. `-file` stays the file being edited and the anchor is chosen as usual.
+
+```bash
+# Insert Helper from a.go into b.go, after the line matching '// helpers'
+fedit -file b.go -op insertafter -match '// helpers' -sourcefile a.go -sourceblock Helper -lang go -v
+```
+
+- -sourcefile and -sourceblock must be used together and need -lang. They cannot be combined with -text, -textfile or -texthex.
+- A multi -file target is rejected. This edits one file; it is not a -dest fan-out.
+- CLI only.
 
 ---
 
