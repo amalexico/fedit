@@ -11,7 +11,7 @@ PATH:    C:\Users\kehsi\Desktop\amalex-brand\fedit\
 WEBSITE: amalexhandler.com/fedit (LIVE -- current: v1.8.0)
 INSTALL: go install github.com/amalexico/fedit@latest
 
-CURRENT TAG:  v1.8.1 (tagged). main (7fb1491) holds everything for v1.9.0, documented and not yet tagged: multi -file mutation, -dest copy/move/replace, -destblock, -sourcefile/-sourceblock, MCP multi-file.
+CURRENT TAG:  v1.9.0 (tagged and pushed Oct 11, 2026, 3c45523; module proxy serves it). Includes multi -file mutation, -dest copy/move/replace, -destblock, -sourcefile/-sourceblock, MCP multi-file, and the MCP serverInfo version fix (was stuck at 1.6.0).
 PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. v1.8.1 was tagged later (see the Sept 28 notes below).
   Code commit
   touched .gitignore, CLAUDE_DESKTOP.md, main.go (~3920 lines), user_skill.md.
@@ -130,7 +130,7 @@ SESSION LOG (Sept 27, 2026, later):
     LESSON: new test helpers need a unique prefix (mmRead clashed with multimutate_test.go; renamed mcpMMRead).
     KNOWN: single-file fedit_replaceall ignores match_regex, files, stream and textfile although its schema advertises them (task 9).
   - Open items: MCP -dest/-destblock/-sourcefile/-sourceblock are not built; the Go import advisory (6e) is not wired in; single-file fedit_replaceall ignores match_regex, files, stream and textfile. go build ./... does not refresh fedit.exe, so run go build -o fedit.exe . before any live test.
-  - NEXT SESSION, in order: (1) tag v1.9.0 (git tag v1.9.0 ; git push ; git push --tags, then update the website version and the fedit page); (2) MCP -dest, -destblock, -sourcefile and -sourceblock (mcpDoReplace, mcpDoInsertMatch and the rest bypass main(), so they need their own wiring), and the Go import advisory wiring (6e); (3) task 9, including the single-file fedit_replaceall params its schema advertises but does not handle; then tasks 7, 8, 10.
+  - NEXT SESSION, in order: (1) MCP -dest, -destblock, -sourcefile and -sourceblock (mcpDoReplace, mcpDoInsertMatch and the rest bypass main(), so they need their own wiring), and the Go import advisory wiring (6e); (2) website: add v1.9.0 rows to the fedit.html operations table (multi -file, -dest, -sourcefile) and examples, then deploy with .\deploy.ps1 (not yet done; the counts were fixed Oct 11); (3) task 9, including the single-file fedit_replaceall params its schema advertises but does not handle, and the 17-language wording in the mcp.go fedit_map description; then tasks 7 and 8.
 
 ===============================================================
 FEDIT -- PENDING TASKS
