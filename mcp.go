@@ -190,6 +190,13 @@ func mcpExecTool(name string, args map[string]any) mcpCallResult {
 			}
 		})
 	}
+	if _, isMut := mcpMultiMutTools[name]; isMut && isMultiSpec(file) {
+		o, msg := mcpMultiMutOpts(name, file, getStr, getInt, getBool)
+		if msg != "" {
+			return mcpErrorResult(msg)
+		}
+		return mcpRunMultiMutate(o)
+	}
 	file, _ = filepath.Abs(file)
 	switch name {
 	case "fedit_show":
