@@ -113,10 +113,26 @@ func runMultiMutate(o multiMutOpts) int {
 		fmt.Fprintln(os.Stderr, "Nothing to insert (-text or -textfile is empty)")
 		return 1
 	}
-	paths, err := expandMultiSpec(o.spec)
+	results, okCount, err := collectMultiMutate(o)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 1
+	}
+	printBatchReport("multi -file "+o.op, results)
+	if okCount == 0 {
+		return 1
+	}
+	return 0
+}
+
+// collectMultiMutate expands the spec, applies the op to every file and returns
+// one batchResult per file plus the number that succeeded. It prints nothing, so
+// the CLI and the MCP server can each format the report their own way. The only
+// error is an invalid spec; per-file problems are SKIP results, never an abort.
+func collectMultiMutate(o multiMutOpts) ([]batchResult, int, error) {
+	paths, err := expandMultiSpec(o.spec)
+	if err != nil {
+		return nil, 0, err
 	}
 	results := make([]batchResult, 0, len(paths))
 	okCount := 0
@@ -139,9 +155,5 @@ func runMultiMutate(o multiMutOpts) int {
 		okCount++
 		results = append(results, batchResult{path: p, status: "OK", detail: detail})
 	}
-	printBatchReport("multi -file "+o.op, results)
-	if okCount == 0 {
-		return 1
-	}
-	return 0
+	return results, okCount, nil
 }
