@@ -178,6 +178,18 @@ func mcpExecTool(name string, args map[string]any) mcpCallResult {
 	if file == "" {
 		return mcpErrorResult("missing required parameter: file")
 	}
+	if (name == "fedit_show" || name == "fedit_find" || name == "fedit_map") && isMultiSpec(file) {
+		return mcpRunMulti(name, file, func(p string) mcpCallResult {
+			switch name {
+			case "fedit_show":
+				return mcpDoShow(p, getInt("line", 0), getInt("end", 0), getInt("nth", 1), getStr("match"), getStr("endmatch"), getStr("block"), getStr("lang"), getBool("raw"), start)
+			case "fedit_find":
+				return mcpDoFind(p, getStr("match"), getInt("nth", 1), getBool("x"), getStr("get"), getStr("extract"), getStr("wdelim"), start)
+			default:
+				return mcpDoMap(p, getStr("lang"), start)
+			}
+		})
+	}
 	file, _ = filepath.Abs(file)
 	switch name {
 	case "fedit_show":
