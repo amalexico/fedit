@@ -198,6 +198,13 @@ func mcpExecTool(name string, args map[string]any) mcpCallResult {
 		return mcpRunMultiMutate(o)
 	}
 	file, _ = filepath.Abs(file)
+	if _, isDest := mcpDestTools[name]; isDest && getStr("dest") != "" {
+		o, msg := mcpMultiDestOpts(name, file, getStr, getInt)
+		if msg != "" {
+			return mcpErrorResult(msg)
+		}
+		return mcpRunMultiDest(o)
+	}
 	switch name {
 	case "fedit_show":
 		return mcpDoShow(file, getInt("line", 0), getInt("end", 0), getInt("nth", 1), getStr("match"), getStr("endmatch"), getStr("block"), getStr("lang"), getBool("raw"), start)
