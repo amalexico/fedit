@@ -320,7 +320,7 @@ fedit -file '*.md' -op delete -match '<!-- start -->' -endmatch '<!-- end -->'
 - Only -match (plus -endmatch for delete and replace), -nth and -text/-textfile/-texthex are accepted. -match-regex works with replaceall, and write needs no -match and writes the same content to every file. -block, -line, -cleanfirst, -stream and -files are rejected, and so are move and copy, all before any file is read.
 - MCP: fedit_replaceall, fedit_insertafter, fedit_insertbefore, fedit_delete and fedit_replace take a comma list or glob in file, with the same rules and a per-file report; block, line, stream and files are rejected. fedit_write always treats file as one path. fedit_show, fedit_find and fedit_map also take a list.
 
-### Cross-file copy, move and replace -- -dest (v1.9.0)
+### Cross-file copy, move and replace -- -dest (v1.9.0, MCP since v1.10.0)
 
 `-dest` copies or moves a block from `-file` into one or more other files. It takes a comma-separated list of existing files (no globs). The source is chosen the usual way: `-line`/`-end`, `-match`/`-endmatch`, or `-block` with `-lang`. The destination anchor is resolved separately inside each destination file, using one of `-after`, `-before`, `-aftermatch`, `-beforematch`, `-afterblock` or `-beforeblock` (the block anchors need `-lang`).
 
@@ -341,7 +341,7 @@ fedit -file src.txt -op copy -line 5:+3 -dest a.txt,b.txt -aftermatch ANCHOR -ti
 - A destination that is the source file itself is a SKIP, and a file listed twice is used once.
 - copy and move take -dest with an anchor flag, and replace takes -dest with -destblock (below). It is rejected with any other op, and with -match-regex, -cleanfirst, -stream or -files, before any file is read. It does not combine with a multi -file list: -file must be the single source file.
 - Cross-file transfer moves text, not dependencies. A Go function that calls fmt.Println lands textually perfect in a file with no fmt import, and that file will not compile until you add the import.
-- CLI only: the MCP tools do not support -dest, -destblock, -sourcefile or -sourceblock.
+- MCP: fedit_copy, fedit_move and fedit_replace take a dest parameter (a comma list of files) with the same anchors, and destblock for replace; fedit_insertafter and fedit_insertbefore take sourcefile and sourceblock (with lang). Same rules and a per-destination report; file must be a single path.
 
 **Replace a block in other files -- `replace -dest` with `-destblock`**
 
@@ -366,7 +366,7 @@ fedit -file b.go -op insertafter -match '// helpers' -sourcefile a.go -sourceblo
 
 - -sourcefile and -sourceblock must be used together and need -lang. They cannot be combined with -text, -textfile or -texthex.
 - A multi -file target is rejected. This edits one file; it is not a -dest fan-out.
-- CLI only.
+- The MCP tools take sourcefile and sourceblock as parameters on fedit_insertafter and fedit_insertbefore (with lang).
 
 ---
 
