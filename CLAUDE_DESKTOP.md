@@ -117,7 +117,7 @@ Once connected, try these in Claude Desktop:
 | `fedit_find` | Find lines matching a substring; `-extract`/`-get`/`-wdelim` for sub-line extraction; `-x` for bare line numbers; `stream=true` for large files |
 | `fedit_insertafter` | Insert content after a matched line |
 | `fedit_insertbefore` | Insert content before a matched line |
-| `fedit_replaceall` | Global replace; supports regex capture groups and glob (`files`) |
+| `fedit_replaceall` | Global replace; `match_regex` for regex, `textfile` for replacement text, comma list or glob in `file` |
 | `fedit_move` | Move a line range or named block to a new position |
 | `fedit_copy` | Copy a line range or named block |
 | `fedit_fields` | Extract column N from CSV/TSV/delimited file; `-x` suppresses stats footer |

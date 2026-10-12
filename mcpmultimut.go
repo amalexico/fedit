@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -43,6 +44,16 @@ func mcpMultiMutOpts(name, spec string, getStr func(string) string, getInt func(
 		}
 		o.matchRegex = getStr("match_regex")
 		o.replacement = text
+		if tf := getStr("textfile"); tf != "" {
+			if text != "" {
+				return o, "replaceall takes text or textfile, not both"
+			}
+			b, rerr := os.ReadFile(tf)
+			if rerr != nil {
+				return o, fmt.Sprintf("Error reading textfile: %v", rerr)
+			}
+			o.replacement = strings.TrimRight(string(b), "\r\n")
+		}
 	case "insertafter", "insertbefore", "replace":
 		o.newLines = expandText(text)
 	}

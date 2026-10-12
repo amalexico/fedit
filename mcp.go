@@ -132,7 +132,7 @@ func mcpToolDefs() []mcpToolDef {
 		{Name: "fedit_insert", Description: "Insert content after a given line number.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"line":{"type":"integer","description":"Insert after this line (0 = beginning)"},"text":{"type":"string","description":"Content to insert (use \\n for newlines)"},"cleanfirst":{"type":"boolean","description":"Truncate file before inserting (result is just the inserted content)"}},"required":["file","line","text"]}`)},
 		{Name: "fedit_delete", Description: "Delete one or more lines. The file param may be a comma list or glob when match is used (not line, block, stream or files): each file is its own source, per-file report, a skipped file is never modified.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"line":{"type":"integer","description":"Start line to delete"},"end":{"type":"integer","description":"End line (inclusive, defaults to start line)"},"match":{"type":"string","description":"Content anchor for start of range"},"endmatch":{"type":"string","description":"Content anchor for end of range"},"nth":{"type":"integer","description":"Which occurrence of match (default 1, -1 for last)"}},"required":["file"]}`)},
 		{Name: "fedit_replace", Description: "Replace a line range or named block with new content. The file param may be a comma list or glob when match is used (not line, block, stream or files): each file is its own source, per-file report, a skipped file is never modified. With the dest parameter (a comma list of files) plus destblock, the source block or range in file overwrites the named block in each destination instead, with a per-destination report; a destination without that block is skipped, never inserted into, and text is then ignored (pass any placeholder).", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer","description":"Start line"},"end":{"type":"integer","description":"End line (inclusive)"},"text":{"type":"string","description":"Replacement content (ignored when dest is given)"},"block":{"type":"string","description":"Named block to replace (func/class/resource)"},"lang":{"type":"string","description":"Language for block resolution"},"match":{"type":"string","description":"Content anchor for start of range"},"endmatch":{"type":"string","description":"Content anchor for end of range"},"nth":{"type":"integer","description":"Which occurrence of match (default 1, -1 for last)"},"dest":{"type":"string","description":"Comma list of destination files for a cross-file replace; requires destblock"},"destblock":{"type":"string","description":"Block in each destination file to overwrite with the source block or range (requires dest and lang)"}},"required":["file","text"]}`)},
-		{Name: "fedit_replaceall", Description: "Global find-and-replace. The file param may be a comma list or glob when match is used (not line, block, stream or files): each file is its own source, per-file report, a skipped file is never modified. Use match_regex for capture groups. Use files for glob. Add stream=true for large files.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Literal text to find (use match_regex for regex)"},"match_regex":{"type":"string","description":"Regex pattern with capture groups $1 $2 (alternative to match)"},"files":{"type":"string","description":"Glob pattern to apply replaceall across multiple files (e.g. *.go)"},"stream":{"type":"boolean","description":"Line-by-line I/O for multi-GB files without loading into memory"},"text":{"type":"string","description":"Replacement text"},"textfile":{"type":"string","description":"File containing replacement text"}},"required":["file"]}`)},
+		{Name: "fedit_replaceall", Description: "Global find-and-replace. The file param may be a comma list or glob when match is used (not line, block, stream or files): each file is its own source, per-file report, a skipped file is never modified. Use match_regex instead of match for a regex replace. Use textfile instead of text to read the replacement from a file (not both). The files parameter is not supported: pass a comma list or glob in file instead. The stream parameter is accepted and the file is processed normally.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"match":{"type":"string","description":"Literal text to find (use match_regex for regex)"},"match_regex":{"type":"string","description":"Regex pattern with capture groups $1 $2 (use instead of match, not both)"},"files":{"type":"string","description":"Not supported here: put a comma list or glob (e.g. *.go) in file instead"},"stream":{"type":"boolean","description":"Accepted for compatibility; the file is processed normally"},"text":{"type":"string","description":"Replacement text"},"textfile":{"type":"string","description":"File containing replacement text (trailing newlines trimmed; not with text)"}},"required":["file"]}`)},
 		{Name: "fedit_write", Description: "Write or overwrite an entire file.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"text":{"type":"string","description":"Full file content (use \\n for newlines)"}},"required":["file","text"]}`)},
 		{Name: "fedit_writeraw", Description: "Write or overwrite a file with no escape expansion -- backslashes are literal. Use when content already contains real newlines.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"text":{"type":"string","description":"Full file content; real newlines only, no escape expansion"}},"required":["file","text"]}`)},
 		{Name: "fedit_map", Description: "Structural overview of a source file. The file param may be a comma list or glob, with one section per file. Supports 17 languages: go, python, js, ts, rust, java, cs, ruby, php, html, sql, hcl, tf, terraform, nix. Use lang param for ambiguous extensions.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string","description":"Path to file"},"lang":{"type":"string","description":"Language hint: go, python, js, ts, rust, java, cs, ruby, php, html, sql, hcl, tf, terraform, nix (auto-detected from extension if omitted)"}},"required":["file"]}`)},
@@ -230,7 +230,10 @@ func mcpExecTool(name string, args map[string]any) mcpCallResult {
 	case "fedit_replace":
 		return mcpDoReplace(file, getInt("line", 0), getInt("end", 0), getInt("nth", 1), getStr("match"), getStr("endmatch"), getStr("block"), getStr("lang"), getStr("text"), start)
 	case "fedit_replaceall":
-		return mcpDoReplaceAll(file, getStr("match"), getStr("text"), start)
+		if getStr("files") != "" {
+			return mcpErrorResult("replaceall does not support the files parameter: pass a comma list or glob in file instead")
+		}
+		return mcpDoReplaceAll(file, getStr("match"), getStr("match_regex"), getStr("text"), getStr("textfile"), start)
 	case "fedit_map":
 		return mcpDoMap(file, getStr("lang"), start)
 	case "fedit_find":
@@ -516,15 +519,43 @@ func mcpDoReplace(file string, startLine, endLine, nth int, match, endmatch, blo
 	return mcpOK(msg)
 }
 
-func mcpDoReplaceAll(file, search, replacement string, start time.Time) mcpCallResult {
-	if search == "" {
-		return mcpErrorResult("replaceall requires match (text to find)")
+func mcpDoReplaceAll(file, search, regex, replacement, textFile string, start time.Time) mcpCallResult {
+	if search == "" && regex == "" {
+		return mcpErrorResult("replaceall requires match (text to find) or match_regex")
+	}
+	if search != "" && regex != "" {
+		return mcpErrorResult("replaceall takes match or match_regex, not both")
+	}
+	if textFile != "" {
+		if replacement != "" {
+			return mcpErrorResult("replaceall takes text or textfile, not both")
+		}
+		b, rerr := os.ReadFile(textFile)
+		if rerr != nil {
+			return mcpErrorResult(fmt.Sprintf("Error reading textfile: %v", rerr))
+		}
+		replacement = strings.TrimRight(string(b), "\r\n")
 	}
 	lines, err := readLines(file)
 	if err != nil {
 		return mcpErrorResult(fmt.Sprintf("Error reading file: %v", err))
 	}
 	count := 0
+	if regex != "" {
+		result, n, rxErr := execReplaceAllRegex(lines, regex, replacement)
+		if rxErr != nil {
+			return mcpErrorResult(fmt.Sprintf("Error: %v", rxErr))
+		}
+		if n == 0 {
+			return mcpErrorResult(fmt.Sprintf("No lines match: %s", regex))
+		}
+		if err := writeLines(file, result); err != nil {
+			return mcpErrorResult(fmt.Sprintf("Error writing file: %v", err))
+		}
+		msg := fmt.Sprintf("Replaced /%s/ on %d line(s) (%d total)", regex, n, len(result))
+		msg += mcpStats("replaceall", file, len(result), len(result), regex, start)
+		return mcpOK(msg)
+	}
 	for i, line := range lines {
 		if strings.Contains(line, search) {
 			lines[i] = strings.ReplaceAll(line, search, replacement)
