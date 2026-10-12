@@ -8,7 +8,7 @@ FEDIT -- PROJECT STATE
 
 REPO:    github.com/amalexico/fedit (PUBLIC -- MIT)
 PATH:    C:\Users\kehsi\Desktop\amalex-brand\fedit\
-WEBSITE: amalexhandler.com/fedit (LIVE -- current: v1.8.0)
+WEBSITE: amalexhandler.com/fedit (LIVE, deployed Oct 11, 2026: v1.9.0 rows, examples and corrected counts; the page shows no version badge)
 INSTALL: go install github.com/amalexico/fedit@latest
 
 CURRENT TAG:  v1.9.0 (tagged and pushed Oct 11, 2026, 3c45523; module proxy serves it). Includes multi -file mutation, -dest copy/move/replace, -destblock, -sourcefile/-sourceblock, MCP multi-file, and the MCP serverInfo version fix (was stuck at 1.6.0).
