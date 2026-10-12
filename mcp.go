@@ -94,7 +94,7 @@ func runMCP() {
 			mcpSendResult(req.ID, mcpInitResult{
 				ProtocolVersion: "2024-11-05",
 				Capabilities:    mcpCaps{Tools: map[string]any{}},
-				ServerInfo:      mcpServerInfo{Name: "fedit", Version: "1.9.0"},
+				ServerInfo:      mcpServerInfo{Name: "fedit", Version: "1.10.0"},
 			})
 		case "notifications/initialized":
 		// no response needed
