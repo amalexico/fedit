@@ -8,10 +8,10 @@ FEDIT -- PROJECT STATE
 
 REPO:    github.com/amalexico/fedit (PUBLIC -- MIT)
 PATH:    C:\Users\kehsi\Desktop\amalex-brand\fedit\
-WEBSITE: amalexhandler.com/fedit (LIVE, deployed Oct 11, 2026: v1.9.0 rows, examples and corrected counts; the page shows no version badge)
+WEBSITE: amalexhandler.com/fedit (LIVE, deployed Oct 12, 2026: v1.10 rows for MCP dest and sourcefile; the page shows no version badge)
 INSTALL: go install github.com/amalexico/fedit@latest
 
-CURRENT TAG:  v1.9.0 (tagged and pushed Oct 11, 2026, 3c45523; module proxy serves it). main is ahead of it with the unreleased MCP dest, destblock, sourcefile and sourceblock work (5adce73); serverInfo already reports 1.10.0.
+CURRENT TAG:  v1.10.0 (tagged and pushed Oct 12, 2026, ee8cfde; module proxy serves it). Adds MCP dest, destblock, sourcefile and sourceblock; serverInfo reports 1.10.0.
 PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. v1.8.1 was tagged later (see the Sept 28 notes below).
   Code commit
   touched .gitignore, CLAUDE_DESKTOP.md, main.go (~3920 lines), user_skill.md.
@@ -136,8 +136,8 @@ SESSION LOG (Sept 27, 2026, later):
     DECIDED: text stays required on fedit_replace, because an empty text silently deletes the range (the old CLI bug); with dest the text is ignored and any placeholder works. Dropping text from required is safe on insertafter and insertbefore, which return Nothing to insert.
     KNOWN: a comma list in file on fedit_copy or fedit_move with dest fails safe (file not found, nothing modified) but the message is poor, because filepath.Abs runs before the check.
     KNOWN: website fedit.html rows for -dest and -sourcefile (lines 211 and 212) still say CLI only; fix them before the next deploy.
-  - Open items: v1.10.0 (MCP dest, destblock, sourcefile and sourceblock) is pushed but not tagged; the Go import advisory (6e) is not wired in; single-file fedit_replaceall ignores match_regex, files, stream and textfile. go build ./... does not refresh fedit.exe, so run go build -o fedit.exe . before any live test.
-  - NEXT SESSION, in order: (1) tag v1.10.0 when you decide (serverInfo already says 1.10.0): first fix the website rows for -dest and -sourcefile in fedit.html (lines 211 and 212 say CLI only) and the MCP bullet, deploy, then git tag v1.10.0 ; git push --tags and check the module proxy; (2) the Go import advisory wiring (6e); (3) task 9, including the single-file fedit_replaceall params its schema advertises but does not handle and the 17-language wording in the mcp.go fedit_map description; then tasks 7 and 8.
+  - Open items: the Go import advisory (6e) is not wired in; single-file fedit_replaceall ignores match_regex, files, stream and textfile. go build ./... does not refresh fedit.exe, so run go build -o fedit.exe . before any live test.
+  - NEXT SESSION, in order: (1) the Go import advisory wiring (6e); (2) task 9, including the single-file fedit_replaceall params its schema advertises but does not handle, the poor error for a comma list in file with dest, and the 17-language wording in the mcp.go fedit_map description; then tasks 7 and 8.
 
 ===============================================================
 FEDIT -- PENDING TASKS
