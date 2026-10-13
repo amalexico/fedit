@@ -431,6 +431,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", rtErr)
 			os.Exit(1)
 		}
+		hint := sourceBlockHint(*sourceFileFlag, *sourceBlockFlag, *file, newText, lines)
 		if *block != "" {
 			_, blockEnd, bErr := resolveBlock(lines, *lang, *block)
 			if bErr != nil {
@@ -441,12 +442,16 @@ func main() {
 		} else {
 			doInsertMatch(lines, *file, *match, *nth, newText, false)
 		}
+		if len(hint) != 0 {
+			fmt.Fprintln(os.Stderr, hint)
+		}
 	case "insertbefore":
 		newText, rtErr := resolveTextFull(*text, *textFile, resolvedBytes, *sourceFileFlag, *sourceBlockFlag, *lang)
 		if rtErr != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", rtErr)
 			os.Exit(1)
 		}
+		hint := sourceBlockHint(*sourceFileFlag, *sourceBlockFlag, *file, newText, lines)
 		if *block != "" {
 			blockStart, _, bErr := resolveBlock(lines, *lang, *block)
 			if bErr != nil {
@@ -456,6 +461,9 @@ func main() {
 			doInsert(lines, *file, blockStart-1, newText) // before opening line of block
 		} else {
 			doInsertMatch(lines, *file, *match, *nth, newText, true)
+		}
+		if len(hint) != 0 {
+			fmt.Fprintln(os.Stderr, hint)
 		}
 	case "replaceall":
 		isRegex := *matchRegex != ""
