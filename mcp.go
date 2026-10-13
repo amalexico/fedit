@@ -213,7 +213,7 @@ func mcpExecTool(name string, args map[string]any) mcpCallResult {
 		if msg != "" {
 			return mcpErrorResult(msg)
 		}
-		return mcpDoInsertMatchLines(file, getStr("match"), getInt("nth", 1), block, name == "fedit_insertbefore", getStr("block"), getStr("lang"), start)
+		return mcpDoInsertMatchLines(file, getStr("match"), getInt("nth", 1), block, name == "fedit_insertbefore", getStr("block"), getStr("lang"), getStr("sourcefile"), getStr("sourceblock"), start)
 	}
 	switch name {
 	case "fedit_show":
@@ -684,12 +684,12 @@ func mcpDoFind(file, match string, nth int, x bool, get, extractStr, wdelim stri
 }
 
 func mcpDoInsertMatch(file, match string, nth int, text string, before bool, block, lang string, start time.Time) mcpCallResult {
-	return mcpDoInsertMatchLines(file, match, nth, expandText(text), before, block, lang, start)
+	return mcpDoInsertMatchLines(file, match, nth, expandText(text), before, block, lang, "", "", start)
 }
 
 // mcpDoInsertMatchLines is mcpDoInsertMatch with the content already split into
 // lines, so a caller can supply a block pulled from another file.
-func mcpDoInsertMatchLines(file, match string, nth int, newLines []string, before bool, block, lang string, start time.Time) mcpCallResult {
+func mcpDoInsertMatchLines(file, match string, nth int, newLines []string, before bool, block, lang, srcFile, srcBlock string, start time.Time) mcpCallResult {
 	lines, err := readLines(file)
 	if err != nil {
 		return mcpErrorResult(fmt.Sprintf("Error reading file: %v", err))
@@ -755,6 +755,9 @@ func mcpDoInsertMatchLines(file, match string, nth int, newLines []string, befor
 		targetDesc = block
 	}
 	msg := fmt.Sprintf("Inserted %d line(s) %s %q (%d total now)", len(newLines), direction, targetDesc, len(result))
+	if h := sourceBlockHint(srcFile, srcBlock, file, newLines, lines); h != "" {
+		msg += "\n" + h
+	}
 	msg += mcpStats("insert"+direction, file, linesBefore, len(result), targetDesc, start)
 	return mcpOK(msg)
 }
