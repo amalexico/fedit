@@ -174,6 +174,7 @@ func collectMultiDest(o multiDestOpts) (multiDestOutcome, error) {
 			out.results = append(out.results, batchResult{d, "SKIP", e.Error()})
 			continue
 		}
+		hint := goImportHint(o.srcFile, d, block, dl)
 		res, desc, e := multiDestOne(dl, o, block)
 		if e != nil {
 			out.results = append(out.results, batchResult{d, "SKIP", e.Error()})
@@ -185,6 +186,9 @@ func collectMultiDest(o multiDestOpts) (multiDestOutcome, error) {
 		}
 		out.okCount++
 		out.results = append(out.results, batchResult{d, "OK", fmt.Sprintf("%d line(s) x%d %s", len(block), o.times, desc)})
+		if hint != "" {
+			out.notes = append(out.notes, hint)
+		}
 	}
 
 	if out.okCount == 0 {
@@ -253,6 +257,7 @@ func collectMultiDestReplace(o multiDestOpts) (multiDestOutcome, error) {
 			out.results = append(out.results, batchResult{d, "SKIP", e.Error()})
 			continue
 		}
+		hint := goImportHint(o.srcFile, d, srcBlock, dl)
 		bs, be, e := resolveBlock(dl, o.lang, o.destBlock)
 		if e != nil {
 			out.results = append(out.results, batchResult{d, "SKIP", fmt.Sprintf("target block %q not found: %v", o.destBlock, e)})
@@ -269,6 +274,9 @@ func collectMultiDestReplace(o multiDestOpts) (multiDestOutcome, error) {
 		}
 		out.okCount++
 		out.results = append(out.results, batchResult{d, "OK", fmt.Sprintf("block %q replaced with %d line(s)", o.destBlock, len(srcBlock))})
+		if hint != "" {
+			out.notes = append(out.notes, hint)
+		}
 	}
 
 	if out.okCount == 0 {
