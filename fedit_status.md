@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: October 11, 2026
+# Last updated: October 12, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -135,8 +135,10 @@ SESSION LOG (Sept 27, 2026, later):
     d69ab91, 14aa93f: schemas advertise dest and destblock; fedit_insertafter and fedit_insertbefore take sourcefile and sourceblock (needs lang, not with text). mcpDoInsertMatch is now a thin wrapper over mcpDoInsertMatchLines. Tests in mcpsourceblock_test.go. 5adce73: README and SKILL no longer say CLI only.
     DECIDED: text stays required on fedit_replace, because an empty text silently deletes the range (the old CLI bug); with dest the text is ignored and any placeholder works. Dropping text from required is safe on insertafter and insertbefore, which return Nothing to insert.
     KNOWN: a comma list in file on fedit_copy or fedit_move with dest fails safe (file not found, nothing modified) but the message is poor, because filepath.Abs runs before the check.
-  - Open items: the Go import advisory (6e) is not wired in; single-file fedit_replaceall ignores match_regex, files, stream and textfile. go build ./... does not refresh fedit.exe, so run go build -o fedit.exe . before any live test.
-  - NEXT SESSION, in order: (1) the Go import advisory wiring (6e); (2) task 9, including the single-file fedit_replaceall params its schema advertises but does not handle, the poor error for a comma list in file with dest, and the 17-language wording in the mcp.go fedit_map description; then tasks 7 and 8.
+  - DONE (6e31571, pushed Oct 12, 2026, not tagged): single-file MCP fedit_replaceall now honours match_regex (execReplaceAllRegex; errors for neither or both of match and match_regex, "No lines match: ...") and textfile (trailing newlines trimmed; error if text is also given). files is rejected with a message pointing to file. stream stays accepted and is processed normally (TestMCPExec_ReplaceAll_Stream sends it). The multi-file comma-list path in mcpmultimut.go already rejected stream and files but ignored textfile, which would have replaced matches with empty text; it now honours textfile too. The literal match path is unchanged. Schema text, README and CLAUDE_DESKTOP rows updated. 12 new tests in mcp_replaceall_test.go (helper prefix mra; prefixes already used: mcpMD, mcpMM, mcpSB, mdt, mrd, mra).
+  - LESSONS (Oct 12, 2026): fedit find without -x prints to the console, not stdout, so guards must use find -x and count lines; a find -match with embedded double quotes is mangled by PowerShell; patch-file guards must check the file content, not just Test-Path; the website folder is not in the git repo (deploy only on explicit go-ahead); never tag without an explicit go-ahead.
+  - Open items: the Go import advisory (6e) is not wired in. go build ./... does not refresh fedit.exe, so run go build -o fedit.exe . before any live test.
+  - NEXT SESSION, in order: (1) the Go import advisory wiring (6e); (2) task 9, remaining: the poor error for a comma list in file with dest on fedit_copy and fedit_move (filepath.Abs runs before the check) and the 17-language wording in the mcp.go fedit_map description (map supports 19); then tasks 7 and 8.
 
 ===============================================================
 FEDIT -- PENDING TASKS
