@@ -158,10 +158,6 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Error: -sourcefile/-sourceblock are only supported with insertafter and insertbefore")
 			os.Exit(1)
 		}
-		if *file != "" && isMultiSpec(*file) {
-			fmt.Fprintln(os.Stderr, "Error: -sourcefile/-sourceblock do not support multi -file targets")
-			os.Exit(1)
-		}
 		if *lang == "" {
 			fmt.Fprintln(os.Stderr, "Error: -sourcefile/-sourceblock require -lang")
 			os.Exit(1)
