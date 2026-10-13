@@ -270,6 +270,8 @@ func main() {
 					os.Exit(1)
 				}
 				mo.newLines = newLines
+				mo.srcFile = *sourceFileFlag
+				mo.srcBlock = *sourceBlockFlag
 			}
 			os.Exit(runMultiMutate(mo))
 		}

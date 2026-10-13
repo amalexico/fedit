@@ -17,6 +17,8 @@ type multiMutOpts struct {
 	newLines    []string
 	replacement string
 	matchRegex  string
+	srcFile     string
+	srcBlock    string
 }
 
 // multiMutateOne applies the op to one file's lines using the pure exec*
@@ -142,6 +144,7 @@ func collectMultiMutate(o multiMutOpts) ([]batchResult, int, error) {
 			results = append(results, batchResult{path: p, status: "SKIP", detail: rerr.Error()})
 			continue
 		}
+		hint := sourceBlockHint(o.srcFile, o.srcBlock, p, o.newLines, lines)
 		result, detail, merr := multiMutateOne(o, lines)
 		if merr != nil {
 			flat := strings.ReplaceAll(merr.Error(), "\n", "; ")
@@ -151,6 +154,9 @@ func collectMultiMutate(o multiMutOpts) ([]batchResult, int, error) {
 		if werr := writeLines(p, result); werr != nil {
 			results = append(results, batchResult{path: p, status: "SKIP", detail: "write failed: " + werr.Error()})
 			continue
+		}
+		if hint != "" {
+			detail += "; " + hint
 		}
 		okCount++
 		results = append(results, batchResult{path: p, status: "OK", detail: detail})
