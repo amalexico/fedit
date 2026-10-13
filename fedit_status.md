@@ -31,7 +31,7 @@ TRACKED (decided Oct 11, 2026): _testsystem/, design_cross_file_ops.md and
   guide_mode_examples.md are committed and tracked going forward.
 GITIGNORED, NOT COMMITTED (kept on local disk only, Oct 11, 2026 decision):
   description 1.9/2.0.txt, guided notes.txt, import_advisory.patch,
-  import_advisory_test.go, map_json_csv_test.go, add_fedit_to_goose.ps1,
+  map_json_csv_test.go, add_fedit_to_goose.ps1, (import_advisory_test.go became tracked Oct 12, 2026, 1aa7867)
   download_cli.ps1, fedit-mcp.md, server.json -- untracked via git rm
   --cached (fc7d6b6) and added to .gitignore by exact name.
   .gitignore now covers .mcpregistry_* (token files, NEVER commit),
@@ -139,8 +139,9 @@ SESSION LOG (Sept 27, 2026, later):
   - DONE (Oct 12, 2026, not tagged): BUG FIXED: fedit_replace with dest and a comma list in file fell into the multi file replace path, ignored dest and overwrote the sources with the placeholder text. mcpMultiMutOpts now rejects dest with a multi file list, with the same message as copy and move. Tests in mcp_destmulti_test.go cover copy, move and replace.
   - DONE (6e31571, pushed Oct 12, 2026, not tagged): single-file MCP fedit_replaceall now honours match_regex (execReplaceAllRegex; errors for neither or both of match and match_regex, "No lines match: ...") and textfile (trailing newlines trimmed; error if text is also given). files is rejected with a message pointing to file. stream stays accepted and is processed normally (TestMCPExec_ReplaceAll_Stream sends it). The multi-file comma-list path in mcpmultimut.go already rejected stream and files but ignored textfile, which would have replaced matches with empty text; it now honours textfile too. The literal match path is unchanged. Schema text, README and CLAUDE_DESKTOP rows updated. 12 new tests in mcp_replaceall_test.go (helper prefix mra; prefixes already used: mcpMD, mcpMM, mcpSB, mdt, mrd, mra).
   - LESSONS (Oct 12, 2026): fedit find without -x prints to the console, not stdout, so guards must use find -x and count lines; a find -match with embedded double quotes is mangled by PowerShell; patch-file guards must check the file content, not just Test-Path; the website folder is not in the git repo (deploy only on explicit go-ahead); never tag without an explicit go-ahead.
-  - Open items: the Go import advisory (6e) is not wired in. go build ./... does not refresh fedit.exe, so run go build -o fedit.exe . before any live test.
-  - NEXT SESSION, in order: (1) the Go import advisory wiring (6e); (2) the remaining task 9 older items (MCP fedit_find invalid get regex, detectLang duplication, the misleading -afterblock and -beforeblock error, CSS @media duplicate, markdown and dockerfile duplicate detection, doMapHCL); then tasks 7 and 8. Task 9 parts done Oct 12, 2026: replaceall parameters, fedit_map wording and schema, multi file dest guard.
+  - DONE (90e60fc, 1aa7867, pushed Oct 12, 2026, not tagged): Go import advisory wiring (6e), first step. Copy, move and replace with dest (CLI and MCP) add an advisory note in out.notes when the transferred lines use stdlib packages a Go destination does not import. goImportHint in multidest_advisory.go calls checkMissingGoImports only when source and destination are .go files; it never changes OK or SKIP results, exit codes or move semantics. Tests: multidest_advisory_test.go (5 new) and import_advisory_test.go, now tracked (removed from .gitignore) so its 8 tests run for everyone.
+  - Open items: the Go import advisory is not wired into the sourcefile and sourceblock insert path. go build ./... does not refresh fedit.exe, so run go build -o fedit.exe . before any live test.
+  - NEXT SESSION, in order: (1) 6e second step: wire the Go import advisory into the sourcefile and sourceblock insert path (CLI and MCP; needs recon in main.go and the MCP insert code); (2) the remaining task 9 older items (MCP fedit_find invalid get regex, detectLang duplication, the misleading -afterblock and -beforeblock error, CSS @media duplicate, markdown and dockerfile duplicate detection, doMapHCL); then tasks 7 and 8.
 
 ===============================================================
 FEDIT -- PENDING TASKS
@@ -170,7 +171,7 @@ IMMEDIATE (do in this order):
             continue, never abort the batch (ASSUMED, not yet confirmed).
          c. -dest fan-out for copy/move/replace
          d. -sourceblock/-sourcefile/-destblock
-         e. wire checkMissingGoImports into cross-file Go transfers
+         e. DONE (90e60fc, pushed Oct 12, 2026): checkMissingGoImports is called from collectMultiDest and collectMultiDestReplace via goImportHint (multidest_advisory.go); advisory note only. The sourcefile and sourceblock insert path is not wired yet.
   [ ] 7. Build the guided entry point (git-style bypass like mcp).
   [ ] 8. Phase 2 of the scanner fix: multi-line string constructs (C#
          verbatim, Java text blocks, Rust raw strings, HCL heredocs).
