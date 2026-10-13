@@ -140,7 +140,7 @@ SESSION LOG (Sept 27, 2026, later):
   - DONE (6e31571, pushed Oct 12, 2026, not tagged): single-file MCP fedit_replaceall now honours match_regex (execReplaceAllRegex; errors for neither or both of match and match_regex, "No lines match: ...") and textfile (trailing newlines trimmed; error if text is also given). files is rejected with a message pointing to file. stream stays accepted and is processed normally (TestMCPExec_ReplaceAll_Stream sends it). The multi-file comma-list path in mcpmultimut.go already rejected stream and files but ignored textfile, which would have replaced matches with empty text; it now honours textfile too. The literal match path is unchanged. Schema text, README and CLAUDE_DESKTOP rows updated. 12 new tests in mcp_replaceall_test.go (helper prefix mra; prefixes already used: mcpMD, mcpMM, mcpSB, mdt, mrd, mra).
   - LESSONS (Oct 12, 2026): fedit find without -x prints to the console, not stdout, so guards must use find -x and count lines; a find -match with embedded double quotes is mangled by PowerShell; patch-file guards must check the file content, not just Test-Path; the website folder is not in the git repo (deploy only on explicit go-ahead); never tag without an explicit go-ahead.
   - Open items: the Go import advisory (6e) is not wired in. go build ./... does not refresh fedit.exe, so run go build -o fedit.exe . before any live test.
-  - NEXT SESSION, in order: (1) the Go import advisory wiring (6e); then tasks 7 and 8. Task 9 is finished (replaceall parameters, fedit_map wording, multi file dest guard).
+  - NEXT SESSION, in order: (1) the Go import advisory wiring (6e); (2) the remaining task 9 older items (MCP fedit_find invalid get regex, detectLang duplication, the misleading -afterblock and -beforeblock error, CSS @media duplicate, markdown and dockerfile duplicate detection, doMapHCL); then tasks 7 and 8. Task 9 parts done Oct 12, 2026: replaceall parameters, fedit_map wording and schema, multi file dest guard.
 
 ===============================================================
 FEDIT -- PENDING TASKS
@@ -178,8 +178,8 @@ IMMEDIATE (do in this order):
          insertafter/insertbefore; CSS @media duplicate false positive;
          duplicate-detection for markdown and dockerfile; doMapHCL missing,
          so map -lang terraform still fails.
-         ALSO: MCP fedit_find bypasses main() so an invalid get regex still skips every line silently there. fedit_map description in mcp.go says 17 languages but map supports 19 (JSON and CSV added).
-         ALSO: fedit_map schema advertises lang aliases (js, ts, cs, hcl, tf, terraform, nix) that doMap does not accept (now an error result, not a crash): make them work or fix the schema text. detectLang in multifile.go duplicates the doMap extension switch: make doMap call it.
+         ALSO (remaining): MCP fedit_find bypasses main() so an invalid get regex still skips every line silently there.
+         ALSO (remaining): detectLang in multifile.go duplicates the doMap extension switch: make doMap call it. The fedit_map schema alias problem and the 17-language wording were fixed Oct 12, 2026 (245ec57).
   [ ] 10. Tag v1.9.0 once the fixes and the first multi-file steps land.
 
 LOCKED DESIGN DECISION (Sept 27, 2026): multi -file and multi -dest are two
