@@ -21,7 +21,6 @@ description 1.9.txt
 description 2.0.txt
 guided notes.txt
 import_advisory.patch
-import_advisory_test.go
 map_json_csv_test.go
 server.json
 add_fedit_to_goose.ps1
