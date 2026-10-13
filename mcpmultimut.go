@@ -33,6 +33,9 @@ func mcpMultiMutOpts(name, spec string, getStr func(string) string, getInt func(
 	if getStr("block") != "" {
 		return o, "block is not supported with a multi file list; use match"
 	}
+	if getStr("dest") != "" {
+		return o, "dest does not combine with a multi file list: file must be the single source file"
+	}
 	if getInt("line", 0) != 0 || getInt("end", 0) != 0 {
 		return o, "line numbers are not supported with a multi file list; use match"
 	}
