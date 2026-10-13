@@ -774,7 +774,7 @@ This starts a JSON-RPC 2.0 server on stdin/stdout. The server exposes all 14 edi
 | `fedit_replaceall` | Global find-and-replace; `match_regex` for regex; `textfile` for replacement text; comma list or glob in `file` |
 | `fedit_write` | Create or overwrite a file |
 | `fedit_writeraw` | Create or overwrite a file with no escape expansion (backslashes literal) |
-| `fedit_map` | Structural overview (17 languages); comma list or glob in file |
+| `fedit_map` | Structural overview (19 languages); comma list or glob in file |
 | `fedit_find` | Find lines matching a substring; comma list or glob in file |
 | `fedit_insertafter` | Insert after a matching line |
 | `fedit_insertbefore` | Insert before a matching line |

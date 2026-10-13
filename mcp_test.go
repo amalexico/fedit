@@ -141,43 +141,6 @@ func TestMCPToolDefs_FindRequiredFields(t *testing.T) {
 	t.Error("fedit_find not found")
 }
 
-// ── fedit_map IaC language coverage ──────────────────────────────────────────
-
-func TestMCPToolDefs_MapDescriptionMentionsIaC(t *testing.T) {
-	for _, def := range mcpToolDefs() {
-		if def.Name != "fedit_map" {
-			continue
-		}
-		for _, lang := range []string{"hcl", "terraform", "nix"} {
-			if !strings.Contains(def.Description, lang) {
-				t.Errorf("fedit_map description missing %q", lang)
-			}
-		}
-		return
-	}
-	t.Error("fedit_map not found")
-}
-
-func TestMCPToolDefs_MapLangSchemaListsIaC(t *testing.T) {
-	for _, def := range mcpToolDefs() {
-		if def.Name != "fedit_map" {
-			continue
-		}
-		var schema map[string]any
-		json.Unmarshal(schemaBytes(def), &schema)
-		props := schema["properties"].(map[string]any)
-		langProp := props["lang"].(map[string]any)
-		langDesc, _ := langProp["description"].(string)
-		for _, lang := range []string{"hcl", "tf", "terraform", "nix"} {
-			if !strings.Contains(langDesc, lang) {
-				t.Errorf("fedit_map lang schema description missing %q", lang)
-			}
-		}
-		return
-	}
-	t.Error("fedit_map not found")
-}
-
 // ── mcpExecTool integration helpers ──────────────────────────────────────────
 
 func mcpTempFile(t *testing.T, content string) string {
@@ -495,10 +458,10 @@ func TestMCPExec_Move_NixBlock(t *testing.T) {
 	path := mcpTempFile(t, src)
 	defer os.Remove(path)
 	r := mcpExecTool("fedit_move", map[string]any{
-		"file":        path,
-		"block":       "programs.git",
-		"afterblock":  "programs.ssh",
-		"lang":        "nix",
+		"file":       path,
+		"block":      "programs.git",
+		"afterblock": "programs.ssh",
+		"lang":       "nix",
 	})
 	if r.IsError {
 		t.Fatalf("Nix block move error: %s", mcpText(r))

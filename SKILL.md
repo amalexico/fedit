@@ -25,7 +25,7 @@ If you have an MCP connection to fedit, ALWAYS prefer it over generating a full-
 
 Never mutate a file blind. Always recon first using read-only tools:
 
-- **fedit_map** -- structural overview (functions, headings, sections, code blocks). Supports 17 languages: go, python, js, ts, rust, java, cs, ruby, php, html, sql, hcl, tf, terraform, nix.
+- **fedit_map** -- structural overview (functions, headings, sections, code blocks). Supports 19 languages: go, html, sql, python, javascript, typescript, css, rust, java, csharp, yaml, toml, markdown, ruby, php, dockerfile, makefile, json, csv.
 - **Block scanners** for `-block`: Python, Go, JS/TS, Rust, Java, C#, Ruby, PHP, **HCL/Terraform** (`-lang hcl`/`tf`/`terraform`), **Nix** (`-lang nix`).
 - **fedit_find** -- locate exact line numbers for a substring. Returns context lines. Add `-x` for bare line numbers only (machine-readable).
 - **fedit_show** -- display a line range to confirm what you are about to edit. Add `-raw` for bare content with no line-number prefix and no footer -- ideal for piping output to fwencode.
@@ -304,9 +304,9 @@ Full results: https://amalexhandler.com/fedit#benchmark
   fedit_move, fedit_copy, fedit_fields
   (writelines is interactive stdin only -- no MCP tool)
 
-**Map languages (17):**
+**Map languages (19):**
   Go, HTML, SQL, Python, JavaScript, TypeScript, CSS, Rust,
-  Java, C#, YAML, TOML, Markdown, Ruby, PHP, Dockerfile, Makefile
+  Java, C#, YAML, TOML, Markdown, Ruby, PHP, Dockerfile, Makefile, JSON, CSV
 
 **Block scanner languages (10):**
   Go, Python, JS/TS, Rust, Java, C#, Ruby, PHP,
