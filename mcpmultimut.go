@@ -59,6 +59,19 @@ func mcpMultiMutOpts(name, spec string, getStr func(string) string, getInt func(
 		}
 	case "insertafter", "insertbefore", "replace":
 		o.newLines = expandText(text)
+		sf, sb := getStr("sourcefile"), getStr("sourceblock")
+		if op != "replace" && (sf != "" || sb != "") {
+			if text != "" {
+				return o, "sourcefile and sourceblock cannot be combined with text"
+			}
+			block, msg := mcpSourceBlockContent(sf, sb, getStr("lang"))
+			if msg != "" {
+				return o, msg
+			}
+			o.newLines = block
+			o.srcFile = sf
+			o.srcBlock = sb
+		}
 	}
 	if o.match == "" && o.matchRegex == "" {
 		return o, op + " requires match"
