@@ -224,7 +224,7 @@ For Terraform resource reordering, use block-aware move:
 
     fedit -file b.go -op insertafter -match '// helpers' -sourcefile a.go -sourceblock Helper -lang go -v
 
-- -sourcefile and -sourceblock must be used together and need -lang. They cannot combine with -text, -textfile or -texthex, or with a multi -file target.
+- -sourcefile and -sourceblock must be used together and need -lang. They cannot combine with -text, -textfile or -texthex. -file may be a comma list or glob: the block is read once and inserted into every file at its own -match, with a per-file report. When both files are Go, a standard library import the destination lacks is flagged with an advisory hint (the insert is still done).
 
 ### Duplicate a block N times (scaffolding / test fixtures)
 
@@ -336,4 +336,4 @@ Full results: https://amalexhandler.com/fedit#benchmark
   -file LIST     CLI: comma list and/or glob; show/find/map, plus replaceall (also -match-regex), insertafter, insertbefore, delete and replace with -match, and write (per-file SKIP, never abort); -block, -line, move, copy and -stream rejected. MCP: fedit_show/find/map/replaceall/insertafter/insertbefore/delete/replace take a list too; fedit_write and the other tools take one file
   -dest F1,F2    copy/move into other files; each destination needs its own anchor flag; per-destination SKIP, source removed only if a write succeeded; MCP: the dest parameter
   -destblock NAME  replace -dest only: block in each destination to overwrite (required); a destination without it is a SKIP
-  -sourcefile F    with -sourceblock NAME and -lang, insertafter/insertbefore take content from that block of F; not with -text/-textfile/-texthex or a multi -file target
+  -sourcefile F    with -sourceblock NAME and -lang, insertafter/insertbefore take content from that block of F; not with -text/-textfile/-texthex; -file may be a comma list or glob (per-file report, Go import hint)

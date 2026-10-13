@@ -341,7 +341,7 @@ fedit -file src.txt -op copy -line 5:+3 -dest a.txt,b.txt -aftermatch ANCHOR -ti
 - A destination that is the source file itself is a SKIP, and a file listed twice is used once.
 - copy and move take -dest with an anchor flag, and replace takes -dest with -destblock (below). It is rejected with any other op, and with -match-regex, -cleanfirst, -stream or -files, before any file is read. It does not combine with a multi -file list: -file must be the single source file.
 - Cross-file transfer moves text, not dependencies. A Go function that calls fmt.Println lands textually perfect in a file with no fmt import, and that file will not compile until you add the import.
-- MCP: fedit_copy, fedit_move and fedit_replace take a dest parameter (a comma list of files) with the same anchors, and destblock for replace; fedit_insertafter and fedit_insertbefore take sourcefile and sourceblock (with lang). Same rules and a per-destination report; file must be a single path.
+- MCP: fedit_copy, fedit_move and fedit_replace take a dest parameter (a comma list of files) with the same anchors, and destblock for replace; Same rules and a per-destination report; file must be a single path. fedit_insertafter and fedit_insertbefore take sourcefile and sourceblock (with lang); there file may also be a comma list or glob.
 
 **Replace a block in other files -- `replace -dest` with `-destblock`**
 
@@ -365,7 +365,8 @@ fedit -file b.go -op insertafter -match '// helpers' -sourcefile a.go -sourceblo
 ```
 
 - -sourcefile and -sourceblock must be used together and need -lang. They cannot be combined with -text, -textfile or -texthex.
-- A multi -file target is rejected. This edits one file; it is not a -dest fan-out.
+- -file may be a comma list or glob. The block is read once from -sourcefile and inserted into every file at that file's own -match, with a per-file report. A file without the match is a SKIP and is never modified. This is not a -dest fan-out: each target is edited at its own -match.
+- When the source and the destination are both Go files and the inserted block uses a standard library package the destination does not import, a hint is printed (advisory only: the insert is still done and the exit code is unchanged). With a file list the hint is added to that file's report line.
 - The MCP tools take sourcefile and sourceblock as parameters on fedit_insertafter and fedit_insertbefore (with lang).
 
 ---
