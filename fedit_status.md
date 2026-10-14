@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: October 12, 2026
+# Last updated: October 13, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -12,6 +12,7 @@ WEBSITE: amalexhandler.com/fedit (LIVE, deployed Oct 12, 2026: v1.10 rows for MC
 INSTALL: go install github.com/amalexico/fedit@latest
 
 CURRENT TAG:  v1.10.0 (tagged and pushed Oct 12, 2026, ee8cfde; module proxy serves it). Adds MCP dest, destblock, sourcefile and sourceblock; serverInfo reports 1.10.0.
+UNRELEASED (pushed, not tagged; the next tag is expected to be v1.11.0): MCP replaceall match_regex and textfile; the replace -dest multi-list guard; the Go import hint on -sourcefile/-sourceblock inserts; -sourcefile/-sourceblock with a multi -file target (CLI and MCP); map for hcl and nix (21 languages) with terraform and tf aliases; MCP inferLang fallback to detectLang. The README, SKILL, CLAUDE_DESKTOP and mcp.go documentation pass is in progress.
 PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. v1.8.1 was tagged later (see the Sept 28 notes below).
   Code commit
   touched .gitignore, CLAUDE_DESKTOP.md, main.go (~3920 lines), user_skill.md.
@@ -140,9 +141,10 @@ SESSION LOG (Sept 27, 2026, later):
   - DONE (6e31571, pushed Oct 12, 2026, not tagged): single-file MCP fedit_replaceall now honours match_regex (execReplaceAllRegex; errors for neither or both of match and match_regex, "No lines match: ...") and textfile (trailing newlines trimmed; error if text is also given). files is rejected with a message pointing to file. stream stays accepted and is processed normally (TestMCPExec_ReplaceAll_Stream sends it). The multi-file comma-list path in mcpmultimut.go already rejected stream and files but ignored textfile, which would have replaced matches with empty text; it now honours textfile too. The literal match path is unchanged. Schema text, README and CLAUDE_DESKTOP rows updated. 12 new tests in mcp_replaceall_test.go (helper prefix mra; prefixes already used: mcpMD, mcpMM, mcpSB, mdt, mrd, mra).
   - LESSONS (Oct 12, 2026): fedit find without -x prints to the console, not stdout, so guards must use find -x and count lines; a find -match with embedded double quotes is mangled by PowerShell; patch-file guards must check the file content, not just Test-Path; the website folder is not in the git repo (deploy only on explicit go-ahead); never tag without an explicit go-ahead.
   - DONE (90e60fc, 1aa7867, pushed Oct 12, 2026, not tagged): Go import advisory wiring (6e), first step. Copy, move and replace with dest (CLI and MCP) add an advisory note in out.notes when the transferred lines use stdlib packages a Go destination does not import. goImportHint in multidest_advisory.go calls checkMissingGoImports only when source and destination are .go files; it never changes OK or SKIP results, exit codes or move semantics. Tests: multidest_advisory_test.go (5 new) and import_advisory_test.go, now tracked (removed from .gitignore) so its 8 tests run for everyone.
-  - DONE (4935255, 9075bbb, 51a32eb, a7841f6, f8fbdec, baf97c4, d251f06, a44a175; committed locally Oct 13, 2026, not pushed, not tagged): Go import advisory wiring (6e), second step. sourceBlockHint (multidest_advisory.go) returns the existing goImportHint only when -sourcefile and -sourceblock were both used, and the hint never changes an insert, an OK or SKIP result or an exit code. Wired into: single-file CLI insertafter and insertbefore (hint printed to stderr after the Inserted line, both the -match and the -block branch); single-file MCP (mcpDoInsertMatchLines now takes srcFile and srcBlock and appends the hint to the OK message); multi -file insertafter and insertbefore on both CLI and MCP (multiMutOpts gained srcFile and srcBlock; collectMultiMutate computes the hint per file from that file own pre-edit lines and appends it to that file report detail). insert and replace already reject -sourcefile, so they carry no hint. DECISION (user, Oct 13, 2026): -sourcefile and -sourceblock now work with a multi -file target on the CLI (rejection removed from main(); the block is read once and inserted into every file at its own -match, per-file report, a file without the match is a SKIP) and on MCP (mcpMultiMutOpts reads sourcefile and sourceblock, rejects text together with them and requires lang; before this it ignored them). MCP tool descriptions, README and SKILL updated. Tests (helper prefix sbh): sourceblock_hint_test.go (4), sourceblock_multi_test.go (2), sourceblock_mcpmulti_test.go (3), sourceblock_mcpsingle_test.go (4). The two CLI hint sites sit in main() and have no automated test; they were live-tested in scratch folders under TEMP with a fresh go build -o fedit.exe . (hint for a Go destination missing the import, none for a .txt destination or plain -text, multi -file report 3/4 with one SKIP).
+  - DONE (4935255, 9075bbb, 51a32eb, a7841f6, f8fbdec, baf97c4, d251f06, a44a175; pushed Oct 13, 2026, not tagged): Go import advisory wiring (6e), second step. sourceBlockHint (multidest_advisory.go) returns the existing goImportHint only when -sourcefile and -sourceblock were both used, and the hint never changes an insert, an OK or SKIP result or an exit code. Wired into: single-file CLI insertafter and insertbefore (hint printed to stderr after the Inserted line, both the -match and the -block branch); single-file MCP (mcpDoInsertMatchLines now takes srcFile and srcBlock and appends the hint to the OK message); multi -file insertafter and insertbefore on both CLI and MCP (multiMutOpts gained srcFile and srcBlock; collectMultiMutate computes the hint per file from that file own pre-edit lines and appends it to that file report detail). insert and replace already reject -sourcefile, so they carry no hint. DECISION (user, Oct 13, 2026): -sourcefile and -sourceblock now work with a multi -file target on the CLI (rejection removed from main(); the block is read once and inserted into every file at its own -match, per-file report, a file without the match is a SKIP) and on MCP (mcpMultiMutOpts reads sourcefile and sourceblock, rejects text together with them and requires lang; before this it ignored them). MCP tool descriptions, README and SKILL updated. Tests (helper prefix sbh): sourceblock_hint_test.go (4), sourceblock_multi_test.go (2), sourceblock_mcpmulti_test.go (3), sourceblock_mcpsingle_test.go (4). The two CLI hint sites sit in main() and have no automated test; they were live-tested in scratch folders under TEMP with a fresh go build -o fedit.exe . (hint for a Go destination missing the import, none for a .txt destination or plain -text, multi -file report 3/4 with one SKIP).
+  - DONE (7d488ba, pushed Oct 13, 2026, not tagged): map for HCL/Terraform and Nix. New map_hcl.go: doMapHCL groups the top-level blocks of a .tf or .hcl file by kind with getHCLBlocks and flags duplicate resource, data, module, variable and output blocks; provider aliases, locals, terraform, moved, import and check can legitimately repeat and are never flagged; a one-line block header is cut at its brace. doMapNix lists the block attributes and the single-line attributes of the unindented top level with getNixBlocks and flags an attribute path defined twice; a file whose attributes are all indented (a function or let/in body) prints a note instead of a list. mapLangs has 21 languages (hcl and nix added). normMapLang maps the terraform and tf aliases to hcl in doMap, multi -file map and the MCP map handler; the aliases are not mapLangs keys. .tf, .hcl and .nix are auto-detected in doMap and detectLang. mcp.go inferLang is a third extension table (it had no json, csv, jsx, tsx, markdown, tf, hcl or nix, so fedit_map without lang failed on them); it now falls back to detectLang, and its only caller is the MCP map handler. The fedit_map description and lang schema list 21 languages. Tests: map_hcl_test.go (12, prefix mh), infer_lang_test.go (1); TestDetectLang in multifile_test.go now expects hcl and nix. Live-tested on the _testsystem .tf and .nix fixtures (CLI, -lang terraform, multi -file) and over MCP without lang. LESSON: a hex payload pasted by hand had one corrupted character in a comment; a SHA-256 check of the written file against the tested copy caught it, so large pasted files get a hash check.
   - Open items: no automated test covers the two CLI hint sites in main() (a test that builds and runs the binary would close it). A fixture written through fwencode with embedded double quotes lost them (a Go fixture got import strings without quotes); use [IO.File]::WriteAllText for such fixtures. replace -match needs -endmatch, so for a single line use find -x then replace -line N. go build ./... does not refresh fedit.exe, so run go build -o fedit.exe . before any live test.
-  - NEXT SESSION, in order: (1) the remaining task 9 older items (MCP fedit_find invalid get regex, detectLang duplication, the misleading -afterblock and -beforeblock error, CSS @media duplicate, markdown and dockerfile duplicate detection, doMapHCL); then tasks 7 and 8. Release plan: no tag and no website deploy without an explicit go-ahead; the LinkedIn announcement (what is new in fedit, plus a request for feedback) waits until all multi-path work is complete.
+  - NEXT SESSION, in order: (0) documentation complete and accurate for everything unreleased since v1.10.0: README, SKILL, CLAUDE_DESKTOP, the MCP tool descriptions in mcp.go and the CLI flag help text, with the since v1.11.0 label fixed before tagging, the two README LLM Benchmark sections merged, and the CLAUDE_DESKTOP block examples checked against the tool schemas; (1) the remaining task 9 older items (MCP fedit_find invalid get regex, detectLang duplication, the misleading -afterblock and -beforeblock error, CSS @media duplicate, markdown and dockerfile duplicate detection); then tasks 7 and 8. Release plan: no tag and no website deploy without an explicit go-ahead; the LinkedIn announcement (what is new in fedit, plus a request for feedback) waits until all multi-path work is complete.
 
 ===============================================================
 FEDIT -- PENDING TASKS
@@ -172,17 +174,17 @@ IMMEDIATE (do in this order):
             continue, never abort the batch (ASSUMED, not yet confirmed).
          c. -dest fan-out for copy/move/replace
          d. -sourceblock/-sourcefile/-destblock
-         e. DONE (90e60fc, pushed Oct 12, 2026): checkMissingGoImports is called from collectMultiDest and collectMultiDestReplace via goImportHint (multidest_advisory.go); advisory note only. The sourcefile and sourceblock insert path is not wired yet.
+         e. DONE (90e60fc, pushed Oct 12, 2026): checkMissingGoImports is called from collectMultiDest and collectMultiDestReplace via goImportHint (multidest_advisory.go); advisory note only. The sourcefile and sourceblock insert path was wired Oct 13, 2026 (sourceBlockHint); open: no automated test for the two CLI hint sites in main().
   [ ] 7. Build the guided entry point (git-style bypass like mcp).
   [ ] 8. Phase 2 of the scanner fix: multi-line string constructs (C#
          verbatim, Java text blocks, Rust raw strings, HCL heredocs).
   [ ] 9. Older items: -afterblock/-beforeblock misleading error for
          insertafter/insertbefore; CSS @media duplicate false positive;
-         duplicate-detection for markdown and dockerfile; doMapHCL missing,
-         so map -lang terraform still fails.
+         duplicate-detection for markdown and dockerfile. (doMapHCL and doMapNix are DONE,
+         Oct 13, 2026, 7d488ba: map now supports hcl and nix.)
          ALSO (remaining): MCP fedit_find bypasses main() so an invalid get regex still skips every line silently there.
-         ALSO (remaining): detectLang in multifile.go duplicates the doMap extension switch: make doMap call it. The fedit_map schema alias problem and the 17-language wording were fixed Oct 12, 2026 (245ec57).
-  [ ] 10. Tag v1.9.0 once the fixes and the first multi-file steps land.
+         ALSO (remaining): detectLang in multifile.go duplicates the doMap extension switch: make doMap call it. mcp.go inferLang is a third table; since 7d488ba it falls back to detectLang for anything it does not know. The fedit_map schema alias problem and the 17-language wording were fixed Oct 12, 2026 (245ec57).
+  [ ] 10. Tag the next release (v1.11.0 expected; v1.9.0 and v1.10.0 are already tagged) once the remaining multi-path work and the documentation are complete. Explicit go-ahead required; never tag before that.
 
 LOCKED DESIGN DECISION (Sept 27, 2026): multi -file and multi -dest are two
 SEPARATE mechanisms that NEVER combine. Multi -file = self-contained
@@ -215,12 +217,12 @@ BLOCK SCANNER LANGUAGES (10):
   map function) -- confirmed by reading the source, not assumed. Decision
   on whether to add it is still open.
 
-MAP LANGUAGES (19, was 17 at v1.8.0):
+MAP LANGUAGES (21, was 17 at v1.8.0):
   Go, HTML, SQL, Python, JavaScript, TypeScript, CSS, Rust,
   Java, C#, YAML, TOML, Markdown, Ruby, PHP, Dockerfile, Makefile,
-  JSON (NEW), CSV (NEW)
-  NOTE: HCL/Terraform and Nix are block-scanner-only -- no doMapHCL exists,
-  so `map -lang terraform` still fails today. Real gap, not yet closed.
+  JSON (NEW), CSV (NEW), HCL/Terraform (NEW, Oct 13), Nix (NEW, Oct 13)
+  NOTE: hcl and nix map through doMapHCL and doMapNix (map_hcl.go, 7d488ba); terraform and tf are aliases for hcl (normMapLang).
+  Nix maps only the unindented top level, the same rule as the block scanner.
 
 JSON MAP DETAILS (new):
   - Integrity: valid/malformed JSON, with parse error and cause
@@ -240,8 +242,8 @@ CSV MAP DETAILS (new):
   - Malformed CSV still reports the header + any rows parsed before the
     failure point (two-pass strict/lenient read)
 
-GO IMPORT ADVISORY (new, checkMissingGoImports -- NOT YET WIRED IN):
-  - Advisory-only heuristic for the future guided cross-file transfer report
+GO IMPORT ADVISORY (checkMissingGoImports -- WIRED Oct 12-13, 2026):
+  - Advisory-only heuristic: printed on every cross-file -dest run and on -sourcefile/-sourceblock inserts (Go to Go only), and still meant for the future guided report
   - Scoped to Go standard library packages only (curated whitelist) --
     third-party packages are out of scope by design, no fixed list exists
   - Tested against fedit's own source: an unscoped ("any lowercase.Capitalized(
@@ -269,8 +271,7 @@ KEY FLAGS (v1.8.0, all still current):
   -v                         verify after every mutation (ALWAYS USE)
   -nth N                     occurrence selector (default 1, -1 = last)
   -match-regex P             regex pattern with capture groups ($1 $2) for replaceall
-  -files GLOB                apply replaceall across matching files (replaceall ONLY
-                             today -- no other op accepts multi-file input yet)
+  -files GLOB                apply replaceall across matching files (replaceall only; every other op takes a comma list or glob in -file)
   -line N:+M               colon range: N to N+M (M additional lines)
   -line -N                 N-th line from end of file
   -line -N:                last N lines (from -N to EOF)
@@ -278,14 +279,16 @@ KEY FLAGS (v1.8.0, all still current):
   -end -N                  end line relative to EOF
   -endmatch TEXT           content-anchor end of range (show, replace, delete, move, copy)
   -quiet                   suppress stdout on success; exit code signals result (wins over -v)
+  -file LIST               comma list and/or glob: show/find/map, replaceall, insertafter, insertbefore, delete, replace (with -match) and write, per-file SKIP, never abort; MCP takes the same lists
 
-PLANNED FLAGS (designed, NOT YET IMPLEMENTED -- see FEDIT 2.0 section):
+CROSS-FILE FLAGS (implemented Oct 11-13, 2026; designed in the FEDIT 2.0 section):
   -dest PATH(,PATH,...)     destination file(s) for copy/move/replace
-  -sourceblock NAME         block in -file to use as content (cross-file only)
+  -sourceblock NAME         block in -sourcefile to insert (insertafter and insertbefore; needs -lang)
   -destblock NAME           block in -dest to overwrite (replace -dest only)
   -sourcefile PATH          the OTHER file, for insertbefore/insertafter
                             (paired with -sourceblock; -file stays the
                             edited file, unchanged from today)
+                            -file may also be a comma list or glob; the block is read once.
 
 EXTRACT HIERARCHY (File -> Line -> Word -> Char):
   WN           word N (normalized whitespace, 1-based)
@@ -505,12 +508,13 @@ FEDIT -- FILES IN REPO (partial -- repo has accumulated many one-off
 patch scripts over time, see `ls` output for the full list)
 ═══════════════════════════════════════════════════════════════
 
-main.go              (~4050 lines -- primary source, was 3357 at v1.8.0)
-mcp.go               (845 lines)
+main.go              (~4190 lines -- primary source, was 3357 at v1.8.0)
+mcp.go               (934 lines)
 README.md, SKILL.md, CLAUDE_DESKTOP.md, user_skill.md
 go.mod, LICENSE, .gitignore
 design_cross_file_ops.md, guide_mode_examples.md   (NEW -- fedit 2.0 design)
 import_advisory.patch, import_advisory_test.go     (NEW -- applied)
+map_hcl.go, map_hcl_test.go, infer_lang_test.go (NEW Oct 13, 2026 -- HCL and Nix map, inferLang fallback)
 Test files: mcp_test.go, texthex_test.go, extract_test.go, block_test.go,
   iac_test.go, move_copy_test.go, regex_glob_test.go, stream_fields_test.go,
   v180_test.go, map_json_csv_test.go (NEW), import_advisory_test.go (NEW)
@@ -518,5 +522,5 @@ _testsystem/          (NEW -- see TESTING SYSTEM section above)
 Demo: demo.gif, demo.tape, demo_sample.go
 
 ═══════════════════════════════════════════════════════════════
-END OF FEDIT STATUS -- September 28, 2026
+END OF FEDIT STATUS -- October 13, 2026
 ═══════════════════════════════════════════════════════════════
