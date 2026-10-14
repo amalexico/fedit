@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: October 13, 2026
+# Last updated: October 14, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -12,7 +12,7 @@ WEBSITE: amalexhandler.com/fedit (LIVE, deployed Oct 12, 2026: v1.10 rows for MC
 INSTALL: go install github.com/amalexico/fedit@latest
 
 CURRENT TAG:  v1.10.0 (tagged and pushed Oct 12, 2026, ee8cfde; module proxy serves it). Adds MCP dest, destblock, sourcefile and sourceblock; serverInfo reports 1.10.0.
-UNRELEASED (pushed, not tagged; the next tag is expected to be v1.11.0): MCP replaceall match_regex and textfile; the replace -dest multi-list guard; the Go import hint on -sourcefile/-sourceblock inserts; -sourcefile/-sourceblock with a multi -file target (CLI and MCP); map for hcl and nix (21 languages) with terraform and tf aliases; MCP inferLang fallback to detectLang. The README, SKILL, CLAUDE_DESKTOP and mcp.go documentation pass is in progress.
+UNRELEASED (pushed, not tagged; the next tag is expected to be v1.11.0): MCP replaceall match_regex and textfile; the replace -dest multi-list guard; the Go import hint on -sourcefile/-sourceblock inserts; -sourcefile/-sourceblock with a multi -file target (CLI and MCP); map for hcl and nix (21 languages) with terraform and tf aliases; MCP inferLang fallback to detectLang. The README, SKILL, CLAUDE_DESKTOP, mcp.go and CLI help documentation pass is DONE (Oct 14, 2026, see the SESSION Oct 14 entry); js, ts, cs and c# lang aliases for -block and map (f0d4bcd); the no-argument usage text rewritten (1d49a71).
 PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. v1.8.1 was tagged later (see the Sept 28 notes below).
   Code commit
   touched .gitignore, CLAUDE_DESKTOP.md, main.go (~3920 lines), user_skill.md.
@@ -54,7 +54,7 @@ LESSONS FROM THIS SESSION (Sept 27, 2026):
 
 SESSION LOG (Sept 27, 2026, later):
   - Task 2 DONE: block scanner regression check passed for JS, Rust, Java, C#, PHP, HCL and Nix (unbalanced braces inside single-line strings, exact block ranges). Fixtures are in the _testsystem\blockfixtures folder (untracked). Multi-line strings still untested (task 8).
-  - Block -lang names: javascript or typescript, rust, java, csharp or c#, ruby, php, hcl or terraform or tf, nix. NOT js.
+  - Block -lang names: javascript or typescript, rust, java, csharp or c#, ruby, php, hcl or terraform or tf, nix. js, ts, cs and c# are accepted aliases since f0d4bcd (Oct 14, 2026).
   - Task 3 DONE (edea6c4, pushed): package var verifyCenter is set by doInsert, doInsertMatch, doDelete and doReplace; main() prefers it. replaceall keeps the first-hit search on purpose.
   - The PATH entry is the repo folder itself, so go build -o fedit.exe . replaces the PATH binary. Always use the explicit -o build.
   - Task 4 DONE (c6442f7, 06b890e, c027e97, all pushed): -matchhex and -endmatchhex decode into -match/-endmatch right after flag.Parse via decodeHexAnchor(flagName, h). Tests in matchhex_test.go. Documented in README.md and SKILL.md. CLAUDE_DESKTOP.md and mcp.go deliberately skipped (mcp.go was checked later: its params are JSON and never pass through PowerShell, so it needs no change).
@@ -144,7 +144,17 @@ SESSION LOG (Sept 27, 2026, later):
   - DONE (4935255, 9075bbb, 51a32eb, a7841f6, f8fbdec, baf97c4, d251f06, a44a175; pushed Oct 13, 2026, not tagged): Go import advisory wiring (6e), second step. sourceBlockHint (multidest_advisory.go) returns the existing goImportHint only when -sourcefile and -sourceblock were both used, and the hint never changes an insert, an OK or SKIP result or an exit code. Wired into: single-file CLI insertafter and insertbefore (hint printed to stderr after the Inserted line, both the -match and the -block branch); single-file MCP (mcpDoInsertMatchLines now takes srcFile and srcBlock and appends the hint to the OK message); multi -file insertafter and insertbefore on both CLI and MCP (multiMutOpts gained srcFile and srcBlock; collectMultiMutate computes the hint per file from that file own pre-edit lines and appends it to that file report detail). insert and replace already reject -sourcefile, so they carry no hint. DECISION (user, Oct 13, 2026): -sourcefile and -sourceblock now work with a multi -file target on the CLI (rejection removed from main(); the block is read once and inserted into every file at its own -match, per-file report, a file without the match is a SKIP) and on MCP (mcpMultiMutOpts reads sourcefile and sourceblock, rejects text together with them and requires lang; before this it ignored them). MCP tool descriptions, README and SKILL updated. Tests (helper prefix sbh): sourceblock_hint_test.go (4), sourceblock_multi_test.go (2), sourceblock_mcpmulti_test.go (3), sourceblock_mcpsingle_test.go (4). The two CLI hint sites sit in main() and have no automated test; they were live-tested in scratch folders under TEMP with a fresh go build -o fedit.exe . (hint for a Go destination missing the import, none for a .txt destination or plain -text, multi -file report 3/4 with one SKIP).
   - DONE (7d488ba, pushed Oct 13, 2026, not tagged): map for HCL/Terraform and Nix. New map_hcl.go: doMapHCL groups the top-level blocks of a .tf or .hcl file by kind with getHCLBlocks and flags duplicate resource, data, module, variable and output blocks; provider aliases, locals, terraform, moved, import and check can legitimately repeat and are never flagged; a one-line block header is cut at its brace. doMapNix lists the block attributes and the single-line attributes of the unindented top level with getNixBlocks and flags an attribute path defined twice; a file whose attributes are all indented (a function or let/in body) prints a note instead of a list. mapLangs has 21 languages (hcl and nix added). normMapLang maps the terraform and tf aliases to hcl in doMap, multi -file map and the MCP map handler; the aliases are not mapLangs keys. .tf, .hcl and .nix are auto-detected in doMap and detectLang. mcp.go inferLang is a third extension table (it had no json, csv, jsx, tsx, markdown, tf, hcl or nix, so fedit_map without lang failed on them); it now falls back to detectLang, and its only caller is the MCP map handler. The fedit_map description and lang schema list 21 languages. Tests: map_hcl_test.go (12, prefix mh), infer_lang_test.go (1); TestDetectLang in multifile_test.go now expects hcl and nix. Live-tested on the _testsystem .tf and .nix fixtures (CLI, -lang terraform, multi -file) and over MCP without lang. LESSON: a hex payload pasted by hand had one corrupted character in a comment; a SHA-256 check of the written file against the tested copy caught it, so large pasted files get a hash check.
   - Open items: no automated test covers the two CLI hint sites in main() (a test that builds and runs the binary would close it). A fixture written through fwencode with embedded double quotes lost them (a Go fixture got import strings without quotes); use [IO.File]::WriteAllText for such fixtures. replace -match needs -endmatch, so for a single line use find -x then replace -line N. go build ./... does not refresh fedit.exe, so run go build -o fedit.exe . before any live test.
-  - NEXT SESSION, in order: (0) documentation complete and accurate for everything unreleased since v1.10.0: README, SKILL, CLAUDE_DESKTOP, the MCP tool descriptions in mcp.go and the CLI flag help text, with the since v1.11.0 label fixed before tagging, the two README LLM Benchmark sections merged, and the CLAUDE_DESKTOP block examples checked against the tool schemas; (1) the remaining task 9 older items (MCP fedit_find invalid get regex, detectLang duplication, the misleading -afterblock and -beforeblock error, CSS @media duplicate, markdown and dockerfile duplicate detection); then tasks 7 and 8. Release plan: no tag and no website deploy without an explicit go-ahead; the LinkedIn announcement (what is new in fedit, plus a request for feedback) waits until all multi-path work is complete.
+  - NEXT SESSION (older plan; item (0) is DONE as of Oct 14, 2026, see the SESSION Oct 14 entry), in order: (0) documentation complete and accurate for everything unreleased since v1.10.0: README, SKILL, CLAUDE_DESKTOP, the MCP tool descriptions in mcp.go and the CLI flag help text, with the since v1.11.0 label fixed before tagging, the two README LLM Benchmark sections merged, and the CLAUDE_DESKTOP block examples checked against the tool schemas; (1) the remaining task 9 older items (MCP fedit_find invalid get regex, detectLang duplication, the misleading -afterblock and -beforeblock error, CSS @media duplicate, markdown and dockerfile duplicate detection); then tasks 7 and 8. Release plan: no tag and no website deploy without an explicit go-ahead; the LinkedIn announcement (what is new in fedit, plus a request for feedback) waits until all multi-path work is complete.
+  - SESSION Oct 14, 2026 (documentation pass; HEAD was 77206cf and the last tag v1.10.0 at the start; nothing tagged, website not deployed):
+    b5e464b: status file up to 7d488ba. 25f92fa: README brought in line with the code (21 languages, full flags table, provisional since v1.11.0 labels, the two LLM Benchmark sections merged, an unclosed code fence fixed, double-encoded dashes repaired, FAQ corrected).
+    f0d4bcd: FIX, js, ts, cs and c# are accepted as lang aliases for -block and map (getTopLevelBlocks calls normMapLang first); tests in lang_alias_test.go. The older note that js is NOT a block lang name was wrong.
+    4f9acab: SKILL.md (many-files section, import hint, 21 languages, flag rows, anti-patterns 11 and 12). a6c485c: CLAUDE_DESKTOP.md (tool table with MCP parameter names, section 7 examples fixed and extended, troubleshooting, changelog lines).
+    77206cf: REAL STATE: only the lang schema description of fedit_insertafter and fedit_insertbefore in mcp.go changed (2 lines). Its commit message wrongly claims more. The rest of that text work did not apply because the PowerShell helper was named Rp, a built-in alias of Remove-ItemProperty.
+    52c5cf3: the redo, 7 guarded edits, 0 skipped, gate passed: mcp.go fedit_replace description (file must then be a single path); mcp.go fedit_map lang schema (accepted aliases terraform, tf, js, ts, cs, c#); main.go -lang help (21 map languages, block languages, aliases), -endmatch help (show, replace, delete, move, copy), -file help (comma list or glob); dest_flag.go help (copy, move and replace; replace needs -destblock); sourcefile_flag.go help.
+    1d49a71: GAP FOUND AND FIXED, the no-argument usage text was stale (map -lang go|html|sql, -block for move/copy only, and no -dest, -destblock, -sourcefile, -sourceblock, destination anchors, -times, -raw, -extract, -get, -wdelim, -lang or list support in -file). Seven operation lines rewritten and new sections added (block and language, range, destination, cross-file, find and show, output flags); a live run of the freshly built fedit.exe confirmed the new text and that go|html|sql is gone. Text only, no behaviour change.
+    Documentation for everything unreleased since v1.10.0 is now complete: README, SKILL, CLAUDE_DESKTOP, mcp.go tool descriptions and CLI help. The since v1.11.0 labels stay provisional until the tag is confirmed, and the serverInfo version in mcp.go (1.10.0) changes at tag time.
+    LESSONS: the prompt in this session was Windows PowerShell 5.1 (5.1.26100.9444), not pwsh 7.6.2, so check $PSVersionTable.PSVersion first. Never name a helper after a PowerShell alias (Rp, rp, sc); check Get-Command and Get-Alias first. The guarded helper pattern (edit only when the anchor matches exactly once, count skips and edits, gate the commit on counts, gofmt, build, vet, test and a live check) did 15 edits with 0 skips.
+  - NEXT, in order: (1) an automated test that builds and runs the binary for the two CLI hint sites in main(); (2) and (3) task 9 older items and tasks 7 and 8, order to be chosen by the user; (4) before any tag confirm the since v1.11.0 labels and bump serverInfo. Tag, website deploy and the LinkedIn post only on the explicit go-ahead.
 
 ===============================================================
 FEDIT -- PENDING TASKS
@@ -211,7 +221,7 @@ MCP TOOLS (14 -- writelines has no MCP tool, interactive stdin only):
 
 BLOCK SCANNER LANGUAGES (10):
   Go, Python, JS/TS, Rust, Java, C#, Ruby, PHP,
-  HCL/Terraform (hcl/tf/terraform), Nix
+  HCL/Terraform (hcl/tf/terraform), Nix (aliases js, ts, cs, c# accepted since f0d4bcd)
   Supported on: replace, insert, insertbefore, insertafter, show, move, copy
   NOTE: plain C is NOT supported anywhere in fedit (no block scanner, no
   map function) -- confirmed by reading the source, not assumed. Decision
@@ -508,13 +518,14 @@ FEDIT -- FILES IN REPO (partial -- repo has accumulated many one-off
 patch scripts over time, see `ls` output for the full list)
 ═══════════════════════════════════════════════════════════════
 
-main.go              (~4190 lines -- primary source, was 3357 at v1.8.0)
+main.go              (~4220 lines -- primary source, was 3357 at v1.8.0)
 mcp.go               (934 lines)
 README.md, SKILL.md, CLAUDE_DESKTOP.md, user_skill.md
 go.mod, LICENSE, .gitignore
 design_cross_file_ops.md, guide_mode_examples.md   (NEW -- fedit 2.0 design)
 import_advisory.patch, import_advisory_test.go     (NEW -- applied)
 map_hcl.go, map_hcl_test.go, infer_lang_test.go (NEW Oct 13, 2026 -- HCL and Nix map, inferLang fallback)
+lang_alias_test.go (NEW Oct 14, 2026 -- js, ts, cs, c# lang aliases)
 Test files: mcp_test.go, texthex_test.go, extract_test.go, block_test.go,
   iac_test.go, move_copy_test.go, regex_glob_test.go, stream_fields_test.go,
   v180_test.go, map_json_csv_test.go (NEW), import_advisory_test.go (NEW)
@@ -522,5 +533,5 @@ _testsystem/          (NEW -- see TESTING SYSTEM section above)
 Demo: demo.gif, demo.tape, demo_sample.go
 
 ═══════════════════════════════════════════════════════════════
-END OF FEDIT STATUS -- October 13, 2026
+END OF FEDIT STATUS -- October 14, 2026
 ═══════════════════════════════════════════════════════════════
