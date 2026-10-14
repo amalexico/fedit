@@ -1352,6 +1352,7 @@ func doReplaceAll(lines []string, path, search, replacement string) {
 // ════════════════════════════════════════════════════════════
 
 func doMap(lines []string, filename, lang string) {
+	lang = normMapLang(lang)
 	if lang == "" {
 		// Auto-detect from extension
 		lower := strings.ToLower(filename)
@@ -1394,6 +1395,10 @@ func doMap(lines []string, filename, lang string) {
 			lang = "json"
 		case strings.HasSuffix(lower, ".csv"):
 			lang = "csv"
+		case strings.HasSuffix(lower, ".tf") || strings.HasSuffix(lower, ".hcl"):
+			lang = "hcl"
+		case strings.HasSuffix(lower, ".nix"):
+			lang = "nix"
 		default:
 			fmt.Fprintln(os.Stderr, "Cannot auto-detect language. Use -lang flag.")
 			os.Exit(1)
@@ -1439,6 +1444,10 @@ func doMap(lines []string, filename, lang string) {
 		doMapJSON(lines)
 	case "csv":
 		doMapCSV(lines)
+	case "hcl":
+		doMapHCL(lines)
+	case "nix":
+		doMapNix(lines)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown language: %s\n", lang)
 		os.Exit(1)

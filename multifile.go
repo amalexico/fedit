@@ -37,7 +37,7 @@ var mapLangs = map[string]bool{
 	"go": true, "html": true, "sql": true, "python": true, "javascript": true,
 	"typescript": true, "css": true, "rust": true, "java": true, "csharp": true,
 	"yaml": true, "toml": true, "markdown": true, "ruby": true, "php": true,
-	"dockerfile": true, "makefile": true, "json": true, "csv": true,
+	"dockerfile": true, "makefile": true, "json": true, "csv": true, "hcl": true, "nix": true,
 }
 
 // isMultiSpec reports whether a -file value is a comma list or glob.
@@ -127,6 +127,10 @@ func detectLang(filename string) (string, bool) {
 		return "json", true
 	case strings.HasSuffix(lower, ".csv"):
 		return "csv", true
+	case strings.HasSuffix(lower, ".tf") || strings.HasSuffix(lower, ".hcl"):
+		return "hcl", true
+	case strings.HasSuffix(lower, ".nix"):
+		return "nix", true
 	}
 	return "", false
 }
@@ -154,7 +158,7 @@ func runMultiFile(o multiOpts) int {
 		fmt.Fprintln(os.Stderr, "Error: -match is required for find")
 		return 1
 	}
-	if o.op == "map" && o.lang != "" && !mapLangs[o.lang] {
+	if o.op == "map" && o.lang != "" && !mapLangs[normMapLang(o.lang)] {
 		fmt.Fprintf(os.Stderr, "Error: unknown -lang for map: %s\n", o.lang)
 		return 1
 	}

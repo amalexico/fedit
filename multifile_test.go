@@ -67,7 +67,7 @@ func TestDetectLang(t *testing.T) {
 	cases := map[string]string{
 		"a.go": "go", "b.PY": "python", "c.jsx": "javascript", "d.tsx": "typescript",
 		"e.cs": "csharp", "f.yml": "yaml", "g.md": "markdown", "Dockerfile": "dockerfile",
-		"h.mk": "makefile", "i.json": "json", "j.csv": "csv",
+		"h.mk": "makefile", "i.json": "json", "j.csv": "csv", "k.tf": "hcl", "l.HCL": "hcl", "m.nix": "nix",
 	}
 	for name, want := range cases {
 		got, ok := detectLang(name)
@@ -77,9 +77,6 @@ func TestDetectLang(t *testing.T) {
 	}
 	if _, ok := detectLang("notes.txt"); ok {
 		t.Error("detectLang(notes.txt) should not detect a language")
-	}
-	if _, ok := detectLang("infra.tf"); ok {
-		t.Error("detectLang(infra.tf) should not detect a language (doMap has no HCL)")
 	}
 }
 
