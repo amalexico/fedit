@@ -23,17 +23,17 @@ func main() {
 		return
 	}
 
-	file := flag.String("file", "", "Path to the file")
+	file := flag.String("file", "", "Path to the file (a comma list or glob where the operation supports it)")
 	op := flag.String("op", "", "Operation: insert, delete, replace, replaceall, show, write, writeraw, writelines, map, find, insertafter, insertbefore, move, copy, fields")
 	line := flag.String("line", "", "Line number (1-based)")
 	endLine := flag.String("end", "", "End line for delete/replace range (inclusive)")
 	text := flag.String("text", "", "Text to insert/replace (use \\n for newlines, \\t for tabs)")
 	textFile := flag.String("textfile", "", "Read insert/replace text from this file instead of -text")
-	lang := flag.String("lang", "", "Language for map: go, html, sql, python, javascript, typescript, css, rust, java, csharp, yaml, toml, markdown, ruby, php, dockerfile, makefile, json, csv")
+	lang := flag.String("lang", "", "Language for map: go, html, sql, python, javascript, typescript, css, rust, java, csharp, yaml, toml, markdown, ruby, php, dockerfile, makefile, json, csv, hcl, nix (21 map languages). Block languages for -block: go, python, javascript, typescript, rust, java, csharp, ruby, php, hcl, nix. Aliases: terraform, tf, js, ts, cs, c#")
 	match := flag.String("match", "", "Text to search for (find/insertafter/insertbefore)")
 	nth := flag.Int("nth", 1, "Which occurrence to match (default 1, use -1 for last)")
 	v := flag.Bool("v", false, "Verify: show affected lines after mutation")
-	endmatch := flag.String("endmatch", "", "End line bound for move/copy source (content-based)")
+	endmatch := flag.String("endmatch", "", "End line bound (content-based) for show, replace, delete, move and copy ranges")
 	after := flag.Int("after", -1, "Destination: insert after line N (0 = beginning of file)")
 	before := flag.Int("before", -1, "Destination: insert before line N")
 	aftermatch := flag.String("aftermatch", "", "Destination: insert after first line matching TEXT")
