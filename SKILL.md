@@ -12,7 +12,7 @@ Reach for fedit whenever the user asks you to:
 - **Edit a file** -- any insert / delete / replace / rename / refactor task
 - **Patch code** -- add a method, fix a bug on specific lines, modify a config block
 - **Modify large files** -- anything over ~100 lines where rewriting the whole file is slow and risks truncation or formatting drift
-- **Make multiple coordinated edits** -- fedit can chain operations atomically
+- **Make multiple coordinated edits** -- chain several calls; every call re-reads the file, so content-matching anchors stay valid across the chain
 - **Process large files** -- add `-stream` to replaceall/find for multi-GB files
 - **Extract structured data** -- use `fields` to pull CSV/TSV columns; use `-extract` for sub-line word/char extraction without awk
 - **Block-aware edits** -- use `-block` / `-lang` to target named functions, classes, or Terraform resources without line numbers
@@ -25,7 +25,7 @@ If you have an MCP connection to fedit, ALWAYS prefer it over generating a full-
 
 Never mutate a file blind. Always recon first using read-only tools:
 
-- **fedit_map** -- structural overview (functions, headings, sections, code blocks). Supports 19 languages: go, html, sql, python, javascript, typescript, css, rust, java, csharp, yaml, toml, markdown, ruby, php, dockerfile, makefile, json, csv.
+- **fedit_map** -- structural overview (functions, headings, sections, code blocks). Supports 21 languages: go, html, sql, python, javascript, typescript, css, rust, java, csharp, yaml, toml, markdown, ruby, php, dockerfile, makefile, json, csv, hcl, nix.
 - **Block scanners** for `-block`: Python, Go, JS/TS, Rust, Java, C#, Ruby, PHP, **HCL/Terraform** (`-lang hcl`/`tf`/`terraform`), **Nix** (`-lang nix`).
 - **fedit_find** -- locate exact line numbers for a substring. Returns context lines. Add `-x` for bare line numbers only (machine-readable).
 - **fedit_show** -- display a line range to confirm what you are about to edit. Add `-raw` for bare content with no line-number prefix and no footer -- ideal for piping output to fwencode.
@@ -74,7 +74,7 @@ element when adding code AFTER something closes.
     fedit_replace (file="dst.go", block="OldFunc", lang="go", texthex=$hex)
 
 Block-aware ops: replace, insert, insertbefore, insertafter, show.
-Languages: go, python, js/ts, rust, java, cs, ruby, php, hcl/tf/terraform, nix.
+Languages: go, python, js/ts, rust, java, cs, ruby, php, hcl/tf/terraform, nix (the long names javascript, typescript and csharp, and c#, are accepted as well).
 
 ### Insert before/after a named block
 
@@ -212,7 +212,7 @@ For Terraform resource reordering, use block-aware move:
 - Per-destination policy: a problem in one destination is a SKIP for that file and never aborts the batch. Exit code 0 if at least one destination succeeded, 1 if none did.
 - move writes all destinations first and removes the source only if at least one write succeeded. If every destination fails the source stays intact.
 - copy and move take -dest with an anchor flag; replace takes -dest with -destblock (below). It is rejected with -match-regex, -cleanfirst, -stream, -files or a multi -file list. The MCP tools take the same thing as parameters: dest and destblock on fedit_copy, fedit_move and fedit_replace, sourcefile and sourceblock on fedit_insertafter and fedit_insertbefore.
-- It moves text, not dependencies. After a Go transfer, check imports in the destination.
+- It moves text, not dependencies. After a Go transfer, check imports in the destination: fedit adds an advisory note when a Go destination lacks a standard library import that the transferred text uses (results and exit codes are unchanged).
 
 **Replace a block in other files:** `replace -dest` overwrites a named block in each destination with the source block or range from `-file`. `-destblock` is required:
 
@@ -224,7 +224,18 @@ For Terraform resource reordering, use block-aware move:
 
     fedit -file b.go -op insertafter -match '// helpers' -sourcefile a.go -sourceblock Helper -lang go -v
 
-- -sourcefile and -sourceblock must be used together and need -lang. They cannot combine with -text, -textfile or -texthex. -file may be a comma list or glob: the block is read once and inserted into every file at its own -match, with a per-file report. When both files are Go, a standard library import the destination lacks is flagged with an advisory hint (the insert is still done).
+- -sourcefile and -sourceblock must be used together and need -lang. They cannot combine with -text, -textfile or -texthex. -file may be a comma list or glob: the block is read once and inserted into every file at its own -match, with a per-file report. When both files are Go, a standard library import the destination lacks is flagged with an advisory hint (the insert is still done); the hint goes to stderr on the CLI and is appended to the OK message over MCP.
+
+### Edit many files at once (comma list or glob in file)
+
+    fedit_replaceall (file="*.conf", match="old.example.com", text="new.example.com")
+    fedit_insertafter (file="a.yaml,b.yaml", match="servers:", text="  - new")
+    fedit_delete (file="*.md", match="<!-- start -->", endmatch="<!-- end -->")
+    fedit_find (file="*.go", match="TODO")
+
+- Each file is its own source: a problem in one (no match, unreadable, read-only, write failed) is a SKIP for that file, the batch goes on, and a skipped file is never modified. The report lists OK or SKIP per file, then N/M file(s) succeeded. Exit code 0 if at least one file succeeded, 1 if none did.
+- Accepted: show, find and map, plus replaceall (also match_regex), insertafter, insertbefore, delete and replace with match, and write (same content to every file). block, line, stream, files, move and copy are rejected before any file is read. fedit_write over MCP takes one path.
+- This is not -dest. A multi file edit applies the same match in every file; -dest moves text from one source file into other files. They never combine.
 
 ### Duplicate a block N times (scaffolding / test fixtures)
 
@@ -250,6 +261,7 @@ Add `-x` to suppress the stats footer (machine-readable output).
 
 All top-level Terraform block types supported. Accepts lang: `hcl`, `tf`, `terraform`.
 Nested blocks (ingress, lifecycle) are ignored -- only top-level blocks matched.
+Recon first with fedit_map on the .tf file: it lists the top-level blocks by kind with line ranges and flags duplicate resource, data, module, variable and output blocks (.tf and .hcl are detected from the extension).
 
 ### Reorder Nix attribute bindings
 
@@ -257,6 +269,7 @@ Nested blocks (ingress, lifecycle) are ignored -- only top-level blocks matched.
                 beforeblock="programs.ssh", lang="nix")
 
 Handles attribute sets and list bindings. Dotted attrs (`programs.git`) work natively.
+fedit_map on a .nix file lists the unindented top-level attributes with line ranges and flags a path defined twice; indented attributes inside a function body are not listed, the same rule -block uses.
 
 ### Stream mode for large files
 
@@ -279,6 +292,8 @@ Not supported with move/copy/map (those need full structure in memory).
 8. **Do not use WriteAllBytes + textfile when -texthex works.** Pre-compute the hex and pass it directly via -texthex. Temp files are only necessary when the hex string exceeds PS argument length limits (~32KB).
 9. **Do not run line-number ops after insertions in the same sequence.** Insertions shift all subsequent line numbers. Always run delete/replace-by-line BEFORE insertafter/insertbefore in the same patch sequence.
 10. **Do not anchor insertbefore on headings or separators when content precedes them.** A `---` or `## N.` heading anchor places content after the separator, outside the intended section. Anchor on the last line of actual content with insertafter instead.
+11. **Do not combine -dest with a comma list or glob in -file, and do not expect -dest to carry imports.** Multi -file and -dest never combine; after a Go transfer add the missing import in the destination yourself (the hint tells you which).
+12. **Do not pass block, line, stream or files together with a comma list or glob in file.** They are rejected; use match (plus endmatch) so each file resolves its own anchor.
 
 ## Why this skill exists
 
@@ -304,9 +319,9 @@ Full results: https://amalexhandler.com/fedit#benchmark
   fedit_move, fedit_copy, fedit_fields
   (writelines is interactive stdin only -- no MCP tool)
 
-**Map languages (19):**
+**Map languages (21):**
   Go, HTML, SQL, Python, JavaScript, TypeScript, CSS, Rust,
-  Java, C#, YAML, TOML, Markdown, Ruby, PHP, Dockerfile, Makefile, JSON, CSV
+  Java, C#, YAML, TOML, Markdown, Ruby, PHP, Dockerfile, Makefile, JSON, CSV, HCL, Nix
 
 **Block scanner languages (10):**
   Go, Python, JS/TS, Rust, Java, C#, Ruby, PHP,
@@ -328,11 +343,14 @@ Full results: https://amalexhandler.com/fedit#benchmark
   -v             verify block after every mutation (always include)
   -nth N         which occurrence (default 1, -1 = last)
   -match-regex   regex pattern for replaceall with capture groups ($1 $2)
-  -files GLOB    apply replaceall to all files matching a glob
+  -files GLOB    apply replaceall to all files matching a glob (every other op takes a comma list or glob in -file)
   -line N:+M     lines N to N+M inclusive (N:+0 = N only); -N counts from end; -N: = last N lines; : = EOF/append
   -end -N        end line relative to EOF (-1 = last line, -5 = fifth from end)
   -endmatch TEXT content-anchor end of range -- show, replace, delete, move, copy
   -quiet         suppress stdout on success; exit code signals result (wins over -v)
+  -times N       move/copy: paste N times (move cuts once)
+  -after N, -before N, -aftermatch TEXT, -beforematch TEXT, -afterblock NAME, -beforeblock NAME   move/copy destination anchors (the block anchors need -lang)
+  -col N         fields: column number (1-based); -delim CHAR is the field delimiter (default tab)
   -file LIST     CLI: comma list and/or glob; show/find/map, plus replaceall (also -match-regex), insertafter, insertbefore, delete and replace with -match, and write (per-file SKIP, never abort); -block, -line, move, copy and -stream rejected. MCP: fedit_show/find/map/replaceall/insertafter/insertbefore/delete/replace take a list too; fedit_write and the other tools take one file
   -dest F1,F2    copy/move into other files; each destination needs its own anchor flag; per-destination SKIP, source removed only if a write succeeded; MCP: the dest parameter
   -destblock NAME  replace -dest only: block in each destination to overwrite (required); a destination without it is a SKIP
