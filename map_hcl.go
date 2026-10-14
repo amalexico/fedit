@@ -8,9 +8,15 @@ import (
 	"strings"
 )
 
-// normMapLang maps the terraform and tf aliases to hcl, the name doMap uses.
+// normMapLang maps accepted language aliases to the canonical names used by doMap and the block scanners: terraform and tf to hcl, js to javascript, ts to typescript, cs and c# to csharp.
 func normMapLang(lang string) string {
 	switch strings.ToLower(lang) {
+	case "js":
+		return "javascript"
+	case "ts":
+		return "typescript"
+	case "cs", "c#":
+		return "csharp"
 	case "terraform", "tf":
 		return "hcl"
 	}

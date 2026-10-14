@@ -3225,6 +3225,7 @@ func resolveBlock(lines []string, lang, name string) (start, end int, err error)
 
 // getTopLevelBlocks routes to the correct language scanner.
 func getTopLevelBlocks(lines []string, lang string) ([]blockEntry, error) {
+	lang = normMapLang(lang)
 	switch strings.ToLower(lang) {
 	case "go":
 		return getGoBlocks(lines), nil
