@@ -23,6 +23,13 @@ func main() {
 		return
 	}
 
+	if isGuidedCall(os.Args) {
+		if err := runGuided(); err != nil {
+			fmt.Fprintln(os.Stderr, "guided:", err)
+			os.Exit(2)
+		}
+	}
+
 	file := flag.String("file", "", "Path to the file (a comma list or glob where the operation supports it)")
 	op := flag.String("op", "", "Operation: insert, delete, replace, replaceall, show, write, writeraw, writelines, map, find, insertafter, insertbefore, move, copy, fields")
 	line := flag.String("line", "", "Line number (1-based)")
