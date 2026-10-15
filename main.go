@@ -2225,17 +2225,12 @@ func doMapTOML(lines []string) {
 }
 
 func doMapMarkdown(lines []string) {
-	reHeading := regexp.MustCompile(`^(#{1,6})\s+(.+)`)
 	reLink := regexp.MustCompile(`$$([^$$]+)\]\(([^)]+)\)`)
 	reCodeBlock := regexp.MustCompile("^```(\\w*)")
 
 	fmt.Println("── Headings ──")
-	for i, line := range lines {
-		if m := reHeading.FindStringSubmatch(line); m != nil {
-			indent := strings.Repeat("  ", len(m[1])-1)
-			fmt.Printf("%4d │ %s%s %s\n", i+1, indent, m[1], m[2])
-		}
-	}
+	hs := mkdHeadings(lines)
+	mkdPrintHeadings(hs)
 
 	fmt.Println("\n── Code Blocks ──")
 	inCode := false
@@ -2262,6 +2257,7 @@ func doMapMarkdown(lines []string) {
 		}
 	}
 
+	mkdPrintDuplicates(hs)
 	fmt.Fprintf(os.Stderr, "\n--- %d total lines ---\n", len(lines))
 }
 
@@ -2414,6 +2410,7 @@ func doMapDockerfile(lines []string) {
 		}
 	}
 
+	dkrPrintDuplicates(lines)
 	fmt.Fprintf(os.Stderr, "\n--- %d total lines ---\n", len(lines))
 }
 
