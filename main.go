@@ -1904,9 +1904,6 @@ func doMapJavaScript(lines []string) {
 }
 
 func doMapCSS(lines []string) {
-	reSelector := regexp.MustCompile(`^([a-zA-Z.#@\[\*:][^{]*)\{`)
-	reMedia := regexp.MustCompile(`^@media\s+`)
-	reKeyframes := regexp.MustCompile(`^@keyframes\s+(\S+)`)
 	reImport := regexp.MustCompile(`^@import\s+`)
 	reVar := regexp.MustCompile(`^\s*(--[\w-]+)\s*:`)
 
@@ -1926,39 +1923,7 @@ func doMapCSS(lines []string) {
 	}
 
 	fmt.Println("\n── Selectors & At-Rules ──")
-	names := map[string]int{}
-	for i, line := range lines {
-		t := strings.TrimSpace(line)
-		if m := reKeyframes.FindStringSubmatch(t); m != nil {
-			fmt.Printf("%4d │ @keyframes %s\n", i+1, m[1])
-			names["@keyframes "+m[1]]++
-			continue
-		}
-		if reMedia.MatchString(t) {
-			fmt.Printf("%4d │ %s\n", i+1, t)
-			continue
-		}
-		if m := reSelector.FindStringSubmatch(t); m != nil {
-			sel := strings.TrimSpace(m[1])
-			fmt.Printf("%4d │ %s\n", i+1, sel)
-			names[sel]++
-		}
-	}
-
-	fmt.Println()
-	dups := false
-	for name, count := range names {
-		if count > 1 {
-			if !dups {
-				fmt.Println("⚠ Duplicates:")
-				dups = true
-			}
-			fmt.Printf("  %s (%d times)\n", name, count)
-		}
-	}
-	if !dups {
-		fmt.Println("✓ No duplicate selectors")
-	}
+	doMapCSSSelectors(lines)
 	fmt.Fprintf(os.Stderr, "\n--- %d total lines ---\n", len(lines))
 }
 
