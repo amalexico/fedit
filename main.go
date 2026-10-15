@@ -89,6 +89,11 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	if (*op == "insertafter" || *op == "insertbefore") && (*afterblock != "" || *beforeblock != "") {
+		fmt.Fprintln(os.Stderr, "Error: -afterblock and -beforeblock are destination anchors for move and copy; for insertafter/insertbefore use -block NAME -lang LANG, or -match TEXT")
+		os.Exit(1)
+	}
+
 	// -texthex: hex string is the content itself (produced by fwencode or PS hex encode).
 	// Decoded bytes bypass expandText entirely — no escape expansion, no backslash mangling.
 	// resolvedBytes is nil when -texthex is absent; all downstream code checks nil before use.
