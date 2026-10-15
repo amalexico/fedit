@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: October 14, 2026
+# Last updated: October 15, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -154,7 +154,16 @@ SESSION LOG (Sept 27, 2026, later):
     1d49a71: GAP FOUND AND FIXED, the no-argument usage text was stale (map -lang go|html|sql, -block for move/copy only, and no -dest, -destblock, -sourcefile, -sourceblock, destination anchors, -times, -raw, -extract, -get, -wdelim, -lang or list support in -file). Seven operation lines rewritten and new sections added (block and language, range, destination, cross-file, find and show, output flags); a live run of the freshly built fedit.exe confirmed the new text and that go|html|sql is gone. Text only, no behaviour change.
     Documentation for everything unreleased since v1.10.0 is now complete: README, SKILL, CLAUDE_DESKTOP, mcp.go tool descriptions and CLI help. The since v1.11.0 labels stay provisional until the tag is confirmed, and the serverInfo version in mcp.go (1.10.0) changes at tag time.
     LESSONS: the prompt in this session was Windows PowerShell 5.1 (5.1.26100.9444), not pwsh 7.6.2, so check $PSVersionTable.PSVersion first. Never name a helper after a PowerShell alias (Rp, rp, sc); check Get-Command and Get-Alias first. The guarded helper pattern (edit only when the anchor matches exactly once, count skips and edits, gate the commit on counts, gofmt, build, vet, test and a live check) did 15 edits with 0 skips.
-  - NEXT, in order: (1) an automated test that builds and runs the binary for the two CLI hint sites in main(); (2) and (3) task 9 older items and tasks 7 and 8, order to be chosen by the user; (4) before any tag confirm the since v1.11.0 labels and bump serverInfo. Tag, website deploy and the LinkedIn post only on the explicit go-ahead.
+  - SESSION Oct 15, 2026 (continuation, task 9 done; nothing tagged, website not deployed):
+    5f743f5: status file (the Oct 14 entry above). 0ed69a3: TEST, cli_hint_test.go builds and runs the real binary and covers the two CLI hint sites in main() (insertafter and insertbefore, -block branch, already imported, .txt destination, plain -text). The whole suite now takes about 30s because those tests rebuild the binary; go test -short skips them.
+    0a5507d: FIX, MCP fedit_find rejects an invalid get regex with "get: invalid regex" (mcpCheckGet in mcpgetcheck.go, called in mcpExecTool before the multi-file branch; applyGet itself still skips silently); the get description in mcp.go says so.
+    1a8fe58: REFACTOR, doMap auto-detect and inferLang use detectLang (multifile.go) as the single extension table; lang_table_test.go locks the table for detectLang, inferLang and the CLI map.
+    d45cfc2: FIX, -afterblock and -beforeblock with insertafter/insertbefore fail with a clear error pointing to -block (guard in main() next to the -get guard); other ops still ignore these two flags silently (not changed). Test: block_anchor_guard_test.go.
+    0ca333d: FIX, CSS map counts duplicate selectors per container block (css_scope.go: doMapCSSSelectors, cssBraces); the same selector in different @media or @keyframes blocks, and from/to in keyframes, are no longer duplicates; repeats inside one block report where. Tests: css_scope_test.go.
+    4486609: FEATURE, duplicate detection for markdown headings (same text, same level, same parent, case-insensitive, closing hashes ignored) and Dockerfile (duplicate stage names, case-insensitive; CMD/ENTRYPOINT/HEALTHCHECK repeated in one stage). The markdown heading list now skips fenced code (backticks and tildes), so shell comments are no longer listed as headings. Code in map_dupes.go, tests in map_dupes_test.go.
+    TASK 9 IS COMPLETE (invalid get regex over MCP, detectLang duplication, misleading -afterblock/-beforeblock error, CSS @media duplicate false positive, markdown and dockerfile duplicate detection); the Task 9 entry in the numbered task list further up is DONE and can be tidied.
+    LESSONS: pasted output shows $$ where the source has a backslash-bracket (a display artifact), so never copy regexes from pasted output. A test-first red/green gate (new tests fail before the edit, pass after) worked for every fix. Hex payload plus SHA-256 check for every new file worked with zero corruption. New helper prefixes used: clh, mgc, abg, mkd, dkr, dup.
+  - NEXT, in order: (1) tasks 7 and 8 from the status file (guided entry point, then the multi-line string scanner); (2) docs check before any tag: confirm the since v1.11.0 labels, bump serverInfo in mcp.go (1.10.0), and add the new behaviours to README, SKILL and CLAUDE_DESKTOP where relevant (MCP invalid get error, -afterblock/-beforeblock error, CSS and markdown/Dockerfile duplicate reports, markdown map skipping fenced code); (3) tag, website deploy and the LinkedIn post only on the explicit go-ahead.
 
 ===============================================================
 FEDIT -- PENDING TASKS
@@ -533,5 +542,5 @@ _testsystem/          (NEW -- see TESTING SYSTEM section above)
 Demo: demo.gif, demo.tape, demo_sample.go
 
 ═══════════════════════════════════════════════════════════════
-END OF FEDIT STATUS -- October 14, 2026
+END OF FEDIT STATUS -- October 15, 2026
 ═══════════════════════════════════════════════════════════════
