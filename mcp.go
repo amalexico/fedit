@@ -301,51 +301,9 @@ func mcpStats(op, file string, linesBefore, linesAfter int, match string, start 
 }
 
 func inferLang(file string) string {
-	ext := strings.ToLower(filepath.Ext(file))
-	switch ext {
-	case ".go":
-		return "go"
-	case ".html", ".htm":
-		return "html"
-	case ".sql":
-		return "sql"
-	case ".py":
-		return "python"
-	case ".js":
-		return "javascript"
-	case ".ts":
-		return "typescript"
-	case ".css":
-		return "css"
-	case ".rs":
-		return "rust"
-	case ".java":
-		return "java"
-	case ".cs":
-		return "csharp"
-	case ".yaml", ".yml":
-		return "yaml"
-	case ".toml":
-		return "toml"
-	case ".md":
-		return "markdown"
-	case ".rb":
-		return "ruby"
-	case ".php":
-		return "php"
-	}
-	base := strings.ToLower(filepath.Base(file))
-	switch base {
-	case "dockerfile":
-		return "dockerfile"
-	case "makefile":
-		return "makefile"
-	}
-	// Fall back to detectLang, the table that mirrors doMap's extension switch.
-	if l, ok := detectLang(file); ok {
-		return l
-	}
-	return ""
+	// inferLang uses detectLang, the single extension table shared with doMap.
+	lang, _ := detectLang(file)
+	return lang
 }
 func mcpDoShow(file string, startLine, endLine, nth int, match, endmatch, block, lang string, raw bool, start time.Time) mcpCallResult {
 	lines, err := readLines(file)

@@ -1385,54 +1385,12 @@ func doMap(lines []string, filename, lang string) {
 	lang = normMapLang(lang)
 	if lang == "" {
 		// Auto-detect from extension
-		lower := strings.ToLower(filename)
-		switch {
-		case strings.HasSuffix(lower, ".go"):
-			lang = "go"
-		case strings.HasSuffix(lower, ".html") || strings.HasSuffix(lower, ".htm"):
-			lang = "html"
-		case strings.HasSuffix(lower, ".sql"):
-			lang = "sql"
-		case strings.HasSuffix(lower, ".py"):
-			lang = "python"
-		case strings.HasSuffix(lower, ".js") || strings.HasSuffix(lower, ".jsx"):
-			lang = "javascript"
-		case strings.HasSuffix(lower, ".ts") || strings.HasSuffix(lower, ".tsx"):
-			lang = "typescript"
-		case strings.HasSuffix(lower, ".css"):
-			lang = "css"
-		case strings.HasSuffix(lower, ".rs"):
-			lang = "rust"
-		case strings.HasSuffix(lower, ".java"):
-			lang = "java"
-		case strings.HasSuffix(lower, ".cs"):
-			lang = "csharp"
-		case strings.HasSuffix(lower, ".yaml") || strings.HasSuffix(lower, ".yml"):
-			lang = "yaml"
-		case strings.HasSuffix(lower, ".toml"):
-			lang = "toml"
-		case strings.HasSuffix(lower, ".md") || strings.HasSuffix(lower, ".markdown"):
-			lang = "markdown"
-		case strings.HasSuffix(lower, ".rb"):
-			lang = "ruby"
-		case strings.HasSuffix(lower, ".php"):
-			lang = "php"
-		case strings.HasSuffix(lower, "dockerfile"):
-			lang = "dockerfile"
-		case strings.HasSuffix(lower, "makefile") || strings.HasSuffix(lower, ".mk"):
-			lang = "makefile"
-		case strings.HasSuffix(lower, ".json"):
-			lang = "json"
-		case strings.HasSuffix(lower, ".csv"):
-			lang = "csv"
-		case strings.HasSuffix(lower, ".tf") || strings.HasSuffix(lower, ".hcl"):
-			lang = "hcl"
-		case strings.HasSuffix(lower, ".nix"):
-			lang = "nix"
-		default:
+		detected, ok := detectLang(filename)
+		if !ok {
 			fmt.Fprintln(os.Stderr, "Cannot auto-detect language. Use -lang flag.")
 			os.Exit(1)
 		}
+		lang = detected
 	}
 
 	fmt.Printf("=== MAP: %s (%s, %d lines) ===\n\n", filename, lang, len(lines))
