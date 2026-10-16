@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -74,7 +75,18 @@ func guidedBlockLang(srcLang string, dests []string) (string, error) {
 	return lang, nil
 }
 
-func guidedTransfer(args []string) ([]string, []string, error) {
+// guidedStep is one explicit engine command; create lists destination files to
+// create (empty) before it runs.
+type guidedStep struct {
+	argv   []string
+	create []string
+}
+
+// guidedTransfer plans copy and move. A missing destination file is created and
+// a missing anchor falls back to appending at the end, per destination, so the
+// plan may hold several commands. For move, the last command is the move and the
+// earlier ones are copies, so the source is erased only by a write that landed.
+func guidedTransfer(args []string) ([]guidedStep, []string, error) {
 	src, spec, verb := args[0], args[1], args[2]
 	dests := guidedDests(args[3])
 	if len(dests) == 0 {
@@ -89,7 +101,8 @@ func guidedTransfer(args []string) ([]string, []string, error) {
 	if len(rest) > 0 {
 		pos = rest[0]
 	}
-	var notes, posFlags []string
+	var notes []string
+	kind, target := "", ""
 	switch pos {
 	case "before", "after":
 		if len(rest) < 2 {
@@ -98,32 +111,47 @@ func guidedTransfer(args []string) ([]string, []string, error) {
 		if lang, err = guidedBlockLang(lang, dests); err != nil {
 			return nil, nil, err
 		}
-		posFlags = []string{"-" + pos + "block", rest[1]}
-	case "at-end", "":
-		if len(dests) != 1 {
-			return nil, nil, fmt.Errorf("at-end (the default) supports one destination; name a before/after target for several")
-		}
-		n := 0
-		if lines, e := readLines(dests[0]); e == nil {
-			n = len(lines)
-		} else {
-			notes = append(notes, dests[0]+" does not exist yet, it will be created")
-		}
-		if pos == "" {
-			notes = append(notes, "no position given, appending at the end of "+dests[0])
-		}
-		posFlags = []string{"-after", strconv.Itoa(n)}
+		kind, target = pos, rest[1]
+	case "at-end":
+	case "":
+		notes = append(notes, "no position given, appending at the end of each destination")
 	default:
 		return nil, nil, fmt.Errorf("unknown position %q (use before, after or at-end)", pos)
 	}
-	argv := []string{"-op", verb, "-file", src}
-	if lang != "" {
-		argv = append(argv, "-lang", lang)
+	base := func(extra ...string) []string {
+		argv := []string{"-op", "copy", "-file", src}
+		if lang != "" {
+			argv = append(argv, "-lang", lang)
+		}
+		argv = append(argv, srcFlags...)
+		return append(argv, extra...)
 	}
-	argv = append(argv, srcFlags...)
-	argv = append(argv, "-dest", strings.Join(dests, ","))
-	argv = append(argv, posFlags...)
-	return append(argv, "-v"), notes, nil
+	var steps []guidedStep
+	var okDests []string
+	for _, d := range dests {
+		lines, e := readLines(d)
+		if e != nil {
+			notes = append(notes, d+" does not exist yet, it will be created with the transferred content")
+			steps = append(steps, guidedStep{argv: base("-dest", d, "-after", "0", "-v"), create: []string{d}})
+			continue
+		}
+		if kind != "" {
+			if _, _, e := resolveBlock(lines, lang, target); e == nil {
+				okDests = append(okDests, d)
+				continue
+			}
+			notes = append(notes, fmt.Sprintf("%s: block %q not found, appending at the end", d, target))
+		}
+		steps = append(steps, guidedStep{argv: base("-dest", d, "-after", strconv.Itoa(len(lines)), "-v")})
+	}
+	if len(okDests) > 0 {
+		group := guidedStep{argv: base("-dest", strings.Join(okDests, ","), "-"+kind+"block", target, "-v")}
+		steps = append([]guidedStep{group}, steps...)
+	}
+	if verb == "move" {
+		steps[len(steps)-1].argv[1] = "move"
+	}
+	return steps, notes, nil
 }
 
 func guidedReplace(args []string) ([]string, []string, error) {
@@ -186,8 +214,8 @@ func guidedInsertText(args []string) ([]string, []string, error) {
 	return []string{"-op", verb, "-file", file, "-lang", lang, "-block", args[3], "-text", text, "-v"}, nil, nil
 }
 
-// translateGuided takes the words after "guided" and returns the explicit argv.
-func translateGuided(args []string) ([]string, []string, error) {
+// planGuided takes the words after "guided" and returns the commands to run.
+func planGuided(args []string) ([]guidedStep, []string, error) {
 	silent := false
 	if n := len(args); n > 0 && args[n-1] == "silent" {
 		silent = true
@@ -196,17 +224,24 @@ func translateGuided(args []string) ([]string, []string, error) {
 	if len(args) < 4 {
 		return nil, nil, fmt.Errorf("%s", guidedUsage)
 	}
-	var argv, notes []string
+	var steps []guidedStep
+	var notes []string
 	var err error
+	one := func(argv []string, n []string, e error) {
+		if e == nil {
+			steps = []guidedStep{{argv: argv}}
+		}
+		notes, err = n, e
+	}
 	switch {
 	case args[1] == "insertbefore" || args[1] == "insertafter":
-		argv, notes, err = guidedInsertText(args)
+		one(guidedInsertText(args))
 	case args[2] == "copy" || args[2] == "move":
-		argv, notes, err = guidedTransfer(args)
+		steps, notes, err = guidedTransfer(args)
 	case args[2] == "replace":
-		argv, notes, err = guidedReplace(args)
+		one(guidedReplace(args))
 	case args[2] == "insertbefore" || args[2] == "insertafter":
-		argv, notes, err = guidedInsertFile(args)
+		one(guidedInsertFile(args))
 	default:
 		return nil, nil, fmt.Errorf("unknown verb %q\n%s", args[2], guidedUsage)
 	}
@@ -214,36 +249,82 @@ func translateGuided(args []string) ([]string, []string, error) {
 		return nil, nil, err
 	}
 	if silent {
-		for i, a := range argv {
-			if a == "-v" {
-				argv[i] = "-quiet"
+		for _, st := range steps {
+			for i, a := range st.argv {
+				if a == "-v" {
+					st.argv[i] = "-quiet"
+				}
 			}
 		}
 		notes = nil
 	}
-	return argv, notes, nil
+	return steps, notes, nil
 }
 
-// runGuided rewrites os.Args so main() continues into the normal flag path.
+// translateGuided is the single-command form of planGuided (used by tests).
+func translateGuided(args []string) ([]string, []string, error) {
+	steps, notes, err := planGuided(args)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(steps) != 1 {
+		return nil, nil, fmt.Errorf("plan has %d commands", len(steps))
+	}
+	return steps[0].argv, notes, nil
+}
+
+func guidedEcho(argv []string) {
+	parts := []string{"fedit"}
+	for _, a := range argv {
+		if a == "-quiet" {
+			return
+		}
+		parts = append(parts, guidedQuote(a))
+	}
+	fmt.Fprintln(os.Stderr, "guided: "+strings.Join(parts, " "))
+}
+
+// runGuided runs the plan. One plain command rewrites os.Args and returns so
+// main() continues into the normal flag path; several commands run in order as
+// child processes (flag.Parse can only run once) and the process exits.
 func runGuided() error {
-	argv, notes, err := translateGuided(os.Args[2:])
+	steps, notes, err := planGuided(os.Args[2:])
 	if err != nil {
 		return err
 	}
 	for _, n := range notes {
 		fmt.Fprintln(os.Stderr, "guided note: "+n)
 	}
-	quiet := false
-	parts := []string{"fedit"}
-	for _, a := range argv {
-		if a == "-quiet" {
-			quiet = true
+	if len(steps) == 1 && len(steps[0].create) == 0 {
+		guidedEcho(steps[0].argv)
+		os.Args = append([]string{os.Args[0]}, steps[0].argv...)
+		return nil
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	code := 0
+	for _, st := range steps {
+		failed := false
+		for _, f := range st.create {
+			if e := os.WriteFile(f, nil, 0o644); e != nil {
+				fmt.Fprintf(os.Stderr, "guided: cannot create %s: %v\n", f, e)
+				failed = true
+			}
 		}
-		parts = append(parts, guidedQuote(a))
+		if failed {
+			code = 1
+			continue
+		}
+		guidedEcho(st.argv)
+		cmd := exec.Command(exe, st.argv...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if e := cmd.Run(); e != nil {
+			code = 1
+		}
 	}
-	if !quiet {
-		fmt.Fprintln(os.Stderr, "guided: "+strings.Join(parts, " "))
-	}
-	os.Args = append([]string{os.Args[0]}, argv...)
+	os.Exit(code)
 	return nil
 }
