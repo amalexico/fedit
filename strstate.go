@@ -9,25 +9,27 @@ import (
 type strMode int
 
 const (
-	smNone      strMode = iota
-	smBacktick          // Go raw string, JS template literal
-	smVerbatim          // C# @"..." (a doubled quote is an escaped quote)
-	smQuotes            // C# raw string and Java text block (three or more quotes)
-	smRustRaw           // Rust r"..." and r#"..."#
-	smHeredoc           // HCL heredoc (<<EOT, <<-EOT)
-	smNixIndent         // Nix ''...''
+	smNone         strMode = iota
+	smBacktick             // Go raw string, JS template literal
+	smVerbatim             // C# @"..." (a doubled quote is an escaped quote)
+	smQuotes               // C# raw string and Java text block (three or more quotes)
+	smRustRaw              // Rust r"..." and r#"..."#
+	smHeredoc              // HCL heredoc (<<EOT, <<-EOT)
+	smNixIndent            // Nix ''...''
+	smBlockComment         // /* ... */ (nested in Rust)
 )
 
 // strState carries multi-line string state from one line to the next. The lang
 // given to strip picks the constructs: "hcl" heredocs, "nix" indented strings,
 // "clike" the C# and Java forms and Rust raw strings, "rust" Rust raw strings plus
-// char literals and lifetimes (it also covers JS, PHP and the other
+// char literals and lifetimes. Every mode except "" also skips comments. (it also covers JS, PHP and the other
 // brace-tracked languages), anything else backtick strings only.
 type strState struct {
 	mode    strMode
 	n       int    // quote count (smQuotes) or hash count (smRustRaw)
 	tag     string // heredoc terminator
 	pending bool   // heredoc opened on this line, its body starts on the next
+	nest    bool   // block comments nest (Rust)
 }
 
 func isIdentByte(c byte) bool {
@@ -47,6 +49,21 @@ func skipQuoted(line string, i int) int {
 		}
 	}
 	return len(line)
+}
+
+// lineComment reports whether rest starts a comment that runs to the end of the
+// line. Nix has no // comment (it is the update operator), and # is only a
+// comment in HCL and Nix (it is an attribute, a directive or a field elsewhere).
+func lineComment(rest, lang string) bool {
+	switch lang {
+	case "clike", "rust", "go":
+		return strings.HasPrefix(rest, "//")
+	case "hcl":
+		return strings.HasPrefix(rest, "//") || strings.HasPrefix(rest, "#")
+	case "nix":
+		return strings.HasPrefix(rest, "#")
+	}
+	return false
 }
 
 // rustQuote handles a quote at line[i] in Rust: a char literal is skipped as a
@@ -89,6 +106,14 @@ func (s *strState) strip(line, lang string) string {
 				break
 			}
 			s.mode = smNone
+			continue
+		}
+		if lineComment(line[i:], lang) {
+			break
+		}
+		if strings.HasPrefix(line[i:], "/*") && lang != "" {
+			s.mode, s.n, s.nest = smBlockComment, 1, lang == "rust"
+			i += 2
 			continue
 		}
 		if n := s.open(line, i, lang); n > 0 {
@@ -213,6 +238,21 @@ func (s *strState) consume(rest string) (int, bool) {
 		pat := `"` + strings.Repeat("#", s.n)
 		if k := strings.Index(rest, pat); k >= 0 {
 			return k + len(pat), true
+		}
+	case smBlockComment:
+		for j := 0; j < len(rest); j++ {
+			if s.nest && strings.HasPrefix(rest[j:], "/*") {
+				s.n++
+				j++
+				continue
+			}
+			if strings.HasPrefix(rest[j:], "*/") {
+				s.n--
+				j++
+				if s.n == 0 {
+					return j + 1, true
+				}
+			}
 		}
 	case smNixIndent:
 		for j := 0; j+1 < len(rest); j++ {
