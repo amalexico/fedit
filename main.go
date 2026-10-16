@@ -3393,7 +3393,7 @@ func getJSBlocks(lines []string) []blockEntry {
 
 func getRustBlocks(lines []string) []blockEntry {
 	re := regexp.MustCompile(`^(?:pub\s+)?(?:async\s+)?(?:fn|struct|enum|trait|impl|mod)\s+(\w+)`)
-	return braceTrackedBlocks(lines, func(line string) (name, key string, ok bool) {
+	return braceTrackedBlocksLang(lines, "rust", func(line string) (name, key string, ok bool) {
 		t := strings.TrimSpace(line)
 		if m := re.FindStringSubmatch(t); m != nil {
 			keyword := strings.Fields(t)[0]
@@ -3505,6 +3505,11 @@ func getPHPBlocks(lines []string) []blockEntry {
 // braceTrackedBlocks is a generic brace-depth scanner used by JS, Rust, Java, C#, PHP.
 // matchFn is called on each line; return (name, key, true) to start a new block.
 func braceTrackedBlocks(lines []string, matchFn func(string) (string, string, bool)) []blockEntry {
+	return braceTrackedBlocksLang(lines, "clike", matchFn)
+}
+
+// braceTrackedBlocksLang is braceTrackedBlocks for one string mode (see strState).
+func braceTrackedBlocksLang(lines []string, lang string, matchFn func(string) (string, string, bool)) []blockEntry {
 	var entries []blockEntry
 	inBlock := false
 	depth := 0
@@ -3525,7 +3530,7 @@ func braceTrackedBlocks(lines []string, matchFn func(string) (string, string, bo
 		}
 
 		if inBlock {
-			stripped := sst.strip(t, "clike")
+			stripped := sst.strip(t, lang)
 			depth += strings.Count(stripped, "{") - strings.Count(stripped, "}")
 			if depth <= 0 && ln > curStart {
 				entries = append(entries, blockEntry{curName, curKey, curStart, ln})

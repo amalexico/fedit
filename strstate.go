@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf8"
+)
 
 // strMode is the multi-line string construct the block scanners are inside.
 type strMode int
@@ -17,7 +20,8 @@ const (
 
 // strState carries multi-line string state from one line to the next. The lang
 // given to strip picks the constructs: "hcl" heredocs, "nix" indented strings,
-// "clike" the C#, Java and Rust forms (it also covers JS, PHP and the other
+// "clike" the C# and Java forms and Rust raw strings, "rust" Rust raw strings plus
+// char literals and lifetimes (it also covers JS, PHP and the other
 // brace-tracked languages), anything else backtick strings only.
 type strState struct {
 	mode    strMode
@@ -43,6 +47,27 @@ func skipQuoted(line string, i int) int {
 		}
 	}
 	return len(line)
+}
+
+// rustQuote handles a quote at line[i] in Rust: a char literal is skipped as a
+// string, while a lifetime or loop label (no closing quote) is plain code.
+func rustQuote(line string, i int) int {
+	if i+1 >= len(line) {
+		return i + 1
+	}
+	if line[i+1] == '\\' {
+		for j := i + 3; j < len(line); j++ {
+			if line[j] == '\'' {
+				return j + 1
+			}
+		}
+		return len(line)
+	}
+	_, size := utf8.DecodeRuneInString(line[i+1:])
+	if i+1+size < len(line) && line[i+1+size] == '\'' {
+		return i + 2 + size
+	}
+	return i + 1
 }
 
 // strip returns line with every string literal removed, so braces inside
@@ -71,6 +96,10 @@ func (s *strState) strip(line, lang string) string {
 			continue
 		}
 		c := line[i]
+		if c == '\'' && lang == "rust" {
+			i = rustQuote(line, i)
+			continue
+		}
 		if c == '"' || c == '\'' {
 			i = skipQuoted(line, i)
 			continue
@@ -121,7 +150,7 @@ func (s *strState) open(line string, i int, lang string) int {
 			}
 		}
 	case 'r':
-		if lang == "clike" && (i == 0 || !isIdentByte(line[i-1]) || (line[i-1] == 'b' && (i < 2 || !isIdentByte(line[i-2])))) {
+		if (lang == "clike" || lang == "rust") && (i == 0 || !isIdentByte(line[i-1]) || (line[i-1] == 'b' && (i < 2 || !isIdentByte(line[i-2])))) {
 			j, h := 1, 0
 			for j < len(rest) && rest[j] == '#' {
 				h++
