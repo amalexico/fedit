@@ -73,7 +73,7 @@ element when adding code AFTER something closes.
     fedit_show  (file="src.go", block="NewFunc", lang="go", raw=true)  -> pipe to fwencode -> $hex
     fedit_replace (file="dst.go", block="OldFunc", lang="go", texthex=$hex)
 
-Block-aware ops: replace, insert, insertbefore, insertafter, show.
+Block-aware ops: replace, insert, insertbefore, insertafter, show. Brace languages find a block end by counting braces and skip strings (including multi-line ones), comments, and Rust char literals and lifetimes (since v1.11.0). If a range still looks wrong, check it with fedit_show first and fall back to line numbers.
 Languages: go, python, js/ts, rust, java, cs, ruby, php, hcl/tf/terraform, nix (the long names javascript, typescript and csharp, and c#, are accepted as well).
 
 ### Insert before/after a named block

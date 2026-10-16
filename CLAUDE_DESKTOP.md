@@ -142,7 +142,7 @@ Tool parameters use the schema names (for example `raw`, `x`, `stream`, `match_r
 
 `fedit_replace`, `fedit_insertbefore`, `fedit_insertafter`, `fedit_move`, and `fedit_copy` all accept a `block` parameter instead of line
 numbers. Pass the block name and the language — fedit resolves the exact line
-range automatically.
+range automatically. In brace-based languages the end of a block is found by counting braces, skipping strings (including multi-line ones), comments, and Rust char literals and lifetimes (since v1.11.0); if a range looks wrong, check it with `fedit_show` first.
 
 **Terraform example (fedit_move)**
 ```json
@@ -296,4 +296,4 @@ Restart the editor after saving.
 - v1.8.1 release notes: `-matchhex`/`-endmatchhex`, multi-file `show`, `find` and `map`
 - v1.9.0 release notes: multi-file mutation (comma list or glob in `file`), `-dest` cross-file copy, move and replace
 - v1.10.0 release notes: MCP `dest`, `destblock`, `sourcefile` and `sourceblock`
-- Unreleased (expected v1.11.0): `fedit_map` for hcl and nix (`.tf`, `.hcl`, `.nix`), `terraform` and `tf` as map aliases, `js`, `ts` and `cs` as `lang` values, `sourcefile` and `sourceblock` with a file list, the Go import hint on cross-file transfers and on `sourcefile` inserts, `match_regex` and `textfile` on `fedit_replaceall`, an error for an invalid `get` regex in `fedit_find`, duplicate reports in `fedit_map` for markdown headings, Dockerfile stages and CSS selectors per container block (the markdown map skips fenced code); CLI only: `fedit guided`, and `-afterblock`/`-beforeblock` with insertafter/insertbefore now fail with an error pointing to `-block`
+- Unreleased (expected v1.11.0): `fedit_map` for hcl and nix (`.tf`, `.hcl`, `.nix`), `terraform` and `tf` as map aliases, `js`, `ts` and `cs` as `lang` values, `sourcefile` and `sourceblock` with a file list, the Go import hint on cross-file transfers and on `sourcefile` inserts, `match_regex` and `textfile` on `fedit_replaceall`, an error for an invalid `get` regex in `fedit_find`, duplicate reports in `fedit_map` for markdown headings, Dockerfile stages and CSS selectors per container block (the markdown map skips fenced code); block scanners skip multi-line strings (C# verbatim and raw, Java text blocks, Rust raw strings, HCL heredocs, Nix indented strings), Rust char literals and lifetimes, and comments; CLI only: `fedit guided`, and `-afterblock`/`-beforeblock` with insertafter/insertbefore now fail with an error pointing to `-block`

@@ -598,7 +598,7 @@ Most mappers detect **duplicates** (functions, tables, keys, header columns, blo
 | -x | find: bare line numbers; fields: no stats footer (v1.6.0) |
 | -col N, -delim CHAR | fields: column number (1-based) and field delimiter (default tab) (v1.4.0) |
 | -extract SPEC, -get REGEX, -wdelim CHAR | find: sub-line extraction (word and character slices), regex pre-filter and word delimiter (v1.7.0; over MCP an invalid get regex is an error, since v1.11.0) |
-| -block NAME | Target a named function, class or resource instead of line numbers (needs -lang) |
+| -block NAME | Target a named function, class or resource instead of line numbers (needs -lang); block ends skip strings, multi-line strings and comments, see "How block ends are found" below (since v1.11.0) |
 | -after N, -before N | move/copy destination: after or before line N (0 = beginning of file) |
 | -aftermatch TEXT, -beforematch TEXT | move/copy destination: after or before the first line that contains TEXT |
 | -afterblock NAME, -beforeblock NAME | move/copy destination: after or before a named block (needs -lang); with insertafter and insertbefore they are rejected with an error that points to -block (since v1.11.0) |
@@ -607,6 +607,16 @@ Most mappers detect **duplicates** (functions, tables, keys, header columns, blo
 | -sourcefile F, -sourceblock NAME | insertafter/insertbefore: take the content from a named block of another file (needs -lang; not with -text, -textfile or -texthex). -file may be a list, and a Go import hint can appear (both since v1.11.0); the flags themselves date from v1.9.0, MCP since v1.10.0 |
 
 ---
+
+### How block ends are found (since v1.11.0)
+
+With `-block NAME` (and `-sourceblock`, `-destblock`, `-beforeblock`, `-afterblock`) the range of a block comes from a scanner for the language. Python and Ruby blocks do not use brace counting and are not affected. Go, JS and TS, Rust, Java, C#, PHP, HCL and Nix count braces (and brackets in Nix), and the count ignores:
+
+- Strings, including multi-line ones: backtick strings (Go raw strings, JS template literals), C# verbatim (`@"..."`) and raw (`"""`) strings, Java text blocks, Rust raw strings (`r"..."`, `r#"..."#`), HCL heredocs (`<<EOT`, `<<-EOT`) and Nix indented strings (two single quotes).
+- Rust char literals, lifetimes and loop labels.
+- Comments: `//` and `/* */` (nested in Rust), and `#` in HCL and Nix. Nix has no `//` comment, because `//` is its update operator.
+
+Known gaps: PHP heredoc and nowdoc strings, a Java text block that contains an escaped `"""`, a JS regular expression with an unescaped `/*`, and a block comment that opens outside any block. For a block like that, check the range with `show` first and fall back to `-line`.
 
 ## Real-World Examples
 
