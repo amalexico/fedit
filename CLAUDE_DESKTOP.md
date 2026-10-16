@@ -126,7 +126,7 @@ Once connected, try these in Claude Desktop:
 | `fedit_write` | Write or overwrite an entire file |
 | `fedit_writeraw` | Write or overwrite a file with no escape expansion |
 | `fedit_map` | Structural overview — 21 languages: go, html, sql, python, javascript, typescript, css, rust, java, csharp, yaml, toml, markdown, ruby, php, dockerfile, makefile, json, csv, hcl, nix (hcl and nix since v1.11.0); `lang` is detected from the extension when omitted; comma list or glob in `file` |
-| `fedit_find` | Find lines matching a substring; `extract`/`get`/`wdelim` for sub-line extraction; `x=true` for bare line numbers; `stream=true` for large files; comma list or glob in `file` |
+| `fedit_find` | Find lines matching a substring; `extract`/`get`/`wdelim` for sub-line extraction (an invalid `get` regex is an error); `x=true` for bare line numbers; `stream=true` for large files; comma list or glob in `file` |
 | `fedit_insertafter` | Insert content after a matched line or named block (`block` + `lang`); `sourcefile` + `sourceblock` + `lang` insert a block from another file (Go import hint since v1.11.0); comma list or glob in `file` with `match` |
 | `fedit_insertbefore` | Insert content before a matched line or named block (`block` + `lang`); `sourcefile` + `sourceblock` + `lang` insert a block from another file (Go import hint since v1.11.0); comma list or glob in `file` with `match` |
 | `fedit_replaceall` | Global replace; `match_regex` for regex and `textfile` for replacement text (both since v1.11.0), comma list or glob in `file` |
@@ -296,4 +296,4 @@ Restart the editor after saving.
 - v1.8.1 release notes: `-matchhex`/`-endmatchhex`, multi-file `show`, `find` and `map`
 - v1.9.0 release notes: multi-file mutation (comma list or glob in `file`), `-dest` cross-file copy, move and replace
 - v1.10.0 release notes: MCP `dest`, `destblock`, `sourcefile` and `sourceblock`
-- Unreleased (expected v1.11.0): `fedit_map` for hcl and nix (`.tf`, `.hcl`, `.nix`), `terraform` and `tf` as map aliases, `js`, `ts` and `cs` as `lang` values, `sourcefile` and `sourceblock` with a file list, the Go import hint on cross-file transfers and on `sourcefile` inserts, `match_regex` and `textfile` on `fedit_replaceall`
+- Unreleased (expected v1.11.0): `fedit_map` for hcl and nix (`.tf`, `.hcl`, `.nix`), `terraform` and `tf` as map aliases, `js`, `ts` and `cs` as `lang` values, `sourcefile` and `sourceblock` with a file list, the Go import hint on cross-file transfers and on `sourcefile` inserts, `match_regex` and `textfile` on `fedit_replaceall`, an error for an invalid `get` regex in `fedit_find`, duplicate reports in `fedit_map` for markdown headings, Dockerfile stages and CSS selectors per container block (the markdown map skips fenced code); CLI only: `fedit guided`, and `-afterblock`/`-beforeblock` with insertafter/insertbefore now fail with an error pointing to `-block`

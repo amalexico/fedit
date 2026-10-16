@@ -373,6 +373,29 @@ fedit -file b.go -op insertafter -match '// helpers' -sourcefile a.go -sourceblo
 
 ---
 
+### guided -- Natural-order entry point (CLI, since v1.11.0)
+
+`fedit guided` takes the source, the verb and the destination in plain order and turns them into the explicit `-op` command, which it prints to stderr before running it. It is a CLI shortcut only: there is no MCP tool for it, and the engine and the explicit flags are unchanged.
+
+```
+fedit guided SRCFILE SRCBLOCK copy|move DESTFILE [before TARGET | after TARGET | at-end] [silent]
+fedit guided SRCFILE SRCBLOCK replace DESTFILE [TARGET]
+fedit guided SRCFILE SRCBLOCK insertbefore|insertafter DESTFILE TARGET
+fedit guided "new text" insertbefore|insertafter FILE TARGET
+
+fedit guided a.go Helper copy b.go before Init
+fedit guided a.go Helper move "b.go,c.go" after Init
+fedit guided a.go "line 12-18" copy b.go at-end
+fedit guided a.go Helper replace b.go
+```
+
+- The source is a named block (the language comes from the file extension) or `"line N-M"`.
+- Several destinations: quote them as one comma list (`"b.go,c.go"`), because PowerShell would otherwise split them.
+- Each destination is handled on its own. A missing file is created, and a missing anchor (or no position at all) appends at the end, with a note. A move runs its copies first and the move last, so the source is erased only after a write succeeded.
+- Block names are matched by substring, as everywhere else. If a name matches several blocks, a single exact match wins (a note says so); otherwise you get a numbered choice in a terminal, or the list of candidates and exit code 2 when there is no terminal. The chosen block is then addressed by line numbers.
+- `replace` overwrites TARGET (default: the same name as the source) in each destination and skips a destination that does not have it.
+- `silent` runs the plan with `-quiet`; the engine report for `-dest` still prints.
+
 ### -cleanfirst — Truncate before writing (v1.6.0)
 
 ```bash
@@ -526,7 +549,7 @@ fedit -file Makefile -op map -lang makefile
 | python | imports, classes, functions, decorators |
 | javascript | imports, exports, classes, functions, arrows |
 | typescript | (same as javascript) |
-| css | imports, custom properties, selectors, @media, @keyframes |
+| css | imports, custom properties, selectors, @media, @keyframes; duplicate selectors are counted per container block, so the same selector in different @media or @keyframes blocks is not a duplicate (since v1.11.0) |
 | rust | use, mod, struct, enum, trait, impl, fn, macro_rules! |
 | java | package, imports, classes, interfaces, enums, methods |
 | csharp | using, namespace, classes, interfaces, records, properties |
@@ -534,17 +557,17 @@ fedit -file Makefile -op map -lang makefile
 | sql | CREATE, ALTER, DROP, INSERT, SELECT, indexes, triggers |
 | yaml | document separators, top-level keys |
 | toml | tables, array tables, top-level keys |
-| markdown | headings, code blocks, links |
+| markdown | headings (fenced code is skipped, so shell comments are not listed as headings), code blocks, links; duplicate headings (same text, level and parent, case-insensitive) are flagged (since v1.11.0) |
 | ruby | requires, modules, classes, methods, attributes |
 | php | namespace, use, classes, interfaces, traits, functions |
-| dockerfile | FROM stages, all instructions |
+| dockerfile | FROM stages, all instructions; duplicate stage names (case-insensitive) and CMD, ENTRYPOINT or HEALTHCHECK repeated in one stage are flagged (since v1.11.0) |
 | makefile | includes, variables, .PHONY, targets |
 | json       | root type, top-level keys, nesting depth, duplicate keys within one object, malformed-file error |
 | csv        | rows, columns, header list, ragged rows, duplicate header columns, empty fields |
 | hcl        | top-level blocks by kind (terraform, provider, variable, locals, data, resource, module, output, moved, import, check), duplicate blocks; terraform and tf are aliases (since v1.11.0) |
 | nix        | top-level attribute blocks and simple attributes, duplicate attribute paths; unindented lines only (since v1.11.0) |
 
-Most mappers detect **duplicates** (functions, tables, keys, header columns, blocks, attributes) and flag them with warnings. The markdown and dockerfile mappers report structure only.
+Most mappers detect **duplicates** (functions, tables, keys, header columns, blocks, attributes, selectors, headings, Dockerfile stages) and flag them with warnings.
 
 ---
 
@@ -574,11 +597,11 @@ Most mappers detect **duplicates** (functions, tables, keys, header columns, blo
 | -raw | show: bare content, no line numbers or footer, for piping to fwencode (v1.7.0) |
 | -x | find: bare line numbers; fields: no stats footer (v1.6.0) |
 | -col N, -delim CHAR | fields: column number (1-based) and field delimiter (default tab) (v1.4.0) |
-| -extract SPEC, -get REGEX, -wdelim CHAR | find: sub-line extraction (word and character slices), regex pre-filter and word delimiter (v1.7.0) |
+| -extract SPEC, -get REGEX, -wdelim CHAR | find: sub-line extraction (word and character slices), regex pre-filter and word delimiter (v1.7.0; over MCP an invalid get regex is an error, since v1.11.0) |
 | -block NAME | Target a named function, class or resource instead of line numbers (needs -lang) |
 | -after N, -before N | move/copy destination: after or before line N (0 = beginning of file) |
 | -aftermatch TEXT, -beforematch TEXT | move/copy destination: after or before the first line that contains TEXT |
-| -afterblock NAME, -beforeblock NAME | move/copy destination: after or before a named block (needs -lang) |
+| -afterblock NAME, -beforeblock NAME | move/copy destination: after or before a named block (needs -lang); with insertafter and insertbefore they are rejected with an error that points to -block (since v1.11.0) |
 | -times N | move/copy: paste N times (move cuts once) |
 | -destblock NAME | replace -dest only: the block to overwrite in each destination (required); a destination without it is skipped (v1.9.0, MCP since v1.10.0) |
 | -sourcefile F, -sourceblock NAME | insertafter/insertbefore: take the content from a named block of another file (needs -lang; not with -text, -textfile or -texthex). -file may be a list, and a Go import hint can appear (both since v1.11.0); the flags themselves date from v1.9.0, MCP since v1.10.0 |

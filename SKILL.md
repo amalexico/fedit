@@ -336,7 +336,7 @@ Full results: https://amalexhandler.com/fedit#benchmark
   -matchhex HEX  hex-encoded -match anchor, for anchors containing double quotes
   -endmatchhex HEX  hex-encoded -endmatch anchor
   -extract SPEC  sub-line extraction -- WN, WN[s:c], WN[s:], WN/DELIM/F
-  -get REGEX     pre-filter: extract regex match from line before -extract
+  -get REGEX     pre-filter: extract regex match from line before -extract (over MCP an invalid regex is an error, since v1.11.0)
   -wdelim CHAR   word delimiter for -extract (default: normalized whitespace)
   -cleanfirst    truncate file before insert/write
   -stream        large file mode for replaceall + find
