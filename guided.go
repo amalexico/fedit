@@ -45,16 +45,91 @@ func guidedDests(s string) []string {
 	return out
 }
 
-// guidedSource returns the source-side flags and the source language ("" when unknown).
-func guidedSource(file, spec string) ([]string, string, error) {
+// guidedLookup lists the top-level blocks the engine would match for name
+// (substring of the display name or the key, same rule as resolveBlock).
+func guidedLookup(lines []string, lang, name string) ([]blockEntry, error) {
+	entries, err := getTopLevelBlocks(lines, lang)
+	if err != nil {
+		return nil, err
+	}
+	var ms []blockEntry
+	for _, e := range entries {
+		if strings.Contains(e.name, name) || strings.Contains(e.key, name) {
+			ms = append(ms, e)
+		}
+	}
+	return ms, nil
+}
+
+// guidedAsk shows a numbered choice and returns the 0-based pick. It only asks
+// when stdin is a terminal; tests replace it.
+var guidedAsk = func(question string, options []string) (int, bool) {
+	fi, err := os.Stdin.Stat()
+	if err != nil || fi.Mode()&os.ModeCharDevice == 0 {
+		return 0, false
+	}
+	fmt.Fprintln(os.Stderr, question)
+	for i, o := range options {
+		fmt.Fprintf(os.Stderr, "  %d) %s\n", i+1, o)
+	}
+	fmt.Fprint(os.Stderr, "Choose a number: ")
+	var n int
+	if _, e := fmt.Fscanln(os.Stdin, &n); e != nil || n < 1 || n > len(options) {
+		return 0, false
+	}
+	return n - 1, true
+}
+
+// guidedChoose settles an ambiguous name: a single exact key or name match wins
+// with a note, otherwise the person picks, otherwise it is an error listing the
+// candidates. The chosen block is then addressed by line numbers, because the
+// engine can only match by substring.
+func guidedChoose(file, name string, ms []blockEntry) (blockEntry, string, error) {
+	var exact []blockEntry
+	for _, m := range ms {
+		if m.key == name || m.name == name {
+			exact = append(exact, m)
+		}
+	}
+	if len(exact) == 1 {
+		e := exact[0]
+		return e, fmt.Sprintf("%s: %q matched %d blocks, using the exact match %s (line %d)", file, name, len(ms), e.name, e.start), nil
+	}
+	opts := make([]string, len(ms))
+	for i, m := range ms {
+		opts[i] = fmt.Sprintf("%s (line %d)", m.name, m.start)
+	}
+	q := fmt.Sprintf("%s: %q matched %d blocks, which one?", file, name, len(ms))
+	if i, ok := guidedAsk(q, opts); ok {
+		return ms[i], "", nil
+	}
+	return blockEntry{}, "", fmt.Errorf("%s\n  %s\nrun it in a terminal to pick one, or use a more specific name", q, strings.Join(opts, "\n  "))
+}
+
+// guidedSource returns the source-side flags, the source language ("" when
+// unknown) and any notes.
+func guidedSource(file, spec string) ([]string, string, []string, error) {
 	lang, _ := detectLang(file)
 	if m := guidedLineRange.FindStringSubmatch(spec); m != nil {
-		return []string{"-line", m[1], "-end", m[2]}, lang, nil
+		return []string{"-line", m[1], "-end", m[2]}, lang, nil, nil
 	}
 	if lang == "" {
-		return nil, "", fmt.Errorf("cannot detect the language of %s (needed for block %q)", file, spec)
+		return nil, "", nil, fmt.Errorf("cannot detect the language of %s (needed for block %q)", file, spec)
 	}
-	return []string{"-block", spec}, lang, nil
+	if lines, e := readLines(file); e == nil {
+		if ms, e2 := guidedLookup(lines, lang, spec); e2 == nil && len(ms) > 1 {
+			m, note, err := guidedChoose(file, spec, ms)
+			if err != nil {
+				return nil, "", nil, err
+			}
+			var notes []string
+			if note != "" {
+				notes = append(notes, note)
+			}
+			return []string{"-line", strconv.Itoa(m.start), "-end", strconv.Itoa(m.end)}, lang, notes, nil
+		}
+	}
+	return []string{"-block", spec}, lang, nil, nil
 }
 
 // guidedBlockLang picks the -lang for block resolution and rejects a source/dest mismatch.
@@ -92,7 +167,7 @@ func guidedTransfer(args []string) ([]guidedStep, []string, error) {
 	if len(dests) == 0 {
 		return nil, nil, fmt.Errorf("no destination file given")
 	}
-	srcFlags, lang, err := guidedSource(src, spec)
+	srcFlags, lang, srcNotes, err := guidedSource(src, spec)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -101,7 +176,7 @@ func guidedTransfer(args []string) ([]guidedStep, []string, error) {
 	if len(rest) > 0 {
 		pos = rest[0]
 	}
-	var notes []string
+	notes := srcNotes
 	kind, target := "", ""
 	switch pos {
 	case "before", "after":
@@ -136,8 +211,24 @@ func guidedTransfer(args []string) ([]guidedStep, []string, error) {
 			continue
 		}
 		if kind != "" {
-			if _, _, e := resolveBlock(lines, lang, target); e == nil {
+			ms, e2 := guidedLookup(lines, lang, target)
+			switch {
+			case e2 == nil && len(ms) == 1:
 				okDests = append(okDests, d)
+				continue
+			case e2 == nil && len(ms) > 1:
+				m, note, e3 := guidedChoose(d, target, ms)
+				if e3 != nil {
+					return nil, nil, e3
+				}
+				if note != "" {
+					notes = append(notes, note)
+				}
+				posFlags := []string{"-before", strconv.Itoa(m.start)}
+				if kind == "after" {
+					posFlags = []string{"-after", strconv.Itoa(m.end)}
+				}
+				steps = append(steps, guidedStep{argv: base(append([]string{"-dest", d}, append(posFlags, "-v")...)...)})
 				continue
 			}
 			notes = append(notes, fmt.Sprintf("%s: block %q not found, appending at the end", d, target))
@@ -160,7 +251,7 @@ func guidedReplace(args []string) ([]string, []string, error) {
 	if len(dests) == 0 {
 		return nil, nil, fmt.Errorf("no destination file given")
 	}
-	srcFlags, lang, err := guidedSource(src, spec)
+	srcFlags, lang, srcNotes, err := guidedSource(src, spec)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -176,7 +267,7 @@ func guidedReplace(args []string) ([]string, []string, error) {
 	argv := []string{"-op", "replace", "-file", src, "-lang", lang}
 	argv = append(argv, srcFlags...)
 	argv = append(argv, "-dest", strings.Join(dests, ","), "-destblock", target, "-v")
-	return argv, nil, nil
+	return argv, srcNotes, nil
 }
 
 func guidedInsertFile(args []string) ([]string, []string, error) {
@@ -191,7 +282,7 @@ func guidedInsertFile(args []string) ([]string, []string, error) {
 	if len(dests) != 1 {
 		return nil, nil, fmt.Errorf("%s takes exactly one destination file", verb)
 	}
-	_, lang, err := guidedSource(src, spec)
+	_, lang, _, err := guidedSource(src, spec)
 	if err != nil {
 		return nil, nil, err
 	}

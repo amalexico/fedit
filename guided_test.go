@@ -3,11 +3,12 @@ package main
 import (
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
 
-// guidedDir makes a scratch dir with b.go, c.go, d.go and chdirs into it.
+// guidedDir makes a scratch dir with b.go, c.go, d.go, e.go, f.go, s.go and chdirs into it.
 func guidedDir(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
@@ -15,6 +16,9 @@ func guidedDir(t *testing.T) {
 		"b.go": "package b\n\nfunc two() {}\n",
 		"c.go": "package c\n\nfunc three() {}\n",
 		"d.go": "package d\n\nfunc two() {}\n",
+		"e.go": "package e\n\nfunc two() {}\n\nfunc twoSum() {}\n",
+		"f.go": "package f\n\nfunc alpha1() {}\n\nfunc alpha2() {}\n",
+		"s.go": "package s\n\nfunc one() {}\n\nfunc oneMore() {}\n",
 	}
 	for n, c := range files {
 		if err := os.WriteFile(dir+"/"+n, []byte(c), 0o644); err != nil {
@@ -130,5 +134,75 @@ func TestGuidedErrors(t *testing.T) {
 func TestIsGuidedCall(t *testing.T) {
 	if !isGuidedCall([]string{"fedit", "guided"}) || isGuidedCall([]string{"fedit", "-op"}) || isGuidedCall([]string{"fedit"}) {
 		t.Error("isGuidedCall misclassified")
+	}
+}
+
+// guidedBlk finds a block by key in a scratch file, using the engine scanner.
+func guidedBlk(t *testing.T, file, key string) blockEntry {
+	t.Helper()
+	lines, err := readLines(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := getTopLevelBlocks(lines, "go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.key == key {
+			return e
+		}
+	}
+	t.Fatalf("no block %q in %s", key, file)
+	return blockEntry{}
+}
+
+func TestGuidedAmbiguousExactSource(t *testing.T) {
+	guidedDir(t)
+	one := guidedBlk(t, "s.go", "one")
+	steps, notes, err := planGuided([]string{"s.go", "one", "copy", "b.go", "before", "two"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []guidedStep{gs("-op", "copy", "-file", "s.go", "-lang", "go", "-line", strconv.Itoa(one.start), "-end", strconv.Itoa(one.end), "-dest", "b.go", "-beforeblock", "two", "-v")}
+	if !reflect.DeepEqual(steps, want) {
+		t.Errorf("got %q want %q", steps, want)
+	}
+	if !strings.Contains(strings.Join(notes, "|"), "using the exact match") {
+		t.Errorf("missing exact-match note: %v", notes)
+	}
+}
+
+func TestGuidedAmbiguousExactDest(t *testing.T) {
+	guidedDir(t)
+	two := guidedBlk(t, "e.go", "two")
+	cp := func(extra ...string) []string {
+		return append([]string{"-op", "copy", "-file", "a.go", "-lang", "go", "-block", "one", "-dest", "e.go"}, extra...)
+	}
+	steps, _, err := planGuided([]string{"a.go", "one", "copy", "e.go", "before", "two"})
+	if err != nil || !reflect.DeepEqual(steps, []guidedStep{gs(cp("-before", strconv.Itoa(two.start), "-v")...)}) {
+		t.Errorf("before: got %q err %v", steps, err)
+	}
+	steps, _, err = planGuided([]string{"a.go", "one", "copy", "e.go", "after", "two"})
+	if err != nil || !reflect.DeepEqual(steps, []guidedStep{gs(cp("-after", strconv.Itoa(two.end), "-v")...)}) {
+		t.Errorf("after: got %q err %v", steps, err)
+	}
+}
+
+func TestGuidedAmbiguousAsk(t *testing.T) {
+	guidedDir(t)
+	old := guidedAsk
+	defer func() { guidedAsk = old }()
+	alpha2 := guidedBlk(t, "f.go", "alpha2")
+	guidedAsk = func(string, []string) (int, bool) { return 1, true }
+	steps, _, err := planGuided([]string{"a.go", "one", "copy", "f.go", "before", "alpha"})
+	want := []guidedStep{gs("-op", "copy", "-file", "a.go", "-lang", "go", "-block", "one", "-dest", "f.go", "-before", strconv.Itoa(alpha2.start), "-v")}
+	if err != nil || !reflect.DeepEqual(steps, want) {
+		t.Errorf("picked: got %q err %v", steps, err)
+	}
+	guidedAsk = func(string, []string) (int, bool) { return 0, false }
+	_, _, err = planGuided([]string{"a.go", "one", "copy", "f.go", "before", "alpha"})
+	if err == nil || !strings.Contains(err.Error(), "matched 2 blocks") || !strings.Contains(err.Error(), "alpha1") {
+		t.Errorf("want an error listing the candidates, got %v", err)
 	}
 }
