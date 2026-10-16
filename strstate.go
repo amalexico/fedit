@@ -1,0 +1,200 @@
+package main
+
+import "strings"
+
+// strMode is the multi-line string construct the block scanners are inside.
+type strMode int
+
+const (
+	smNone      strMode = iota
+	smBacktick          // Go raw string, JS template literal
+	smVerbatim          // C# @"..." (a doubled quote is an escaped quote)
+	smQuotes            // C# raw string and Java text block (three or more quotes)
+	smRustRaw           // Rust r"..." and r#"..."#
+	smHeredoc           // HCL heredoc (<<EOT, <<-EOT)
+	smNixIndent         // Nix ''...''
+)
+
+// strState carries multi-line string state from one line to the next. The lang
+// given to strip picks the constructs: "hcl" heredocs, "nix" indented strings,
+// "clike" the C#, Java and Rust forms (it also covers JS, PHP and the other
+// brace-tracked languages), anything else backtick strings only.
+type strState struct {
+	mode    strMode
+	n       int    // quote count (smQuotes) or hash count (smRustRaw)
+	tag     string // heredoc terminator
+	pending bool   // heredoc opened on this line, its body starts on the next
+}
+
+func isIdentByte(c byte) bool {
+	return c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+// skipQuoted returns the index just past the single-line string that opens at i.
+func skipQuoted(line string, i int) int {
+	quote := line[i]
+	for j := i + 1; j < len(line); j++ {
+		if line[j] == '\\' {
+			j++
+			continue
+		}
+		if line[j] == quote {
+			return j + 1
+		}
+	}
+	return len(line)
+}
+
+// strip returns line with every string literal removed, so braces inside
+// strings are never counted, and updates the multi-line state.
+func (s *strState) strip(line, lang string) string {
+	if s.mode == smHeredoc {
+		if strings.TrimSpace(line) == s.tag {
+			s.mode = smNone
+		}
+		return ""
+	}
+	var b strings.Builder
+	i := 0
+	for i < len(line) {
+		if s.mode != smNone {
+			n, closed := s.consume(line[i:])
+			i += n
+			if !closed {
+				break
+			}
+			s.mode = smNone
+			continue
+		}
+		if n := s.open(line, i, lang); n > 0 {
+			i += n
+			continue
+		}
+		c := line[i]
+		if c == '"' || c == '\'' {
+			i = skipQuoted(line, i)
+			continue
+		}
+		b.WriteByte(c)
+		i++
+	}
+	if s.pending {
+		s.pending = false
+		s.mode = smHeredoc
+	}
+	return b.String()
+}
+
+// open recognises the start of a multi-line string at line[i], sets the mode and
+// returns how many bytes the opener takes (0 when there is none).
+func (s *strState) open(line string, i int, lang string) int {
+	rest := line[i:]
+	switch rest[0] {
+	case '`':
+		s.mode = smBacktick
+		return 1
+	case '@':
+		if lang == "clike" {
+			j := 1
+			if j < len(rest) && rest[j] == '$' {
+				j++
+			}
+			if j < len(rest) && rest[j] == '"' {
+				s.mode = smVerbatim
+				return j + 1
+			}
+		}
+	case '$':
+		if lang == "clike" && strings.HasPrefix(rest, `$@"`) {
+			s.mode = smVerbatim
+			return 3
+		}
+	case '"':
+		if lang == "clike" {
+			q := 0
+			for q < len(rest) && rest[q] == '"' {
+				q++
+			}
+			if q >= 3 {
+				s.mode, s.n = smQuotes, q
+				return q
+			}
+		}
+	case 'r':
+		if lang == "clike" && (i == 0 || !isIdentByte(line[i-1]) || (line[i-1] == 'b' && (i < 2 || !isIdentByte(line[i-2])))) {
+			j, h := 1, 0
+			for j < len(rest) && rest[j] == '#' {
+				h++
+				j++
+			}
+			if j < len(rest) && rest[j] == '"' {
+				s.mode, s.n = smRustRaw, h
+				return j + 1
+			}
+		}
+	case '<':
+		if lang == "hcl" && strings.HasPrefix(rest, "<<") {
+			j := 2
+			if j < len(rest) && rest[j] == '-' {
+				j++
+			}
+			k := j
+			for k < len(rest) && isIdentByte(rest[k]) {
+				k++
+			}
+			if k > j {
+				s.tag = rest[j:k]
+				s.pending = true
+				return k
+			}
+		}
+	case '\'':
+		if lang == "nix" && strings.HasPrefix(rest, "''") {
+			s.mode = smNixIndent
+			return 2
+		}
+	}
+	return 0
+}
+
+// consume reads the rest of a multi-line string. It returns the bytes used and
+// whether the string ended on this line.
+func (s *strState) consume(rest string) (int, bool) {
+	switch s.mode {
+	case smBacktick:
+		if k := strings.IndexByte(rest, '`'); k >= 0 {
+			return k + 1, true
+		}
+	case smVerbatim:
+		for j := 0; j < len(rest); j++ {
+			if rest[j] == '"' {
+				if j+1 < len(rest) && rest[j+1] == '"' {
+					j++
+					continue
+				}
+				return j + 1, true
+			}
+		}
+	case smQuotes:
+		pat := strings.Repeat(`"`, s.n)
+		if k := strings.Index(rest, pat); k >= 0 {
+			return k + len(pat), true
+		}
+	case smRustRaw:
+		pat := `"` + strings.Repeat("#", s.n)
+		if k := strings.Index(rest, pat); k >= 0 {
+			return k + len(pat), true
+		}
+	case smNixIndent:
+		for j := 0; j+1 < len(rest); j++ {
+			if rest[j] == '\'' && rest[j+1] == '\'' {
+				if j+2 < len(rest) && (rest[j+2] == '\'' || rest[j+2] == '$' || rest[j+2] == '\\') {
+					j += 2
+					continue
+				}
+				return j + 2, true
+			}
+		}
+	}
+	return len(rest), false
+}

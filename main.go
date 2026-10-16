@@ -3274,7 +3274,7 @@ func getGoBlocks(lines []string) []blockEntry {
 	depth := 0
 	curName, curKey := "", ""
 	curStart := 0
-	inBacktick := false
+	var sst strState
 
 	for i, line := range lines {
 		ln := i + 1
@@ -3312,8 +3312,7 @@ func getGoBlocks(lines []string) []blockEntry {
 		}
 
 		if inBlock {
-			stripped, nb := stripStringLiterals(t, inBacktick)
-			inBacktick = nb
+			stripped := sst.strip(t, "go")
 			depth += strings.Count(stripped, "{") - strings.Count(stripped, "}")
 			if depth <= 0 && ln > curStart {
 				entries = append(entries, blockEntry{curName, curKey, curStart, ln})
@@ -3511,7 +3510,7 @@ func braceTrackedBlocks(lines []string, matchFn func(string) (string, string, bo
 	depth := 0
 	curName, curKey := "", ""
 	curStart := 0
-	inBacktick := false
+	var sst strState
 
 	for i, line := range lines {
 		ln := i + 1
@@ -3526,8 +3525,7 @@ func braceTrackedBlocks(lines []string, matchFn func(string) (string, string, bo
 		}
 
 		if inBlock {
-			stripped, nb := stripStringLiterals(t, inBacktick)
-			inBacktick = nb
+			stripped := sst.strip(t, "clike")
 			depth += strings.Count(stripped, "{") - strings.Count(stripped, "}")
 			if depth <= 0 && ln > curStart {
 				entries = append(entries, blockEntry{curName, curKey, curStart, ln})
@@ -3921,7 +3919,7 @@ func getHCLBlocks(lines []string) []blockEntry {
 	depth := 0
 	curName, curKey := "", ""
 	curStart := 0
-	inBacktick := false
+	var sst strState
 
 	for i, line := range lines {
 		ln := i + 1
@@ -3959,8 +3957,7 @@ func getHCLBlocks(lines []string) []blockEntry {
 		}
 
 		if inBlock {
-			stripped, nb := stripStringLiterals(t, inBacktick)
-			inBacktick = nb
+			stripped := sst.strip(t, "hcl")
 			depth += strings.Count(stripped, "{") - strings.Count(stripped, "}")
 			// Close when balanced. Allow single-line blocks (ln == curStart + brace close).
 			if depth <= 0 && (ln > curStart || strings.Contains(stripped, "}")) {
@@ -3992,7 +3989,7 @@ func getNixBlocks(lines []string) []blockEntry {
 	listDepth := 0 // tracks [ ]
 	curName, curKey := "", ""
 	curStart := 0
-	inBacktick := false
+	var sst strState
 
 	for i, line := range lines {
 		ln := i + 1
@@ -4025,8 +4022,7 @@ func getNixBlocks(lines []string) []blockEntry {
 		}
 
 		if inBlock {
-			stripped, nb := stripStringLiterals(t, inBacktick)
-			inBacktick = nb
+			stripped := sst.strip(t, "nix")
 			depth += strings.Count(stripped, "{") - strings.Count(stripped, "}")
 			listDepth += strings.Count(stripped, "[") - strings.Count(stripped, "]")
 			closed := depth <= 0 && listDepth <= 0
