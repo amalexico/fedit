@@ -3232,54 +3232,6 @@ func getTopLevelBlocks(lines []string, lang string) ([]blockEntry, error) {
 
 // ── Go ────────────────────────────────────────────────────────────────────────
 
-// stripStringLiterals removes the contents of string literals from a line
-// before brace/bracket counting, so braces inside string literals (e.g. a
-// regexp.MustCompile pattern) don't corrupt block-depth tracking. Handles
-// double-quoted strings (backslash-escape aware) and single-quoted strings
-// fully within one line. Backtick raw strings can span multiple physical
-// lines in Go source, so inBacktick carries that state between calls across
-// a scan; callers must thread the returned bool back in on the next line.
-// Known limitation: multi-line double-quoted/verbatim string constructs in
-// other languages (C# @"...", Java """...""", Python """...""") are not
-// tracked -- single-line-only for those, tracked separately as a follow-up.
-func stripStringLiterals(line string, inBacktick bool) (string, bool) {
-	var b strings.Builder
-	i := 0
-	if inBacktick {
-		idx := strings.IndexByte(line, '`')
-		if idx == -1 {
-			return "", true
-		}
-		i = idx + 1
-	}
-	inStr, quote := false, byte(0)
-	for ; i < len(line); i++ {
-		c := line[i]
-		if inStr {
-			if c == '\\' && i+1 < len(line) {
-				i++
-				continue
-			}
-			if c == quote {
-				inStr = false
-			}
-			continue
-		}
-		switch c {
-		case '"', '\'':
-			inStr, quote = true, c
-		case '`':
-			if end := strings.IndexByte(line[i+1:], '`'); end != -1 {
-				i += end + 1
-			} else {
-				return b.String(), true
-			}
-		default:
-			b.WriteByte(c)
-		}
-	}
-	return b.String(), false
-}
 func getGoBlocks(lines []string) []blockEntry {
 	reFn := regexp.MustCompile(`^func\s+(\(.*?\)\s*)?(\w+)\s*[\(\[]`)
 	reType := regexp.MustCompile(`^type\s+(\w+)\s+`)
