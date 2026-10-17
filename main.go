@@ -63,7 +63,7 @@ func main() {
 	get := flag.String("get", "", "Regex pre-filter: extract matching token from line before -extract applies")
 	wdelim := flag.String("wdelim", "", "Word delimiter for -extract (default: normalized whitespace, awk-style)")
 	raw := flag.Bool("raw", false, "Raw show output: no line numbers or prefix (for piping to fwencode)")
-	quiet := flag.Bool("quiet", false, "Suppress stdout on success; exit code signals result (-quiet wins over -v)")
+	quiet := flag.Bool("quiet", false, "Suppress output on success, including the per-file batch report; exit code signals result (-quiet wins over -v)")
 	flag.Parse()
 
 	// -matchhex/-endmatchhex: hex-encoded anchors, decoded into -match/-endmatch so PowerShell never mangles embedded double quotes.
@@ -116,6 +116,7 @@ func main() {
 
 	if *quiet {
 		*v = false
+		batchQuiet = true
 	}
 	if (*file == "" && *files == "") || *op == "" {
 		fmt.Fprintln(os.Stderr, "Usage: fedit -file PATH -op OPERATION [flags]")
@@ -181,7 +182,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Output flags:")
 		fmt.Fprintln(os.Stderr, "  -v            Verify: show affected lines after a mutation")
-		fmt.Fprintln(os.Stderr, "  -quiet        Suppress stdout on success; exit code signals result (wins over -v)")
+		fmt.Fprintln(os.Stderr, "  -quiet        Suppress output on success, including the per-file batch report; exit code signals result (wins over -v)")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Escapes in -text: \\n = newline, \\t = tab, \\\\ = literal backslash")
 		os.Exit(1)
@@ -3056,7 +3057,22 @@ type batchResult struct {
 	detail string
 }
 
+// batchQuiet is set by -quiet: a batch report in which every file succeeded is not printed.
+var batchQuiet bool
+
 func printBatchReport(op string, results []batchResult) {
+	if batchQuiet {
+		allOK := true
+		for _, r := range results {
+			if r.status != "OK" {
+				allOK = false
+				break
+			}
+		}
+		if allOK {
+			return
+		}
+	}
 	okCount := 0
 	for _, r := range results {
 		fmt.Fprintf(os.Stderr, "  %-6s %-40s %s\n", r.status, r.path, r.detail)
