@@ -612,11 +612,11 @@ Most mappers detect **duplicates** (functions, tables, keys, header columns, blo
 
 With `-block NAME` (and `-sourceblock`, `-destblock`, `-beforeblock`, `-afterblock`) the range of a block comes from a scanner for the language. Python and Ruby blocks do not use brace counting and are not affected. Go, JS and TS, Rust, Java, C#, PHP, HCL and Nix count braces (and brackets in Nix), and the count ignores:
 
-- Strings, including multi-line ones: backtick strings (Go raw strings, JS template literals), C# verbatim (`@"..."`) and raw (`"""`) strings, Java text blocks, Rust raw strings (`r"..."`, `r#"..."#`), HCL heredocs (`<<EOT`, `<<-EOT`) and Nix indented strings (two single quotes).
+- Strings, including multi-line ones: backtick strings (Go raw strings, JS template literals), C# verbatim (`@"..."`) and raw (`"""`) strings, Java text blocks, Rust raw strings (`r"..."`, `r#"..."#`), HCL heredocs (`<<EOT`, `<<-EOT`), PHP heredocs and nowdocs (`<<<EOT`, `<<<'EOT'`, with an indented closing marker allowed) and Nix indented strings (two single quotes). In a Java text block a backslash escapes the next character, so an escaped `\"""` does not end the block.
 - Rust char literals, lifetimes and loop labels.
-- Comments: `//` and `/* */` (nested in Rust), and `#` in HCL and Nix. Nix has no `//` comment, because `//` is its update operator.
+- Comments: `//` and `/* */` (nested in Rust), and `#` in PHP, HCL and Nix (in PHP, `#[` starts an attribute and is not a comment). Nix has no `//` comment, because `//` is its update operator.
 
-Known gaps: PHP heredoc and nowdoc strings, a Java text block that contains an escaped `"""`, a JS regular expression with an unescaped `/*`, and a block comment that opens outside any block. For a block like that, check the range with `show` first and fall back to `-line`.
+Known gaps: a JS regular expression with an unescaped `/*`, and a block comment that opens outside any block. For a block like that, check the range with `show` first and fall back to `-line`.
 
 ## Real-World Examples
 
