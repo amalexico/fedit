@@ -378,10 +378,11 @@ fedit -file b.go -op insertafter -match '// helpers' -sourcefile a.go -sourceblo
 `fedit guided` takes the source, the verb and the destination in plain order and turns them into the explicit `-op` command, which it prints to stderr before running it. It is a CLI shortcut only: there is no MCP tool for it, and the engine and the explicit flags are unchanged.
 
 ```
-fedit guided SRCFILE SRCBLOCK copy|move DESTFILE [before TARGET | after TARGET | at-end] [silent]
+fedit guided SRCFILE SRCBLOCK copy|move DESTFILE [before TARGET | after TARGET | at-end] [silent|report-only]
 fedit guided SRCFILE SRCBLOCK replace DESTFILE [TARGET]
 fedit guided SRCFILE SRCBLOCK insertbefore|insertafter DESTFILE TARGET
 fedit guided "new text" insertbefore|insertafter FILE TARGET
+fedit guided
 
 fedit guided a.go Helper copy b.go before Init
 fedit guided a.go Helper move "b.go,c.go" after Init
@@ -395,6 +396,8 @@ fedit guided a.go Helper replace b.go
 - Block names are matched by substring, as everywhere else. If a name matches several blocks, a single exact match wins (a note says so); otherwise you get a numbered choice in a terminal, or the list of candidates and exit code 2 when there is no terminal. The chosen block is then addressed by line numbers.
 - `replace` overwrites TARGET (default: the same name as the source) in each destination and skips a destination that does not have it.
 - `silent` runs the plan with `-quiet`: no echo, no notes, and no engine report when every file succeeded (skips and errors still print).
+- `report-only` runs the plan without the verify output and without the echo line, but keeps the notes and the engine's own summary. Both modifiers go last and work with every verb.
+- Bare `fedit guided` (no other arguments) asks the questions one at a time: the operation, the source file and block, the destination, the position, then the modifier. Operation and position can be answered by name or by number, and a wrong choice is asked again (three tries). The prompts go to stderr and the answers are read from stdin, one per line, so piped input works. If the input ends before the last answer, nothing is changed.
 
 ### -cleanfirst — Truncate before writing (v1.6.0)
 
