@@ -347,7 +347,7 @@ Full results: https://amalexhandler.com/fedit#benchmark
   -line N:+M     lines N to N+M inclusive (N:+0 = N only); -N counts from end; -N: = last N lines; : = EOF/append
   -end -N        end line relative to EOF (-1 = last line, -5 = fifth from end)
   -endmatch TEXT content-anchor end of range -- show, replace, delete, move, copy
-  -quiet         suppress stdout on success; exit code signals result (wins over -v)
+  -quiet         suppress output on success, including the per-file batch report (skips and errors still print); exit code signals result (wins over -v)
   -times N       move/copy: paste N times (move cuts once)
   -after N, -before N, -aftermatch TEXT, -beforematch TEXT, -afterblock NAME, -beforeblock NAME   move/copy destination anchors (the block anchors need -lang)
   -col N         fields: column number (1-based); -delim CHAR is the field delimiter (default tab)

@@ -394,7 +394,7 @@ fedit guided a.go Helper replace b.go
 - Each destination is handled on its own. A missing file is created, and a missing anchor (or no position at all) appends at the end, with a note. A move runs its copies first and the move last, so the source is erased only after a write succeeded.
 - Block names are matched by substring, as everywhere else. If a name matches several blocks, a single exact match wins (a note says so); otherwise you get a numbered choice in a terminal, or the list of candidates and exit code 2 when there is no terminal. The chosen block is then addressed by line numbers.
 - `replace` overwrites TARGET (default: the same name as the source) in each destination and skips a destination that does not have it.
-- `silent` runs the plan with `-quiet`; the engine report for `-dest` still prints.
+- `silent` runs the plan with `-quiet`: no echo, no notes, and no engine report when every file succeeded (skips and errors still print).
 
 ### -cleanfirst — Truncate before writing (v1.6.0)
 
@@ -587,7 +587,7 @@ Most mappers detect **duplicates** (functions, tables, keys, header columns, blo
 | -lang LANG | Language for map and for -block operations |
 | -v | Verify: show affected lines after edit |
 | -endmatch "s" | Content-anchor end of range (show/replace/delete/move/copy) |
-| -quiet | Suppress stdout on success; exit code signals result |
+| -quiet | Suppress output on success, including the per-file report of multi-file and -dest runs (skips and errors still print); exit code signals result (since v1.11.0) |
 | -texthex HEX | Hex-encoded UTF-8 content, bypasses shell quoting (v1.6.0) |
 | -matchhex HEX, -endmatchhex HEX | Hex-encoded -match and -endmatch anchors, for anchors that contain double quotes (v1.8.1) |
 | -match-regex P | replaceall: regex with capture groups ($1 $2) |
