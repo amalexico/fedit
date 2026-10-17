@@ -1,13 +1,13 @@
 # Amalex Brand -- Claude Working Preferences
 # Upload this file alongside the project status file at the start of every chat.
 # Applies to: fedit, amalex-handler, fwrite, website, and all Amalex Brand projects.
-# Last updated: September 28, 2026
+# Last updated: October 17, 2026
 
 ---
 
 ## Shell & Environment
 
-  Shell:     PowerShell 7.6.2 (pwsh). Use ; not &&.
+  Shell:     Windows PowerShell 5.1 (powershell.exe, NOT pwsh 7). Use ; not &&. No SHA256.HashData (use SHA256.Create().ComputeHash).
   OS:        Windows 11
   Base dir:  C:\Users\kehsi\Desktop\amalex-brand\
   Browser:   Firefox
