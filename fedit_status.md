@@ -8,11 +8,11 @@ FEDIT -- PROJECT STATE
 
 REPO:    github.com/amalexico/fedit (PUBLIC -- MIT)
 PATH:    C:\Users\kehsi\Desktop\amalex-brand\fedit\
-WEBSITE: amalexhandler.com/fedit (LIVE, deployed Oct 12, 2026: v1.10 rows for MCP dest and sourcefile; the page shows no version badge)
+WEBSITE: amalexhandler.com/fedit (LIVE, deployed Oct 17, 2026: v1.11 rows for guided, map hcl and nix, multi -file sourcefile, scanner fixes and MCP replaceall, language count 21; the page shows no version badge)
 INSTALL: go install github.com/amalexico/fedit@latest
 
-CURRENT TAG:  v1.11.0 (tagged and pushed Oct 17, 2026; module proxy serves it). Adds MCP replaceall match_regex and textfile; the replace -dest multi-list guard; the Go import hint on -sourcefile/-sourceblock inserts; -sourcefile/-sourceblock with a multi -file target (CLI and MCP); map for hcl and nix (21 languages) with terraform and tf aliases; MCP inferLang fallback to detectLang; js, ts, cs and c# lang aliases for -block and map; fedit guided (bare Q and A, report-only); scanner fixes for PHP heredoc, nowdoc and # comments and the Java escaped triple quote; serverInfo reports 1.11.0. Previous tag: v1.10.0 (Oct 12, 2026, ee8cfde).
-UNRELEASED: nothing; everything above is in v1.11.0. The website deploy and the LinkedIn post still wait for separate go-aheads.
+CURRENT TAG:  v1.11.0 (tagged and pushed Oct 17, 2026, 1425a3c; module proxy serves it). Adds MCP replaceall match_regex and textfile; the replace -dest multi-list guard; the Go import hint on -sourcefile/-sourceblock inserts; -sourcefile/-sourceblock with a multi -file target (CLI and MCP); map for hcl and nix (21 languages) with terraform and tf aliases; MCP inferLang fallback to detectLang; js, ts, cs and c# lang aliases for -block and map; fedit guided (bare Q and A, report-only); scanner fixes for PHP heredoc, nowdoc and # comments and the Java escaped triple quote; serverInfo reports 1.11.0. Previous tag: v1.10.0 (Oct 12, 2026, ee8cfde).
+UNRELEASED: nothing; everything above is in v1.11.0. The website was deployed and the LinkedIn post published on Oct 17, 2026.
 PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. v1.8.1 was tagged later (see the Sept 28 notes below).
   Code commit
   touched .gitignore, CLAUDE_DESKTOP.md, main.go (~3920 lines), user_skill.md.
