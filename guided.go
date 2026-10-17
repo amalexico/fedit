@@ -14,7 +14,8 @@ import (
 
 var guidedLineRange = regexp.MustCompile(`(?i)^line\s+(\d+)-(\d+)$`)
 
-const guidedUsage = "usage: fedit guided SRCFILE SRCBLOCK VERB DESTFILE [before|after TARGET | at-end] [silent]\n" +
+const guidedUsage = "usage: fedit guided SRCFILE SRCBLOCK VERB DESTFILE [before|after TARGET | at-end] [silent|report-only]\n" +
+	"       fedit guided   (no arguments: asks the questions one at a time)\n" +
 	"       fedit guided SRCFILE SRCBLOCK replace DESTFILE [TARGET]\n" +
 	"       fedit guided SRCFILE SRCBLOCK insertbefore|insertafter DESTFILE TARGET\n" +
 	"       fedit guided \"new text\" insertbefore|insertafter FILE TARGET\n" +
@@ -307,10 +308,16 @@ func guidedInsertText(args []string) ([]string, []string, error) {
 
 // planGuided takes the words after "guided" and returns the commands to run.
 func planGuided(args []string) ([]guidedStep, []string, error) {
-	silent := false
-	if n := len(args); n > 0 && args[n-1] == "silent" {
-		silent = true
-		args = args[:n-1]
+	silent, reportOnly := false, false
+	if n := len(args); n > 0 {
+		switch args[n-1] {
+		case "silent":
+			silent = true
+			args = args[:n-1]
+		case "report-only":
+			reportOnly = true
+			args = args[:n-1]
+		}
 	}
 	if len(args) < 4 {
 		return nil, nil, fmt.Errorf("%s", guidedUsage)
@@ -338,6 +345,17 @@ func planGuided(args []string) ([]guidedStep, []string, error) {
 	}
 	if err != nil {
 		return nil, nil, err
+	}
+	if reportOnly {
+		for i := range steps {
+			var kept []string
+			for _, a := range steps[i].argv {
+				if a != "-v" {
+					kept = append(kept, a)
+				}
+			}
+			steps[i].argv = kept
+		}
 	}
 	if silent {
 		for _, st := range steps {
@@ -379,7 +397,16 @@ func guidedEcho(argv []string) {
 // main() continues into the normal flag path; several commands run in order as
 // child processes (flag.Parse can only run once) and the process exits.
 func runGuided() error {
-	steps, notes, err := planGuided(os.Args[2:])
+	args := os.Args[2:]
+	if len(args) == 0 {
+		var ierr error
+		args, ierr = guidedInteractive(os.Stdin, os.Stderr)
+		if ierr != nil {
+			return ierr
+		}
+	}
+	quietEcho := len(args) > 0 && args[len(args)-1] == "report-only"
+	steps, notes, err := planGuided(args)
 	if err != nil {
 		return err
 	}
@@ -387,7 +414,9 @@ func runGuided() error {
 		fmt.Fprintln(os.Stderr, "guided note: "+n)
 	}
 	if len(steps) == 1 && len(steps[0].create) == 0 {
-		guidedEcho(steps[0].argv)
+		if !quietEcho {
+			guidedEcho(steps[0].argv)
+		}
 		os.Args = append([]string{os.Args[0]}, steps[0].argv...)
 		return nil
 	}
@@ -408,7 +437,9 @@ func runGuided() error {
 			code = 1
 			continue
 		}
-		guidedEcho(st.argv)
+		if !quietEcho {
+			guidedEcho(st.argv)
+		}
 		cmd := exec.Command(exe, st.argv...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
