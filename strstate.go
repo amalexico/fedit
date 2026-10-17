@@ -24,12 +24,15 @@ const (
 // "clike" the C# and Java forms and Rust raw strings, "rust" Rust raw strings plus
 // char literals and lifetimes. Every mode except "" also skips comments. (it also covers JS, PHP and the other
 // brace-tracked languages), anything else backtick strings only.
+// The "java" lang is "clike" plus backslash escapes inside text blocks, and "php"
+// is "clike" plus heredocs, nowdocs and # comments.
 type strState struct {
 	mode    strMode
 	n       int    // quote count (smQuotes) or hash count (smRustRaw)
 	tag     string // heredoc terminator
 	pending bool   // heredoc opened on this line, its body starts on the next
 	nest    bool   // block comments nest (Rust)
+	esc     bool   // Java text block: a backslash escapes the next character
 }
 
 func isIdentByte(c byte) bool {
@@ -58,6 +61,8 @@ func lineComment(rest, lang string) bool {
 	switch lang {
 	case "clike", "rust", "go":
 		return strings.HasPrefix(rest, "//")
+	case "php":
+		return strings.HasPrefix(rest, "//") || (strings.HasPrefix(rest, "#") && !strings.HasPrefix(rest, "#["))
 	case "hcl":
 		return strings.HasPrefix(rest, "//") || strings.HasPrefix(rest, "#")
 	case "nix":
@@ -90,11 +95,23 @@ func rustQuote(line string, i int) int {
 // strip returns line with every string literal removed, so braces inside
 // strings are never counted, and updates the multi-line state.
 func (s *strState) strip(line, lang string) string {
+	java := lang == "java"
+	if java {
+		lang = "clike"
+	}
 	if s.mode == smHeredoc {
-		if strings.TrimSpace(line) == s.tag {
-			s.mode = smNone
+		if lang != "php" {
+			if strings.TrimSpace(line) == s.tag {
+				s.mode = smNone
+			}
+			return ""
 		}
-		return ""
+		rest, closed := phpHeredocEnd(line, s.tag)
+		if !closed {
+			return ""
+		}
+		s.mode = smNone
+		line = rest
 	}
 	var b strings.Builder
 	i := 0
@@ -117,6 +134,7 @@ func (s *strState) strip(line, lang string) string {
 			continue
 		}
 		if n := s.open(line, i, lang); n > 0 {
+			s.esc = java && s.mode == smQuotes
 			i += n
 			continue
 		}
@@ -187,6 +205,13 @@ func (s *strState) open(line string, i int, lang string) int {
 			}
 		}
 	case '<':
+		if lang == "php" && strings.HasPrefix(rest, "<<<") {
+			if tag, n := phpHeredocOpen(rest); n > 0 {
+				s.tag = tag
+				s.pending = true
+				return n
+			}
+		}
 		if lang == "hcl" && strings.HasPrefix(rest, "<<") {
 			j := 2
 			if j < len(rest) && rest[j] == '-' {
@@ -231,6 +256,18 @@ func (s *strState) consume(rest string) (int, bool) {
 		}
 	case smQuotes:
 		pat := strings.Repeat(`"`, s.n)
+		if s.esc {
+			for j := 0; j < len(rest); j++ {
+				if rest[j] == '\\' {
+					j++
+					continue
+				}
+				if strings.HasPrefix(rest[j:], pat) {
+					return j + len(pat), true
+				}
+			}
+			return len(rest), false
+		}
 		if k := strings.Index(rest, pat); k >= 0 {
 			return k + len(pat), true
 		}
@@ -266,4 +303,47 @@ func (s *strState) consume(rest string) (int, bool) {
 		}
 	}
 	return len(rest), false
+}
+
+// phpHeredocOpen parses a PHP <<<TAG, <<<"TAG" or <<<'TAG' opener at the start of
+// rest. It returns the tag and the bytes the opener takes (0 when it is not one).
+func phpHeredocOpen(rest string) (string, int) {
+	j := 3
+	for j < len(rest) && (rest[j] == ' ' || rest[j] == '\t') {
+		j++
+	}
+	var q byte
+	if j < len(rest) && (rest[j] == '\'' || rest[j] == '"') {
+		q = rest[j]
+		j++
+	}
+	k := j
+	for k < len(rest) && isIdentByte(rest[k]) {
+		k++
+	}
+	if k == j || (rest[j] >= '0' && rest[j] <= '9') {
+		return "", 0
+	}
+	tag := rest[j:k]
+	if q != 0 {
+		if k >= len(rest) || rest[k] != q {
+			return "", 0
+		}
+		k++
+	}
+	return tag, k
+}
+
+// phpHeredocEnd reports whether line closes the PHP heredoc or nowdoc named tag.
+// The closing marker may be indented and must not be followed by an identifier
+// character. The returned rest is the text after the marker, which is ordinary code.
+func phpHeredocEnd(line, tag string) (string, bool) {
+	t := strings.TrimLeft(line, " \t")
+	if !strings.HasPrefix(t, tag) {
+		return "", false
+	}
+	if len(t) > len(tag) && isIdentByte(t[len(tag)]) {
+		return "", false
+	}
+	return t[len(tag):], true
 }

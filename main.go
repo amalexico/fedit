@@ -3426,7 +3426,7 @@ func getRustBlocks(lines []string) []blockEntry {
 
 func getJavaBlocks(lines []string) []blockEntry {
 	re := regexp.MustCompile(`^(?:public\s+|private\s+|protected\s+|static\s+|abstract\s+|final\s+)*(?:class|interface|enum|record)\s+(\w+)`)
-	return braceTrackedBlocks(lines, func(line string) (name, key string, ok bool) {
+	return braceTrackedBlocksLang(lines, "java", func(line string) (name, key string, ok bool) {
 		t := strings.TrimSpace(line)
 		if m := re.FindStringSubmatch(t); m != nil {
 			return "class " + m[1], m[1], true
@@ -3504,7 +3504,7 @@ func getRubyBlocks(lines []string) []blockEntry {
 func getPHPBlocks(lines []string) []blockEntry {
 	reClass := regexp.MustCompile(`^(?:abstract\s+|final\s+)?class\s+(\w+)`)
 	reFunc := regexp.MustCompile(`^(?:public\s+|private\s+|protected\s+|static\s+)*function\s+(\w+)`)
-	return braceTrackedBlocks(lines, func(line string) (name, key string, ok bool) {
+	return braceTrackedBlocksLang(lines, "php", func(line string) (name, key string, ok bool) {
 		t := strings.TrimSpace(line)
 		if m := reClass.FindStringSubmatch(t); m != nil {
 			return "class " + m[1], m[1], true
