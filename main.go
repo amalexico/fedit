@@ -536,7 +536,10 @@ func main() {
 		} else if isRegex {
 			doReplaceAllRegex(lines, *file, searchStr, replacement)
 		} else {
-			doReplaceAll(lines, *file, searchStr, replacement)
+			windowsShown = *v
+			if code := runReplaceAllVerified(lines, *file, searchStr, replacement, *v, os.Stderr, writeLines); code != 0 {
+				os.Exit(code)
+			}
 		}
 	case "move":
 		srcL, srcE := lineN, endN
@@ -621,7 +624,7 @@ func main() {
 			if verifyCenter > 0 {
 				center = verifyCenter
 			}
-			if center == 0 {
+			if center == 0 && !windowsShown {
 				searchFor := *match
 				if *op == "replaceall" && *text != "" {
 					searchFor = *text
@@ -641,7 +644,9 @@ func main() {
 			if center == 0 {
 				center = 1
 			}
-			showVerify(*file, center)
+			if !windowsShown {
+				showVerify(*file, center)
+			}
 
 			// Operation stats
 			elapsed := time.Since(startTime)
@@ -1036,6 +1041,7 @@ func expandText(text string) []string {
 }
 
 var verifyCenter int
+var windowsShown bool // set when the replaceall path already printed a window for every changed line
 
 func showVerify(path string, centerLine int) {
 	lines, err := readLines(path)
