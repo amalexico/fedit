@@ -294,7 +294,7 @@ func mcpStats(op, file string, linesBefore, linesAfter int, match string, start 
 	} else if delta < 0 {
 		fmt.Fprintf(&b, "  lines:   %d (%d -> %d)\n", delta, linesBefore, linesAfter)
 	} else {
-		fmt.Fprintf(&b, "  lines:   0 (unchanged, %d total)\n", linesBefore)
+		fmt.Fprintf(&b, "  lines:   0 (line count unchanged, %d total)\n", linesBefore)
 	}
 	fmt.Fprintf(&b, "  elapsed: %s\n", elapsedStr)
 	return b.String()

@@ -672,7 +672,7 @@ func main() {
 			} else if delta < 0 {
 				fmt.Fprintf(os.Stderr, "  lines:   %d (%d -> %d)\n", delta, linesBefore, linesAfter)
 			} else {
-				fmt.Fprintf(os.Stderr, "  lines:   0 (unchanged, %d total)\n", linesBefore)
+				fmt.Fprintf(os.Stderr, "  lines:   0 (line count unchanged, %d total)\n", linesBefore)
 			}
 			fmt.Fprintf(os.Stderr, "  elapsed: %s\n", elapsedStr)
 		}
@@ -3052,7 +3052,7 @@ func printMoveCopyStats(op, path, destDesc string, srcStart, srcEnd, times, line
 	} else if delta < 0 {
 		fmt.Fprintf(os.Stderr, "  lines:   %d (%d -> %d)\n", delta, linesBefore, linesAfter)
 	} else {
-		fmt.Fprintf(os.Stderr, "  lines:   0 (unchanged, %d total)\n", linesBefore)
+		fmt.Fprintf(os.Stderr, "  lines:   0 (line count unchanged, %d total)\n", linesBefore)
 	}
 	fmt.Fprintf(os.Stderr, "  elapsed: %s\n", elapsedStr)
 }
