@@ -35,7 +35,7 @@ func execReplaceAllDetail(lines []string, search, replacement string) (replaceAl
 	if len(res.Changed) == 0 {
 		return replaceAllResult{}, fmt.Errorf("No lines contain: %s", search)
 	}
-	return res, nil
+	return flattenResult(res), nil
 }
 
 // replaceVerify is the verdict of re-reading the written file from disk and
