@@ -136,6 +136,10 @@ func collectMultiMutate(o multiMutOpts) ([]batchResult, int, error) {
 	if err != nil {
 		return nil, 0, err
 	}
+	var count func(string) int
+	if o.op == "replaceall" {
+		count = multiReplaceAllCounter(o)
+	}
 	results := make([]batchResult, 0, len(paths))
 	okCount := 0
 	for _, p := range paths {
@@ -151,15 +155,25 @@ func collectMultiMutate(o multiMutOpts) ([]batchResult, int, error) {
 			results = append(results, batchResult{path: p, status: "SKIP", detail: flat})
 			continue
 		}
-		if werr := writeLines(p, result); werr != nil {
+		if werr := multiWriteLines(p, result); werr != nil {
 			results = append(results, batchResult{path: p, status: "SKIP", detail: "write failed: " + werr.Error()})
 			continue
+		}
+		status := "OK"
+		if count != nil {
+			ok, vtext := verifyMultiReplaceAll(p, result, count)
+			detail += "; " + vtext
+			if !ok {
+				status = "FAIL"
+			}
 		}
 		if hint != "" {
 			detail += "; " + hint
 		}
-		okCount++
-		results = append(results, batchResult{path: p, status: "OK", detail: detail})
+		if status == "OK" {
+			okCount++
+		}
+		results = append(results, batchResult{path: p, status: status, detail: detail})
 	}
 	return results, okCount, nil
 }
