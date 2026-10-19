@@ -517,11 +517,16 @@ func mcpDoReplaceAll(file, search, regex, replacement, textFile string, start ti
 		if n == 0 {
 			return mcpErrorResult(fmt.Sprintf("No lines match: %s", regex))
 		}
-		if err := writeLines(file, result); err != nil {
+		if err := multiWriteLines(file, result); err != nil {
 			return mcpErrorResult(fmt.Sprintf("Error writing file: %v", err))
 		}
 		msg := fmt.Sprintf("Replaced /%s/ on %d line(s) (%d total)", regex, n, len(result))
+		ok, vtext := verifyMultiReplaceAll(file, result, multiReplaceAllCounter(multiMutOpts{matchRegex: regex}))
+		msg += "\n" + vtext
 		msg += mcpStats("replaceall", file, len(result), len(result), regex, start)
+		if !ok {
+			return mcpErrorResult(msg)
+		}
 		return mcpOK(msg)
 	}
 	for i, line := range lines {
@@ -533,11 +538,16 @@ func mcpDoReplaceAll(file, search, regex, replacement, textFile string, start ti
 	if count == 0 {
 		return mcpErrorResult(fmt.Sprintf("No lines contain: %s", search))
 	}
-	if err := writeLines(file, lines); err != nil {
+	if err := multiWriteLines(file, lines); err != nil {
 		return mcpErrorResult(fmt.Sprintf("Error writing file: %v", err))
 	}
 	msg := fmt.Sprintf("Replaced '%s' on %d line(s) (%d total)", search, count, len(lines))
+	ok, vtext := verifyMultiReplaceAll(file, lines, multiReplaceAllCounter(multiMutOpts{match: search}))
+	msg += "\n" + vtext
 	msg += mcpStats("replaceall", file, len(lines), len(lines), search, start)
+	if !ok {
+		return mcpErrorResult(msg)
+	}
 	return mcpOK(msg)
 }
 
