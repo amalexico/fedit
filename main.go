@@ -528,10 +528,14 @@ func main() {
 				doReplaceAllGlob(*files, searchStr, replacement)
 			}
 		} else if *stream {
+			var code int
 			if isRegex {
-				doStreamReplaceAllRegex(*file, searchStr, replacement)
+				code = runStreamRegexVerified(*file, searchStr, replacement, os.Stderr)
 			} else {
-				doStreamReplaceAll(*file, searchStr, replacement)
+				code = runStreamLiteralVerified(*file, searchStr, replacement, os.Stderr)
+			}
+			if code != 0 {
+				os.Exit(code)
 			}
 		} else if isRegex {
 			windowsShown = *v
