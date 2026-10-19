@@ -522,10 +522,14 @@ func main() {
 			replacement = strings.Join(rLines, "\n")
 		}
 		if *files != "" {
+			mo := multiMutOpts{spec: *files, op: "replaceall", nth: 1, replacement: replacement}
 			if isRegex {
-				doReplaceAllRegexGlob(*files, searchStr, replacement)
+				mo.matchRegex = searchStr
 			} else {
-				doReplaceAllGlob(*files, searchStr, replacement)
+				mo.match = searchStr
+			}
+			if code := runMultiMutate(mo); code != 0 {
+				os.Exit(code)
 			}
 		} else if *stream {
 			var code int
