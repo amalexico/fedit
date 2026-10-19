@@ -55,30 +55,12 @@ type replaceVerify struct {
 // WantRemaining is what a correct result contains (non-zero when the
 // replacement itself contains the match).
 func verifyReplaceAllOnDisk(path, search string, res replaceAllResult) (replaceVerify, error) {
-	got, err := readLines(path)
-	if err != nil {
-		return replaceVerify{}, err
-	}
-	v := replaceVerify{WantLines: len(res.Lines), GotLines: len(got)}
-	n := len(res.Lines)
-	if len(got) > n {
-		n = len(got)
-	}
-	for i := 0; i < n; i++ {
-		if i >= len(res.Lines) || i >= len(got) || res.Lines[i] != got[i] {
-			v.Bad = append(v.Bad, i+1)
+	return verifyOnDiskWith(path, res, func(l string) int {
+		if search == "" {
+			return 0
 		}
-	}
-	if search != "" {
-		for _, l := range got {
-			v.Remaining += strings.Count(l, search)
-		}
-		for _, l := range res.Lines {
-			v.WantRemaining += strings.Count(l, search)
-		}
-	}
-	v.OK = len(v.Bad) == 0 && v.WantLines == v.GotLines && v.Remaining == v.WantRemaining
-	return v, nil
+		return strings.Count(l, search)
+	})
 }
 
 // formatLineRanges collapses ascending line numbers into ranges: 1,2,3,5 -> "1-3,5".

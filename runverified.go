@@ -16,24 +16,8 @@ func runReplaceAllVerified(lines []string, path, search, replacement string, ver
 		fmt.Fprintln(out, err)
 		return 1
 	}
-	if err := write(path, res.Lines); err != nil {
-		fmt.Fprintf(out, "Error writing file: %v\n", err)
-		return 1
-	}
-	fmt.Fprintf(out, "Replaced '%s' on %d line(s) (%d total)\n", search, len(res.Changed), len(res.Lines))
-	v, err := verifyReplaceAllOnDisk(path, search, res)
-	if err != nil {
-		fmt.Fprintf(out, "VERIFY: could not re-read %s: %v\n", path, err)
-		return 3
-	}
-	fmt.Fprint(out, formatReplaceVerify(res, v))
-	if verbose {
-		if disk, err := readLines(path); err == nil {
-			fmt.Fprint(out, formatHitWindows(disk, res.Changed, 2, 2))
-		}
-	}
-	if !v.OK {
-		return 3
-	}
-	return 0
+	msg := fmt.Sprintf("Replaced '%s' on %d line(s) (%d total)\n", search, len(res.Changed), len(res.Lines))
+	return finishVerified(res, path, msg, verbose, out, write, func(p string) (replaceVerify, error) {
+		return verifyReplaceAllOnDisk(p, search, res)
+	})
 }
