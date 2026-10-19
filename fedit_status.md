@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: October 15, 2026
+# Last updated: October 19, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -12,7 +12,53 @@ WEBSITE: amalexhandler.com/fedit (LIVE, deployed Oct 17, 2026: v1.11 rows for gu
 INSTALL: go install github.com/amalexico/fedit@latest
 
 CURRENT TAG:  v1.11.0 (tagged and pushed Oct 17, 2026, 1425a3c; module proxy serves it). Adds MCP replaceall match_regex and textfile; the replace -dest multi-list guard; the Go import hint on -sourcefile/-sourceblock inserts; -sourcefile/-sourceblock with a multi -file target (CLI and MCP); map for hcl and nix (21 languages) with terraform and tf aliases; MCP inferLang fallback to detectLang; js, ts, cs and c# lang aliases for -block and map; fedit guided (bare Q and A, report-only); scanner fixes for PHP heredoc, nowdoc and # comments and the Java escaped triple quote; serverInfo reports 1.11.0. Previous tag: v1.10.0 (Oct 12, 2026, ee8cfde).
-UNRELEASED: nothing; everything above is in v1.11.0. The website was deployed and the LinkedIn post published on Oct 17, 2026.
+UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (head 88ff116, tree clean); no new tag, no website deploy. The v1.11.0 website deploy and LinkedIn post were Oct 17, 2026.
+  Commits, oldest first: 510cff2, 290f9b5, 8bf0dad, 0d15f8d, 462badd, bad1b27,
+  0a380fe, 87aaa80, 354ec2b, 419489d, 97e8892, 88ff116.
+  REPLACEALL VERIFICATION (step 3 done, full suite ok, vet clean). Every replaceall
+  path re-reads the written file from disk and reports a verdict. It is ALWAYS on
+  (not only -v): VERIFY: PASS or FAIL plus the complete changed-line list; under -v
+  a window for every hit, no cap. Exit codes: 0 ok, 1 the edit did not happen,
+  3 written but verification failed or could not be done. Any FAIL file wins over
+  OK files (exit 3). The regex check compares remaining matches with the expected
+  remaining count (a replacement may recreate the pattern).
+  - Single file, literal and regex: runReplaceAllVerified and
+    runReplaceAllRegexVerified (runverified.go, regex_verified.go) on the shared
+    finishVerified and verifyOnDiskWith (462badd refactored the literal runner and
+    verifyReplaceAllOnDisk onto them; 0d15f8d wired the regex dispatch in main.go).
+    Tests: wire_regex_test.go (TestWRR_Binary).
+  - -stream, literal and regex: stream_verified.go (scanStreamFile, runStreamVerified,
+    runStreamLiteralVerified, runStreamRegexVerified; wired in main.go, 0a380fe).
+    The execStreamOp callback hashes exactly the bytes written (SHA-256), counts
+    output lines and remaining matches and records changed output lines; a second
+    streaming pass compares hash, line count and remaining matches. On FAIL it prints
+    counts and the changed-line list. Tests: wire_stream_test.go (TestWRS_Binary).
+  - Multi -file (comma list or glob in -file), CLI and MCP: multi_verify.go (write
+    seam multiWriteLines, expectedDiskLines, multiReplaceAllCounter,
+    verifyMultiReplaceAll). collectMultiMutate verifies each written file for
+    replaceall; a mismatch is the new status FAIL (not counted in okCount).
+    runMultiMutate returns 3 if any file is FAIL, else 1 if no file succeeded, else 0.
+    A no-match file or a write failure stays a SKIP. mcpRunMultiMutate returns an
+    error result when any file is FAIL or none succeeded. Tests: wire_multi_test.go,
+    multi_fail_test.go (TestMF_FailPath), mcp_multi_fail_test.go (TestMMCP_FailPath).
+  - -files GLOB: the replaceall branch builds multiMutOpts and calls runMultiMutate,
+    so a glob gets per-file VERIFY, FAIL status and exit 3; the report is now the
+    multi -file format (OK/SKIP/FAIL lines plus "multi -file replaceall: N/M
+    file(s) succeeded"). Tests: wire_files_test.go (TestWRF_Binary).
+  - Single-file MCP fedit_replaceall: mcpDoReplaceAll (mcp.go) writes via
+    multiWriteLines, inserts a VERIFY: PASS|FAIL line between the "Replaced ..." line
+    and the stats block, and returns an error result on FAIL (88ff116). Tests:
+    mcp_single_verify_test.go (TestMSV_SingleFileVerify).
+  KNOWN GAPS: -v context windows are not printed for -stream runs (verdict and
+  changed-line list are); execStreamOp renames its temp file over the original even
+  when nothing matched (exit 1 but line endings may be normalized -- fix candidate);
+  only replaceall is verified in multi -file runs (insertafter, insertbefore,
+  delete, replace are not); stale comments above runMultiMutate, mcpRunMultiMutate,
+  multiWriteLines and batchResult.status; doStreamReplaceAll, doStreamReplaceAllRegex,
+  doReplaceAllGlob and doReplaceAllRegexGlob are kept only for tests.
+  NEXT: housekeeping (docs for always-on verification, FAIL status and exit 3;
+  stale comments), then -outputresult, logging core, config + ini, MCP integration
+  (logging + output_file), dry-run.
 PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. v1.8.1 was tagged later (see the Sept 28 notes below).
   Code commit
   touched .gitignore, CLAUDE_DESKTOP.md, main.go (~3920 lines), user_skill.md.
@@ -555,5 +601,5 @@ _testsystem/          (NEW -- see TESTING SYSTEM section above)
 Demo: demo.gif, demo.tape, demo_sample.go
 
 ═══════════════════════════════════════════════════════════════
-END OF FEDIT STATUS -- October 15, 2026
+END OF FEDIT STATUS -- October 19, 2026
 ═══════════════════════════════════════════════════════════════

@@ -133,7 +133,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  find          Find lines containing -match text, print line numbers")
 		fmt.Fprintln(os.Stderr, "  insertafter   Find -match text (or -block), insert -text/-textfile/-texthex content (or a -sourceblock from -sourcefile) AFTER it")
 		fmt.Fprintln(os.Stderr, "  insertbefore  Find -match text (or -block), insert -text/-textfile/-texthex content (or a -sourceblock from -sourcefile) BEFORE it")
-		fmt.Fprintln(os.Stderr, "  replaceall    Replace ALL occurrences of -match text with -text (-match-regex for regex, -files for glob)")
+		fmt.Fprintln(os.Stderr, "  replaceall    Replace ALL occurrences of -match text with -text (-match-regex for regex, -files for glob); the written file is re-read and a VERIFY verdict is printed (exit 3 if verification fails)")
 		fmt.Fprintln(os.Stderr, "  move          Move a line range or -block (-line/-end or -match/-endmatch + -after/-before/-aftermatch/-beforematch/-afterblock/-beforeblock; -dest for other files)")
 		fmt.Fprintln(os.Stderr, "  copy          Copy a line range (same flags as move; -times N for N copies)")
 		fmt.Fprintln(os.Stderr, "  fields        Extract column N from delimited file (-col N -delim CHAR, outputs to stdout)")
@@ -3070,7 +3070,7 @@ func printMoveCopyStats(op, path, destDesc string, srcStart, srcEnd, times, line
 
 type batchResult struct {
 	path   string
-	status string // "OK", "SKIP", "ERROR"
+	status string // "OK", "SKIP", "FAIL", "ERROR"
 	detail string
 }
 

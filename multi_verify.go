@@ -6,8 +6,9 @@ import (
 	"strings"
 )
 
-// multiWriteLines is the writer the multi -file mutation uses for each file.
-// Tests replace it to inject a write that stores the wrong content.
+// multiWriteLines is the writer the multi -file mutation and the single-file
+// MCP replaceall use to write a file. Tests replace it to inject a write that
+// stores the wrong content.
 var multiWriteLines = writeLines
 
 // expectedDiskLines splits every element that contains a newline, so the

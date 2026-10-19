@@ -94,8 +94,10 @@ func multiMutateOne(o multiMutOpts, lines []string) ([]string, string, error) {
 
 // runMultiMutate runs a self-contained mutating op (replaceall, insertafter,
 // insertbefore, delete) over every file in o.spec. A problem in one file is
-// reported as SKIP and never aborts the batch. Returns the process exit code:
-// 1 if the request is invalid or no file succeeded.
+// reported as SKIP and never aborts the batch. For replaceall each written file
+// is re-read and verified, and a mismatch makes that file FAIL. Returns the
+// process exit code: 3 if any file is FAIL (written but verification failed),
+// else 1 if the request is invalid or no file succeeded, else 0.
 func runMultiMutate(o multiMutOpts) int {
 	switch o.op {
 	case "replaceall", "insertafter", "insertbefore", "delete", "replace", "write":

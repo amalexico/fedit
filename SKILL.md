@@ -50,7 +50,7 @@ Mutation operations, in order of safety:
 
 ### Step 3: Verify
 
-All mutation tools auto-emit a verify block showing the surrounding lines and a stats block with line delta and elapsed time. Always read this output before reporting success to the user.
+All mutation tools auto-emit a verify block showing the surrounding lines and a stats block with line delta and elapsed time. Always read this output before reporting success to the user. fedit_replaceall goes further: it re-reads the written file from disk and reports VERIFY: PASS or VERIFY: FAIL, and a FAIL comes back as an error result. Never report a replaceall as done when the result says VERIFY: FAIL.
 
 ## Common patterns
 
@@ -233,7 +233,7 @@ For Terraform resource reordering, use block-aware move:
     fedit_delete (file="*.md", match="<!-- start -->", endmatch="<!-- end -->")
     fedit_find (file="*.go", match="TODO")
 
-- Each file is its own source: a problem in one (no match, unreadable, read-only, write failed) is a SKIP for that file, the batch goes on, and a skipped file is never modified. The report lists OK or SKIP per file, then N/M file(s) succeeded. Exit code 0 if at least one file succeeded, 1 if none did.
+- Each file is its own source: a problem in one (no match, unreadable, read-only, write failed) is a SKIP for that file, the batch goes on, and a skipped file is never modified. The report lists OK, SKIP or FAIL per file, then N/M file(s) succeeded. For replaceall each written file is re-read from disk; a FAIL means the file was written but did not verify. Exit code 0 if at least one file succeeded and none failed, 1 if none succeeded, 3 if any file is FAIL. Over MCP the result is an error if any file is FAIL or none succeeded.
 - Accepted: show, find and map, plus replaceall (also match_regex), insertafter, insertbefore, delete and replace with match, and write (same content to every file). block, line, stream, files, move and copy are rejected before any file is read. fedit_write over MCP takes one path.
 - This is not -dest. A multi file edit applies the same match in every file; -dest moves text from one source file into other files. They never combine.
 
@@ -340,7 +340,7 @@ Full results: https://amalexhandler.com/fedit#benchmark
   -wdelim CHAR   word delimiter for -extract (default: normalized whitespace)
   -cleanfirst    truncate file before insert/write
   -stream        large file mode for replaceall + find
-  -v             verify block after every mutation (always include)
+  -v             verify block after every mutation (always include); replaceall always verifies the written file, -v adds a window for every hit
   -nth N         which occurrence (default 1, -1 = last)
   -match-regex   regex pattern for replaceall with capture groups ($1 $2)
   -files GLOB    apply replaceall to all files matching a glob (every other op takes a comma list or glob in -file)

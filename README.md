@@ -196,6 +196,9 @@ fedit -file nginx.conf -op replaceall -match "old.example.com" -text "new.exampl
 fedit -file Makefile -op replaceall -match "1.1.0" -text "1.2.0" -v
 ```
 
+- Every replaceall is verified by default: after the write, fedit re-reads the file from disk and prints `VERIFY: PASS` or `VERIFY: FAIL` followed by the changed lines. This covers a single file, `-match-regex`, `-stream`, `-files` and a file list in `-file`, and `fedit_replaceall` over MCP. `-v` adds a context window for every match (not printed with `-stream`).
+- Exit codes for replaceall: 0 ok, 1 the edit did not happen, 3 the file was written but verification failed or could not be done. With several files, one FAIL file makes the exit code 3 even when the others succeeded, and the MCP result is an error.
+
 ---
 
 
@@ -318,7 +321,7 @@ fedit -file '*.md' -op delete -match '<!-- start -->' -endmatch '<!-- end -->'
 ```
 
 - A problem in one file (no match, unreadable, read-only, write failed) is reported as SKIP and never stops the batch. A skipped file is never modified.
-- The report lists OK or SKIP per file, then `N/M file(s) succeeded`. Exit code 0 if at least one file succeeded, 1 if none did.
+- The report lists OK, SKIP or FAIL per file, then `N/M file(s) succeeded`. A FAIL is a replaceall file that was written but did not pass the on-disk verification. Exit code 0 if at least one file succeeded and none failed, 1 if none succeeded, 3 if any file is FAIL (FAIL wins).
 - Only -match (plus -endmatch for delete and replace), -nth and -text/-textfile/-texthex are accepted, plus -sourcefile/-sourceblock/-lang on insertafter and insertbefore (since v1.11.0). -match-regex works with replaceall, and write needs no -match and writes the same content to every file. -block, -line, -cleanfirst, -stream and -files are rejected, and so are move and copy, all before any file is read.
 - MCP: fedit_replaceall, fedit_insertafter, fedit_insertbefore, fedit_delete and fedit_replace take a comma list or glob in file, with the same rules and a per-file report; block, line, stream and files are rejected. fedit_write always treats file as one path. fedit_show, fedit_find and fedit_map also take a list.
 
@@ -588,7 +591,7 @@ Most mappers detect **duplicates** (functions, tables, keys, header columns, blo
 | -match "s" | Substring to search for |
 | -nth N | Which occurrence (default 1, -1 = last) |
 | -lang LANG | Language for map and for -block operations |
-| -v | Verify: show affected lines after edit |
+| -v | Verify: show affected lines after edit (replaceall always verifies the written file; -v adds a window for every hit) |
 | -endmatch "s" | Content-anchor end of range (show/replace/delete/move/copy) |
 | -quiet | Suppress output on success, including the per-file report of multi-file and -dest runs (skips and errors still print); exit code signals result (since v1.11.0) |
 | -texthex HEX | Hex-encoded UTF-8 content, bypasses shell quoting (v1.6.0) |
@@ -834,7 +837,7 @@ This starts a JSON-RPC 2.0 server on stdin/stdout. The server exposes all 14 edi
 | `fedit_insert` | Insert content after a line number |
 | `fedit_delete` | Delete one or more lines; comma list or glob in `file` with `match` |
 | `fedit_replace` | Replace a line range or named block; comma list or glob in `file` with `match`; `dest` + `destblock` overwrite a named block in other files |
-| `fedit_replaceall` | Global find-and-replace; `match_regex` for regex and `textfile` for replacement text (both since v1.11.0); comma list or glob in `file` |
+| `fedit_replaceall` | Global find-and-replace; `match_regex` for regex and `textfile` for replacement text (both since v1.11.0); comma list or glob in `file`; the written file is re-read and verified, and a VERIFY: FAIL comes back as an error result |
 | `fedit_write` | Create or overwrite a file |
 | `fedit_writeraw` | Create or overwrite a file with no escape expansion (backslashes literal) |
 | `fedit_map` | Structural overview (21 languages; `lang` is detected from the extension when omitted); comma list or glob in file |

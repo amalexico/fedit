@@ -84,7 +84,9 @@ func mcpMultiMutOpts(name, spec string, getStr func(string) string, getInt func(
 
 // mcpRunMultiMutate applies a validated multi file mutation and formats the
 // per-file report as the tool result. A problem in one file is a SKIP line and
-// that file is left unmodified; the result is an error only if no file succeeded.
+// that file is left unmodified. For replaceall each written file is verified;
+// the result is an error if any file is FAIL (written but verification failed)
+// or if no file succeeded.
 func mcpRunMultiMutate(o multiMutOpts) mcpCallResult {
 	results, okCount, err := collectMultiMutate(o)
 	if err != nil {
