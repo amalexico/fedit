@@ -534,7 +534,10 @@ func main() {
 				doStreamReplaceAll(*file, searchStr, replacement)
 			}
 		} else if isRegex {
-			doReplaceAllRegex(lines, *file, searchStr, replacement)
+			windowsShown = *v
+			if code := runReplaceAllRegexVerified(lines, *file, searchStr, replacement, *v, os.Stderr, writeLines); code != 0 {
+				os.Exit(code)
+			}
 		} else {
 			windowsShown = *v
 			if code := runReplaceAllVerified(lines, *file, searchStr, replacement, *v, os.Stderr, writeLines); code != 0 {
