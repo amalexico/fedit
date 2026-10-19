@@ -121,6 +121,16 @@ func runMultiMutate(o multiMutOpts) int {
 		return 1
 	}
 	printBatchReport("multi -file "+o.op, results)
+	failCount := 0
+	for _, r := range results {
+		if r.status == "FAIL" {
+			failCount++
+		}
+	}
+	if failCount > 0 {
+		fmt.Fprintf(os.Stderr, "VERIFY: FAIL on %d file(s)\n", failCount)
+		return 3
+	}
 	if okCount == 0 {
 		return 1
 	}
