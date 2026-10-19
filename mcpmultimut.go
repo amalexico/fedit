@@ -91,10 +91,18 @@ func mcpRunMultiMutate(o multiMutOpts) mcpCallResult {
 		return mcpErrorResult(fmt.Sprintf("multi file: %v", err))
 	}
 	var b strings.Builder
+	failCount := 0
 	for _, r := range results {
 		fmt.Fprintf(&b, "  %-6s %s  %s\n", r.status, r.path, r.detail)
+		if r.status == "FAIL" {
+			failCount++
+		}
 	}
 	fmt.Fprintf(&b, "multi file %s: %d/%d file(s) succeeded", o.op, okCount, len(results))
+	if failCount > 0 {
+		fmt.Fprintf(&b, "\nVERIFY: FAIL on %d file(s)", failCount)
+		return mcpErrorResult(b.String())
+	}
 	if okCount == 0 {
 		return mcpErrorResult(b.String())
 	}
