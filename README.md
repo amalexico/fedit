@@ -594,6 +594,8 @@ Most mappers detect **duplicates** (functions, tables, keys, header columns, blo
 | -v | Verify: show affected lines after edit (replaceall always verifies the written file; -v adds a window for every hit) |
 | -endmatch "s" | Content-anchor end of range (show/replace/delete/move/copy) |
 | -quiet | Suppress output on success, including the per-file report of multi-file and -dest runs (skips and errors still print); exit code signals result (since v1.11.0) |
+| -outputresult FILE | Write the operation report to FILE (UTF-8, no BOM) and print one summary line on the terminal. FILE may not be any file being edited (-file, -files, -dest) and its directory must exist. On a non-zero exit nothing is written to FILE: the whole report goes to stderr with the same exit code |
+| -outappend | With -outputresult: append to FILE instead of overwriting it |
 | -texthex HEX | Hex-encoded UTF-8 content, bypasses shell quoting (v1.6.0) |
 | -matchhex HEX, -endmatchhex HEX | Hex-encoded -match and -endmatch anchors, for anchors that contain double quotes (v1.8.1) |
 | -match-regex P | replaceall: regex with capture groups ($1 $2) |

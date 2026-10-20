@@ -348,6 +348,8 @@ Full results: https://amalexhandler.com/fedit#benchmark
   -end -N        end line relative to EOF (-1 = last line, -5 = fifth from end)
   -endmatch TEXT content-anchor end of range -- show, replace, delete, move, copy
   -quiet         suppress output on success, including the per-file batch report (skips and errors still print); exit code signals result (wins over -v)
+  -outputresult FILE  write the operation report to FILE (UTF-8, no BOM), one summary line on the terminal; FILE may not be an edited file; nothing is written on a failed run
+  -outappend     with -outputresult: append to FILE instead of overwriting it
   -times N       move/copy: paste N times (move cuts once)
   -after N, -before N, -aftermatch TEXT, -beforematch TEXT, -afterblock NAME, -beforeblock NAME   move/copy destination anchors (the block anchors need -lang)
   -col N         fields: column number (1-based); -delim CHAR is the field delimiter (default tab)

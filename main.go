@@ -206,6 +206,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Output flags:")
 		fmt.Fprintln(os.Stderr, "  -v            Verify: show affected lines after a mutation")
 		fmt.Fprintln(os.Stderr, "  -quiet        Suppress output on success, including the per-file batch report; exit code signals result (wins over -v)")
+		fmt.Fprintln(os.Stderr, "  -outputresult FILE  Write the operation report to FILE (UTF-8, no BOM) and print one summary line; errors stay on stderr; FILE may not be an edited file")
+		fmt.Fprintln(os.Stderr, "  -outappend    With -outputresult: append to FILE instead of overwriting it")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Escapes in -text: \\n = newline, \\t = tab, \\\\ = literal backslash")
 		exitNow(1)

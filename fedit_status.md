@@ -56,9 +56,29 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
   delete, replace are not); stale comments above runMultiMutate, mcpRunMultiMutate,
   multiWriteLines and batchResult.status; doStreamReplaceAll, doStreamReplaceAllRegex,
   doReplaceAllGlob and doReplaceAllRegexGlob are kept only for tests.
-  NEXT: housekeeping (docs for always-on verification, FAIL status and exit 3;
-  stale comments), then -outputresult, logging core, config + ini, MCP integration
-  (logging + output_file), dry-run.
+  LOCAL, NOT PUSHED (after the 12 pushed commits): 5a091ad (docs for always-on
+  verification, FAIL status and exit code 3 in README, SKILL, help text, status file
+  and user_skill.md; stale comments fixed), 5448025 (-outputresult), and the commit
+  that carries this entry (failure-path tests and flag docs).
+  -outputresult FILE and -outappend (outputresult.go). With -outputresult, stdout
+  and stderr both go to one temp capture, and every os.Exit in main.go and guided.go
+  is now exitNow, the single exit point that finishes the capture. Exit 0: the
+  report is written to FILE (UTF-8, no BOM, overwritten; -outappend appends) and the
+  terminal gets one line, result written to FILE (N lines). Non-zero exit: FILE is
+  left alone and everything captured goes to stderr with the same exit code. Refused
+  before any edit, exit 1: FILE equal to any -file, -files or -dest entry (globs
+  expanded, case-insensitive on Windows), a missing directory for FILE, -outappend
+  without -outputresult. If the result file cannot be written after a successful
+  edit: loud error, exit 3. A panic replays the capture and re-panics. Tests:
+  wire_outputresult_test.go (TestOR_Success, TestOR_RefuseSameFile,
+  TestOR_OverwriteAndAppend; helpers orxRun, orxWrite, orxRead, orxNorm) and
+  wire_outputresult_fail_test.go (TestORF_*). Docs: usage text, README flag table,
+  SKILL.md flag list. Not yet: MCP output_file (planned with the MCP integration).
+  NEXT: logging core, config + ini, MCP integration (logging + output_file),
+  dry-run. SMALL GAPS wanted while dry-run is pending: guided ambiguity at
+  insert-from-file source, replace -destblock and insert anchors; scanner whole-file
+  strState pass; replace -match without -endmatch = the single matched line; JS
+  regex containing /* (last); guided over MCP lowest priority.
 PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. v1.8.1 was tagged later (see the Sept 28 notes below).
   Code commit
   touched .gitignore, CLAUDE_DESKTOP.md, main.go (~3920 lines), user_skill.md.
