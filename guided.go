@@ -447,6 +447,6 @@ func runGuided() error {
 			code = 1
 		}
 	}
-	os.Exit(code)
+	exitNow(code)
 	return nil
 }

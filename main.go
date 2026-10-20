@@ -26,7 +26,7 @@ func main() {
 	if isGuidedCall(os.Args) {
 		if err := runGuided(); err != nil {
 			fmt.Fprintln(os.Stderr, "guided:", err)
-			os.Exit(2)
+			exitNow(2)
 		}
 	}
 
@@ -64,6 +64,8 @@ func main() {
 	wdelim := flag.String("wdelim", "", "Word delimiter for -extract (default: normalized whitespace, awk-style)")
 	raw := flag.Bool("raw", false, "Raw show output: no line numbers or prefix (for piping to fwencode)")
 	quiet := flag.Bool("quiet", false, "Suppress output on success, including the per-file batch report; exit code signals result (-quiet wins over -v)")
+	outputresult := flag.String("outputresult", "", "Write the operation report to this file (UTF-8, no BOM) and print one summary line; errors stay on stderr; the file must not be an edited file")
+	outappend := flag.Bool("outappend", false, "With -outputresult: append to the file instead of overwriting it")
 	flag.Parse()
 
 	// -matchhex/-endmatchhex: hex-encoded anchors, decoded into -match/-endmatch so PowerShell never mangles embedded double quotes.
@@ -71,7 +73,7 @@ func main() {
 		decoded, mhErr := decodeHexAnchor("matchhex", *matchhex)
 		if mhErr != nil {
 			fmt.Fprintln(os.Stderr, mhErr)
-			os.Exit(1)
+			exitNow(1)
 		}
 		*match = decoded
 	}
@@ -79,7 +81,7 @@ func main() {
 		decoded, emhErr := decodeHexAnchor("endmatchhex", *endmatchhex)
 		if emhErr != nil {
 			fmt.Fprintln(os.Stderr, emhErr)
-			os.Exit(1)
+			exitNow(1)
 		}
 		*endmatch = decoded
 	}
@@ -89,16 +91,16 @@ func main() {
 	if *get != "" {
 		if *op != "find" {
 			fmt.Fprintf(os.Stderr, "Error: -get is only supported with -op find (got -op %s)\n", *op)
-			os.Exit(1)
+			exitNow(1)
 		}
 		if _, reErr := regexp.Compile(*get); reErr != nil {
 			fmt.Fprintf(os.Stderr, "Error: -get: invalid regex: %v\n", reErr)
-			os.Exit(1)
+			exitNow(1)
 		}
 	}
 	if (*op == "insertafter" || *op == "insertbefore") && (*afterblock != "" || *beforeblock != "") {
 		fmt.Fprintln(os.Stderr, "Error: -afterblock and -beforeblock are destination anchors for move and copy; for insertafter/insertbefore use -block NAME -lang LANG, or -match TEXT")
-		os.Exit(1)
+		exitNow(1)
 	}
 
 	// -texthex: hex string is the content itself (produced by fwencode or PS hex encode).
@@ -110,10 +112,31 @@ func main() {
 		resolvedBytes, hErr = hex.DecodeString(*texthex)
 		if hErr != nil {
 			fmt.Fprintf(os.Stderr, "texthex: invalid hex string: %v\n", hErr)
-			os.Exit(1)
+			exitNow(1)
 		}
 	}
 
+	if *outappend && *outputresult == "" {
+		fmt.Fprintln(os.Stderr, "-outappend requires -outputresult")
+		os.Exit(1)
+	}
+	if *outputresult != "" {
+		if msg := outputResultRefuse(*outputresult, *file, *files, flag.Lookup("dest").Value.String()); msg != "" {
+			fmt.Fprintln(os.Stderr, msg)
+			os.Exit(1)
+		}
+		if err := startOutputResult(*outputresult, *outappend); err != nil {
+			fmt.Fprintf(os.Stderr, "-outputresult: %v\n", err)
+			os.Exit(1)
+		}
+		defer func() {
+			if r := recover(); r != nil {
+				finishOutputResult(2)
+				panic(r)
+			}
+			exitNow(0)
+		}()
+	}
 	if *quiet {
 		*v = false
 		batchQuiet = true
@@ -185,7 +208,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  -quiet        Suppress output on success, including the per-file batch report; exit code signals result (wins over -v)")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Escapes in -text: \\n = newline, \\t = tab, \\\\ = literal backslash")
-		os.Exit(1)
+		exitNow(1)
 	}
 
 	// -sourcefile/-sourceblock: pull content from a named block in another
@@ -195,19 +218,19 @@ func main() {
 	if *sourceFileFlag != "" || *sourceBlockFlag != "" {
 		if *sourceFileFlag == "" || *sourceBlockFlag == "" {
 			fmt.Fprintln(os.Stderr, "Error: -sourcefile and -sourceblock must be used together")
-			os.Exit(1)
+			exitNow(1)
 		}
 		if *op != "insertafter" && *op != "insertbefore" {
 			fmt.Fprintln(os.Stderr, "Error: -sourcefile/-sourceblock are only supported with insertafter and insertbefore")
-			os.Exit(1)
+			exitNow(1)
 		}
 		if *lang == "" {
 			fmt.Fprintln(os.Stderr, "Error: -sourcefile/-sourceblock require -lang")
-			os.Exit(1)
+			exitNow(1)
 		}
 		if *text != "" || *textFile != "" || resolvedBytes != nil {
 			fmt.Fprintln(os.Stderr, "Error: -sourcefile/-sourceblock cannot combine with -text, -textfile or -texthex")
-			os.Exit(1)
+			exitNow(1)
 		}
 	}
 
@@ -215,19 +238,19 @@ func main() {
 		if *op == "write" && *file != "" && isMultiSpec(*file) {
 			if *block != "" || *line != "" || *cleanfirst || *stream || *files != "" {
 				fmt.Fprintln(os.Stderr, "Error: multi -file write takes only the content flags (-text/-textfile/-texthex); -block, -line, -cleanfirst, -stream and -files are not supported with it")
-				os.Exit(1)
+				exitNow(1)
 			}
 			newLines, rtErr := resolveTextFull(*text, *textFile, resolvedBytes, *sourceFileFlag, *sourceBlockFlag, *lang)
 			if rtErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", rtErr)
-				os.Exit(1)
+				exitNow(1)
 			}
 			mo := multiMutOpts{spec: *file, op: "write", newLines: newLines}
 			if len(mo.newLines) == 0 {
 				fmt.Fprintln(os.Stderr, "Nothing to write")
-				os.Exit(1)
+				exitNow(1)
 			}
-			os.Exit(runMultiMutate(mo))
+			exitNow(runMultiMutate(mo))
 		}
 		var content []string
 		switch *op {
@@ -248,7 +271,7 @@ func main() {
 				content, err = readLines(*textFile)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Error reading textfile: %v\n", err)
-					os.Exit(1)
+					exitNow(1)
 				}
 			} else {
 				// raw: split on actual newlines only — no \n->newline expansion
@@ -262,7 +285,7 @@ func main() {
 				content, err = readLines(*textFile)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Error reading textfile: %v\n", err)
-					os.Exit(1)
+					exitNow(1)
 				}
 			} else {
 				content = expandText(*text)
@@ -270,11 +293,11 @@ func main() {
 		}
 		if len(content) == 0 {
 			fmt.Fprintln(os.Stderr, "Nothing to write")
-			os.Exit(1)
+			exitNow(1)
 		}
 		if err := writeLines(*file, content); err != nil {
 			fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
-			os.Exit(1)
+			exitNow(1)
 		}
 		fmt.Fprintf(os.Stderr, "Wrote %d line(s) to %s\n", len(content), *file)
 		return
@@ -287,11 +310,11 @@ func main() {
 		case "replaceall", "insertafter", "insertbefore", "delete", "replace":
 			if *block != "" || *line != "" || *cleanfirst || *stream || *files != "" {
 				fmt.Fprintln(os.Stderr, "Error: multi -file mutation takes -match (plus -endmatch for delete) or -match-regex (replaceall only); -block, -line, -cleanfirst, -stream and -files are not supported with it")
-				os.Exit(1)
+				exitNow(1)
 			}
 			if *matchRegex != "" && *op != "replaceall" {
 				fmt.Fprintln(os.Stderr, "Error: -match-regex is only supported with replaceall")
-				os.Exit(1)
+				exitNow(1)
 			}
 			mo := multiMutOpts{spec: *file, op: *op, match: *match, endmatch: *endmatch, nth: *nth, matchRegex: *matchRegex}
 			switch *op {
@@ -306,15 +329,15 @@ func main() {
 				newLines, rtErr := resolveTextFull(*text, *textFile, resolvedBytes, *sourceFileFlag, *sourceBlockFlag, *lang)
 				if rtErr != nil {
 					fmt.Fprintf(os.Stderr, "Error: %v\n", rtErr)
-					os.Exit(1)
+					exitNow(1)
 				}
 				mo.newLines = newLines
 				mo.srcFile = *sourceFileFlag
 				mo.srcBlock = *sourceBlockFlag
 			}
-			os.Exit(runMultiMutate(mo))
+			exitNow(runMultiMutate(mo))
 		}
-		os.Exit(runMultiFile(multiOpts{
+		exitNow(runMultiFile(multiOpts{
 			spec: *file, op: *op, match: *match, endmatch: *endmatch, nth: *nth,
 			x: *x, get: *get, extract: *extractFlag, wdelim: *wdelim,
 			block: *block, lang: *lang, line: *line, endLine: *endLine,
@@ -326,33 +349,33 @@ func main() {
 	if *destFlag != "" {
 		if *op != "copy" && *op != "move" && *op != "replace" {
 			fmt.Fprintln(os.Stderr, "Error: -dest is only supported with copy, move and replace")
-			os.Exit(1)
+			exitNow(1)
 		}
 		if *file == "" {
 			fmt.Fprintln(os.Stderr, "Error: -dest needs -file as the source file")
-			os.Exit(1)
+			exitNow(1)
 		}
 		if *matchRegex != "" || *cleanfirst || *stream || *files != "" {
 			fmt.Fprintln(os.Stderr, "Error: -dest does not combine with -match-regex, -cleanfirst, -stream or -files")
-			os.Exit(1)
+			exitNow(1)
 		}
 		if *op == "replace" && *destBlockFlag == "" {
 			fmt.Fprintln(os.Stderr, "Error: replace -dest requires -destblock")
-			os.Exit(1)
+			exitNow(1)
 		}
 		if *op != "replace" && *destBlockFlag != "" {
 			fmt.Fprintln(os.Stderr, "Error: -destblock is only supported with replace -dest")
-			os.Exit(1)
+			exitNow(1)
 		}
 		srcAll, dRdErr := readLines(*file)
 		if dRdErr != nil {
 			fmt.Fprintf(os.Stderr, "Error reading file: %v\n", dRdErr)
-			os.Exit(1)
+			exitNow(1)
 		}
 		dLine, dEnd, dLnErr := parseAndResolveLines(*line, *endLine, len(srcAll))
 		if dLnErr != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", dLnErr)
-			os.Exit(1)
+			exitNow(1)
 		}
 		opts := multiDestOpts{
 			op: *op, srcFile: *file, dests: *destFlag, lang: *lang, block: *block, destBlock: *destBlockFlag,
@@ -361,15 +384,15 @@ func main() {
 			afterblock: *afterblock, beforeblock: *beforeblock,
 		}
 		if *op == "replace" {
-			os.Exit(runMultiDestReplace(opts))
+			exitNow(runMultiDestReplace(opts))
 		}
-		os.Exit(runMultiDest(opts))
+		exitNow(runMultiDest(opts))
 	}
 	// -cleanfirst: truncate before reading so mutations start from an empty file.
 	if *cleanfirst && *file != "" {
 		if err := os.WriteFile(*file, []byte{}, 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "Error truncating file: %v\n", err)
-			os.Exit(1)
+			exitNow(1)
 		}
 	}
 
@@ -379,14 +402,14 @@ func main() {
 		lines, rdErr = readLines(*file)
 		if rdErr != nil {
 			fmt.Fprintf(os.Stderr, "Error reading file: %v\n", rdErr)
-			os.Exit(1)
+			exitNow(1)
 		}
 	}
 
 	lineN, endN, lineErr := parseAndResolveLines(*line, *endLine, len(lines))
 	if lineErr != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", lineErr)
-		os.Exit(1)
+		exitNow(1)
 	}
 
 	linesBefore := len(lines)
@@ -400,14 +423,14 @@ func main() {
 			showStart, showEnd, bErr = resolveBlock(lines, *lang, *block)
 			if bErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
-				os.Exit(1)
+				exitNow(1)
 			}
 		} else if *match != "" {
 			var mErr error
 			showStart, showEnd, mErr = resolveSourceLines(lines, 0, 0, *match, *endmatch, *nth)
 			if mErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", mErr)
-				os.Exit(1)
+				exitNow(1)
 			}
 		}
 		doShow(lines, showStart, showEnd, *raw)
@@ -415,7 +438,7 @@ func main() {
 		newText, rtErr := resolveTextFull(*text, *textFile, resolvedBytes, *sourceFileFlag, *sourceBlockFlag, *lang)
 		if rtErr != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", rtErr)
-			os.Exit(1)
+			exitNow(1)
 		}
 		doInsert(lines, *file, lineN, newText)
 	case "delete":
@@ -425,7 +448,7 @@ func main() {
 			delStart, delEnd, mErr = resolveSourceLines(lines, 0, 0, *match, *endmatch, *nth)
 			if mErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", mErr)
-				os.Exit(1)
+				exitNow(1)
 			}
 		}
 		doDelete(lines, *file, delStart, delEnd)
@@ -433,11 +456,11 @@ func main() {
 		newText, rtErr := resolveTextFull(*text, *textFile, resolvedBytes, *sourceFileFlag, *sourceBlockFlag, *lang)
 		if rtErr != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", rtErr)
-			os.Exit(1)
+			exitNow(1)
 		}
 		if *text == "" && *textFile == "" && resolvedBytes == nil {
 			fmt.Fprintln(os.Stderr, "replace requires -text, -textfile, or -texthex (use 'delete' to remove a range)")
-			os.Exit(1)
+			exitNow(1)
 		}
 		replStart, replEnd := lineN, endN
 		if *block != "" {
@@ -445,14 +468,14 @@ func main() {
 			replStart, replEnd, bErr = resolveBlock(lines, *lang, *block)
 			if bErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
-				os.Exit(1)
+				exitNow(1)
 			}
 		} else if *match != "" {
 			var mErr error
 			replStart, replEnd, mErr = resolveSourceLines(lines, 0, 0, *match, *endmatch, *nth)
 			if mErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", mErr)
-				os.Exit(1)
+				exitNow(1)
 			}
 		}
 		doReplace(lines, *file, replStart, replEnd, newText)
@@ -468,14 +491,14 @@ func main() {
 		newText, rtErr := resolveTextFull(*text, *textFile, resolvedBytes, *sourceFileFlag, *sourceBlockFlag, *lang)
 		if rtErr != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", rtErr)
-			os.Exit(1)
+			exitNow(1)
 		}
 		hint := sourceBlockHint(*sourceFileFlag, *sourceBlockFlag, *file, newText, lines)
 		if *block != "" {
 			_, blockEnd, bErr := resolveBlock(lines, *lang, *block)
 			if bErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
-				os.Exit(1)
+				exitNow(1)
 			}
 			doInsert(lines, *file, blockEnd, newText) // after closing line of block
 		} else {
@@ -488,14 +511,14 @@ func main() {
 		newText, rtErr := resolveTextFull(*text, *textFile, resolvedBytes, *sourceFileFlag, *sourceBlockFlag, *lang)
 		if rtErr != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", rtErr)
-			os.Exit(1)
+			exitNow(1)
 		}
 		hint := sourceBlockHint(*sourceFileFlag, *sourceBlockFlag, *file, newText, lines)
 		if *block != "" {
 			blockStart, _, bErr := resolveBlock(lines, *lang, *block)
 			if bErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
-				os.Exit(1)
+				exitNow(1)
 			}
 			doInsert(lines, *file, blockStart-1, newText) // before opening line of block
 		} else {
@@ -508,7 +531,7 @@ func main() {
 		isRegex := *matchRegex != ""
 		if *match == "" && !isRegex {
 			fmt.Fprintln(os.Stderr, "replaceall requires -match TEXT or -match-regex PATTERN")
-			os.Exit(1)
+			exitNow(1)
 		}
 		searchStr := *match
 		if isRegex {
@@ -529,7 +552,7 @@ func main() {
 				mo.match = searchStr
 			}
 			if code := runMultiMutate(mo); code != 0 {
-				os.Exit(code)
+				exitNow(code)
 			}
 		} else if *stream {
 			var code int
@@ -539,17 +562,17 @@ func main() {
 				code = runStreamLiteralVerified(*file, searchStr, replacement, os.Stderr)
 			}
 			if code != 0 {
-				os.Exit(code)
+				exitNow(code)
 			}
 		} else if isRegex {
 			windowsShown = *v
 			if code := runReplaceAllRegexVerified(lines, *file, searchStr, replacement, *v, os.Stderr, writeLines); code != 0 {
-				os.Exit(code)
+				exitNow(code)
 			}
 		} else {
 			windowsShown = *v
 			if code := runReplaceAllVerified(lines, *file, searchStr, replacement, *v, os.Stderr, writeLines); code != 0 {
-				os.Exit(code)
+				exitNow(code)
 			}
 		}
 	case "move":
@@ -561,7 +584,7 @@ func main() {
 			s, e, bErr := resolveBlock(lines, *lang, *block)
 			if bErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
-				os.Exit(1)
+				exitNow(1)
 			}
 			srcL, srcE, srcM, srcEM = s, e, "", ""
 		}
@@ -569,7 +592,7 @@ func main() {
 			bs, _, bErr := resolveBlock(lines, *lang, *beforeblock)
 			if bErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
-				os.Exit(1)
+				exitNow(1)
 			}
 			dstB, dstA, dstAM, dstBM = bs, -1, "", ""
 		}
@@ -577,7 +600,7 @@ func main() {
 			_, be, bErr := resolveBlock(lines, *lang, *afterblock)
 			if bErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
-				os.Exit(1)
+				exitNow(1)
 			}
 			dstA, dstB, dstAM, dstBM = be, -1, "", ""
 		}
@@ -591,7 +614,7 @@ func main() {
 			s, e, bErr := resolveBlock(lines, *lang, *block)
 			if bErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
-				os.Exit(1)
+				exitNow(1)
 			}
 			srcL, srcE, srcM, srcEM = s, e, "", ""
 		}
@@ -599,7 +622,7 @@ func main() {
 			bs, _, bErr := resolveBlock(lines, *lang, *beforeblock)
 			if bErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
-				os.Exit(1)
+				exitNow(1)
 			}
 			dstB, dstA, dstAM, dstBM = bs, -1, "", ""
 		}
@@ -607,7 +630,7 @@ func main() {
 			_, be, bErr := resolveBlock(lines, *lang, *afterblock)
 			if bErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", bErr)
-				os.Exit(1)
+				exitNow(1)
 			}
 			dstA, dstB, dstAM, dstBM = be, -1, "", ""
 		}
@@ -615,7 +638,7 @@ func main() {
 	case "fields":
 		if *col == 0 {
 			fmt.Fprintln(os.Stderr, "fields requires -col N (1-based column number)")
-			os.Exit(1)
+			exitNow(1)
 		}
 		delimStr := *delim
 		if delimStr == "\\t" {
@@ -624,7 +647,7 @@ func main() {
 		doFields(*file, *col, delimStr, *x)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown operation: %s\n", *op)
-		os.Exit(1)
+		exitNow(1)
 	}
 	if *v {
 		switch *op {
@@ -705,7 +728,7 @@ func resolveText(text, textFile string) []string {
 		lines, err := readLines(textFile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error reading textfile: %v\n", err)
-			os.Exit(1)
+			exitNow(1)
 		}
 		return lines
 	}
@@ -1111,13 +1134,13 @@ func resolveNth(hits []int, nth int) (int, error) {
 func doFind(lines []string, match string, nth int, x bool, get, extractStr, wdelim string) {
 	if match == "" {
 		fmt.Fprintln(os.Stderr, "Error: -match is required for find")
-		os.Exit(1)
+		exitNow(1)
 	}
 
 	hits := findMatches(lines, match)
 	if len(hits) == 0 {
 		fmt.Fprintf(os.Stderr, "No matches for: %s\n", match)
-		os.Exit(1)
+		exitNow(1)
 	}
 
 	// Extract mode: -extract or -get provided.
@@ -1130,7 +1153,7 @@ func doFind(lines []string, match string, nth int, x bool, get, extractStr, wdel
 			es, err = parseExtractSpec(extractStr)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+				exitNow(1)
 			}
 		}
 		extracted, skipped := 0, 0
@@ -1199,7 +1222,7 @@ func doFind(lines []string, match string, nth int, x bool, get, extractStr, wdel
 		resolved, err := resolveNth(hits, nth)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "\n%v\n", err)
-			os.Exit(1)
+			exitNow(1)
 		}
 		fmt.Fprintf(os.Stderr, "\nOccurrence %d is at line %d\n", nth, resolved)
 	}
@@ -1240,7 +1263,7 @@ func doInsertMatch(lines []string, path, match string, nth int, newLines []strin
 	result, targetLine, insertAfter, err := execInsertMatch(lines, match, nth, newLines, before)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	fmt.Fprintf(os.Stderr, "Matched line %d: %s\n", targetLine, strings.TrimSpace(lines[targetLine-1]))
 	direction := "after"
@@ -1249,7 +1272,7 @@ func doInsertMatch(lines []string, path, match string, nth int, newLines []strin
 	}
 	if err := writeLines(path, result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	verifyCenter = insertAfter + 1
 	fmt.Fprintf(os.Stderr, "Inserted %d line(s) %s line %d (%d total now)\n",
@@ -1306,11 +1329,11 @@ func doInsert(lines []string, path string, afterLine int, newLines []string) {
 	result, err := execInsert(lines, afterLine, newLines)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	if err := writeLines(path, result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	verifyCenter = afterLine + 1
 	fmt.Fprintf(os.Stderr, "Inserted %d line(s) after line %d (%d total now)\n",
@@ -1333,11 +1356,11 @@ func doDelete(lines []string, path string, start, end int) {
 	result, err := execDelete(lines, start, end)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	if err := writeLines(path, result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	verifyCenter = start
 	fmt.Fprintf(os.Stderr, "Deleted lines %d-%d (%d total now)\n", start, end, len(result))
@@ -1360,11 +1383,11 @@ func doReplace(lines []string, path string, start, end int, newLines []string) {
 	result, err := execReplace(lines, start, end, newLines)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	if err := writeLines(path, result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	verifyCenter = start
 	fmt.Fprintf(os.Stderr, "Replaced lines %d-%d with %d line(s) (%d total now)\n",
@@ -1398,11 +1421,11 @@ func doReplaceAll(lines []string, path, search, replacement string) {
 	result, count, err := execReplaceAll(lines, search, replacement)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	if err := writeLines(path, result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	fmt.Fprintf(os.Stderr, "Replaced '%s' on %d line(s) (%d total)\n", search, count, len(result))
 }
@@ -1418,7 +1441,7 @@ func doMap(lines []string, filename, lang string) {
 		detected, ok := detectLang(filename)
 		if !ok {
 			fmt.Fprintln(os.Stderr, "Cannot auto-detect language. Use -lang flag.")
-			os.Exit(1)
+			exitNow(1)
 		}
 		lang = detected
 	}
@@ -1468,7 +1491,7 @@ func doMap(lines []string, filename, lang string) {
 		doMapNix(lines)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown language: %s\n", lang)
-		os.Exit(1)
+		exitNow(1)
 	}
 }
 
@@ -3106,23 +3129,23 @@ func doMoveOp(lines []string, path string, lineFlag, endFlag int, matchFlag, end
 	srcStart, srcEnd, err := resolveSourceLines(lines, lineFlag, endFlag, matchFlag, endmatchFlag, nth)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	destAfter, destLine, destDesc, err := resolveDestLine(lines, afterFlag, beforeFlag, afterMatchFlag, beforeMatchFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 
 	result, firstDest, err := execMove(lines, srcStart, srcEnd, destAfter, destLine, times)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 
 	if err := writeLines(path, result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 
 	if times == 1 {
@@ -3144,23 +3167,23 @@ func doCopyOp(lines []string, path string, lineFlag, endFlag int, matchFlag, end
 	srcStart, srcEnd, err := resolveSourceLines(lines, lineFlag, endFlag, matchFlag, endmatchFlag, nth)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	destAfter, _, destDesc, err := resolveDestLine(lines, afterFlag, beforeFlag, afterMatchFlag, beforeMatchFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 
 	result, firstDest, err := execCopy(lines, srcStart, srcEnd, destAfter, times)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 
 	if err := writeLines(path, result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 
 	if times == 1 {
@@ -3558,15 +3581,15 @@ func doReplaceAllRegex(lines []string, path, pattern, replacement string) {
 	result, count, err := execReplaceAllRegex(lines, pattern, replacement)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	if count == 0 {
 		fmt.Fprintf(os.Stderr, "No lines match regex: %s\n", pattern)
-		os.Exit(1)
+		exitNow(1)
 	}
 	if err := writeLines(path, result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	fmt.Fprintf(os.Stderr, "Regex-replaced on %d line(s) (%d total)\n", count, len(result))
 }
@@ -3576,11 +3599,11 @@ func doReplaceAllGlob(globPattern, search, replacement string) {
 	paths, err := filepath.Glob(globPattern)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Glob error: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	if len(paths) == 0 {
 		fmt.Fprintf(os.Stderr, "No files matched: %s\n", globPattern)
-		os.Exit(1)
+		exitNow(1)
 	}
 	totalFiles, totalLines := 0, 0
 	for _, p := range paths {
@@ -3616,16 +3639,16 @@ func doReplaceAllRegexGlob(globPattern, pattern, replacement string) {
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid regex %q: %v\n", pattern, err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	paths, err := filepath.Glob(globPattern)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Glob error: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	if len(paths) == 0 {
 		fmt.Fprintf(os.Stderr, "No files matched: %s\n", globPattern)
-		os.Exit(1)
+		exitNow(1)
 	}
 	totalFiles, totalLines := 0, 0
 	for _, p := range paths {
@@ -3738,11 +3761,11 @@ func doStreamReplaceAll(path, search, replacement string) {
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	if changed == 0 {
 		fmt.Fprintf(os.Stderr, "No lines match: %s\n", search)
-		os.Exit(1)
+		exitNow(1)
 	}
 	fmt.Fprintf(os.Stderr, "Stream-replaced on %d line(s) of %d total\n", changed, linesRead)
 }
@@ -3752,7 +3775,7 @@ func doStreamReplaceAllRegex(path, pattern, replacement string) {
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid regex %q: %v\n", pattern, err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	changed := 0
 	linesRead, _, sErr := execStreamOp(path, func(_ int, line string) []string {
@@ -3764,11 +3787,11 @@ func doStreamReplaceAllRegex(path, pattern, replacement string) {
 	})
 	if sErr != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", sErr)
-		os.Exit(1)
+		exitNow(1)
 	}
 	if changed == 0 {
 		fmt.Fprintf(os.Stderr, "No lines match regex: %s\n", pattern)
-		os.Exit(1)
+		exitNow(1)
 	}
 	fmt.Fprintf(os.Stderr, "Stream regex-replaced on %d line(s) of %d total\n", changed, linesRead)
 }
@@ -3778,7 +3801,7 @@ func doStreamFind(path, search string, x bool, get, extractStr, wdelim string) {
 	src, err := os.Open(path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	defer src.Close()
 
@@ -3788,7 +3811,7 @@ func doStreamFind(path, search string, x bool, get, extractStr, wdelim string) {
 		es, err = parseExtractSpec(extractStr)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			exitNow(1)
 		}
 	}
 
@@ -3832,7 +3855,7 @@ func doStreamFind(path, search string, x bool, get, extractStr, wdelim string) {
 	}
 	if scanner.Err() != nil {
 		fmt.Fprintf(os.Stderr, "Error reading: %v\n", scanner.Err())
-		os.Exit(1)
+		exitNow(1)
 	}
 	if extractMode {
 		if skipped > 0 {
@@ -3850,12 +3873,12 @@ func doStreamFind(path, search string, x bool, get, extractStr, wdelim string) {
 func doFields(path string, col int, delim string, x bool) {
 	if col < 1 {
 		fmt.Fprintln(os.Stderr, "Error: -col must be >= 1")
-		os.Exit(1)
+		exitNow(1)
 	}
 	src, err := os.Open(path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		exitNow(1)
 	}
 	defer src.Close()
 
@@ -3878,7 +3901,7 @@ func doFields(path string, col int, delim string, x bool) {
 	}
 	if scanner.Err() != nil {
 		fmt.Fprintf(os.Stderr, "Error reading: %v\n", scanner.Err())
-		os.Exit(1)
+		exitNow(1)
 	}
 	if !x {
 		fmt.Fprintf(os.Stderr, "Extracted col %d from %d/%d lines (delim=%q)\n",
