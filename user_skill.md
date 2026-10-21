@@ -1,7 +1,7 @@
 # Amalex Brand -- Claude Working Preferences
 # Upload this file alongside the project status file at the start of every chat.
 # Applies to: fedit, amalex-handler, fwrite, website, and all Amalex Brand projects.
-# Last updated: October 17, 2026
+# Last updated: October 20, 2026
 
 ---
 
@@ -87,8 +87,9 @@ Patch file location & naming:
   ALWAYS create patch files in the CURRENT WORKING DIRECTORY (apps/fwrite),
   never in a subfolder like internal/builtins/ -- keeps cleanup to one folder.
   Cycling numbering (max 10 temp files): _patch.txt, _patch1.txt ... _patch9.txt, then wrap to _patch.txt and overwrite.
-  Do NOT Remove-Item after each command -- user runs a batch cleanup script
-  at end of session instead.
+  fedit work (Oct 20, 2026): the apply line removes the patch file afterwards, so no
+  cleanup script is needed. The names keep cycling _patch.txt ... _patch9.txt; the
+  last name used is carried in the handoff text.
 ---
 
 ## fwencode / fwdecode
@@ -158,7 +159,8 @@ Patch file location & naming:
    Chained find+insert: combine into ONE line for paste safety:
      $n = [int](fedit -op find -match X -x) ; fedit -op insert -line $n -textfile f.txt -v
    Chained format+verify: after any Go file edit, one line covers everything:
-     gofmt -w file.go ; gofmt -l file.go ; go build ./... ; go test ./... ; go vet ./...
+     gofmt -w FILES ; gofmt -l FILES ; go build -o fedit.exe . ; go test ./... ; go vet ./... ; git status -sb
+     (fedit standard chain, Oct 20, 2026; go test takes about 120 s; other projects: go build ./... is fine)
      gofmt -l prints nothing on success -- silence there means formatting is clean.
    gofmt nests else if inside inner block if patch indentation places it at wrong brace depth.
 
@@ -202,6 +204,47 @@ Patch file location & naming:
   write vs writeraw:
     fedit_write    -- processes escape sequences (\n \t \\)
     fedit_writeraw -- backslashes are literal (use for Go regex, Windows paths)
+
+---
+
+## fedit Working Rules (set Oct 20, 2026)
+
+  Delivery:
+    ONE patch block per response, with its apply command and verify chain in the SAME
+    response. Recon (read-only) commands come in their own earlier turn.
+    Generate and verify every payload with a tool BEFORE posting. Never post a second
+    or corrected block in the same response and never post a draft line; if something
+    is wrong, fix it before posting.
+    SMALL payloads (about 1.5 KB or less): ONE paste-safe line with a hex value and a
+    length guard:
+      $h='<hex>' ; if ($h.Length -eq N) { fedit ... -texthex $h } else { 'HEX LENGTH MISMATCH' }
+    BIGGER payloads: an ATTACHED file that Alex saves in the fedit folder under its
+    exact name, applied by ONE hash-guarded line (hash literal copied from the tool
+    output, typed once). New .go files and test files are the attachment itself. The
+    hash is checked BEFORE gofmt -w. State the expected hash, size and line count.
+    For new identifiers add a guard that Select-String finds no name clash in the
+    other non-test .go files (files starting with an underscore are ignored by Go).
+    Alex pastes commands starting at `cd`.
+
+  Test-first:
+    Red test first (confirm it fails for the right reason), then green. The assistant
+    can usually install a Go toolchain in its container (apt-get install -y golang-go,
+    Go 1.22 on Oct 20, 2026) and should compile, vet and run new files with a stub
+    main before posting; Alex's run is still the real check.
+
+  PowerShell 5.1 details:
+    A double quote inside -match is eaten by native argument passing: anchor on text
+    without quotes or use -matchhex.
+    Compute line numbers in the same command from a content anchor:
+      $n=0 ; if (@(fedit ... -op find -match 'x' -x).Count -eq 1) { $n=[int](fedit ... -x) } ; fedit ... -line "$($n+2)"
+    Set $n=0 first so a failed cast cannot reuse an old value. -match/-endmatch ranges
+    replace whole lines.
+    replaceall always verifies; for a mass replaceall omit -v (it prints a window per hit).
+
+  Git:
+    No tag, no website deploy and no push without Alex's explicit go-ahead.
+    The assistant proposes commit commands (files staged by name, never git add -A);
+    Alex runs them.
 
 ---
 
@@ -260,7 +303,7 @@ Patch file location & naming:
 
   fedit release:
     cd fedit
-    git add -A ; git commit -m "message"
+    git add FILES ; git commit -m "message"   (stage files by name, never git add -A)
     git tag vX.Y.Z ; git push ; git push --tags
     (Go module proxy handles distribution -- no GoReleaser needed)
 

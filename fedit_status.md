@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: October 19, 2026
+# Last updated: October 20, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -58,8 +58,12 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
   doReplaceAllGlob and doReplaceAllRegexGlob are kept only for tests.
   LOCAL, NOT PUSHED (after the 12 pushed commits): 5a091ad (docs for always-on
   verification, FAIL status and exit code 3 in README, SKILL, help text, status file
-  and user_skill.md; stale comments fixed), 5448025 (-outputresult), and the commit
-  that carries this entry (failure-path tests and flag docs).
+  and user_skill.md; stale comments fixed), 5448025 (-outputresult), a1dfa80
+  (failure-path tests and flag docs), 9e602f3 (log formatter), 785b4f4 (log sink),
+  59c6f9a (log file operations) and 93cbed4 (log spool). Seven local commits,
+  nothing pushed since Oct 19; origin/main = 88ff116, HEAD = 93cbed4, tag v1.11.0
+  still at 1425a3c, no new tag. The full suite was ok (about 122 s) and vet clean
+  before 93cbed4 was committed.
   -outputresult FILE and -outappend (outputresult.go). With -outputresult, stdout
   and stderr both go to one temp capture, and every os.Exit in main.go and guided.go
   is now exitNow, the single exit point that finishes the capture. Exit 0: the
@@ -74,11 +78,94 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
   TestOR_OverwriteAndAppend; helpers orxRun, orxWrite, orxRead, orxNorm) and
   wire_outputresult_fail_test.go (TestORF_*). Docs: usage text, README flag table,
   SKILL.md flag list. Not yet: MCP output_file (planned with the MCP integration).
-  NEXT: logging core, config + ini, MCP integration (logging + output_file),
-  dry-run. SMALL GAPS wanted while dry-run is pending: guided ambiguity at
-  insert-from-file source, replace -destblock and insert anchors; scanner whole-file
-  strState pass; replace -match without -endmatch = the single matched line; JS
-  regex containing /* (last); guided over MCP lowest priority.
+  LOGGING / AUDIT TRAIL (building blocks DONE Oct 18-20, 2026; NOT wired into any
+  operation yet, so there is no user-visible change and no README, SKILL or help text
+  for it). Tests use the prefixes TestLF_*, TestLS_*, TestLR_* and TestSP_*.
+  - logfmt.go (9e602f3): logTimestamp (UTC, .000Z), logKey, logQuote (bare unless
+    empty, space, quote, = or control character), formatLogLine(t, level, []logKV),
+    logNewID (16 hex), logTextFields(name, bytes) -> name_len and name_sha256.
+  - logsink.go (785b4f4): logMode off|permissive|strict, parseLogMode, logIO{Append,
+    Size, Rotate} (injected file operations), logSink with Begin, End and MustAbort,
+    newLogSink(mode, path, maxMB, now, io). Begin writes id= phase=begin plus fields;
+    End writes id= phase=end exit= [ms=] plus fields. Level INFO for exit 0, WARNING
+    for 1, ERROR otherwise. Rotation when size >= maxMB; one clock read per record.
+  - logfile.go (59c6f9a): logAppendFile (mkdir, one append write, LF),
+    logFileSize, logRotateFileAt (<log>.<UTC yyyymmddThhmmssZ>[.N], never overwrites),
+    logRotateFile, fileLogIO(), expandLogPath(p, home, getenv) (%VAR% then ~),
+    logBaseDir, defaultLogPath (%LOCALAPPDATA%\fedit\fedit.log, fallback
+    os.UserConfigDir, else an error telling to set log_file).
+  - spool.go (93cbed4, Oct 20, 2026): the permissive-mode spool.
+    newSpoolIO(primary logIO, spoolDir, id, notice func()) logIO: primary Append ok =
+    pass through, nothing spooled, no notice. Primary Append fails = the line plus
+    " logged=spool" goes to <spoolDir>/<id>.log through logAppendFile, Append returns
+    nil and notice() fires once (first failure only, and only when the spool write
+    worked). If the spool write fails too, that error is returned. Size and Rotate
+    delegate to the primary.
+    mergeSpool(spoolDir, mainPath, lio) (int, error): missing spoolDir = 0, nil. Only
+    *.log and *.log.merging files, in name order; other files are untouched. A *.log
+    is first renamed to *.log.merging (not-exist = another process took it, skip; if
+    a .merging file with that name already exists the .log is left for the next merge,
+    so nothing is overwritten). The already-merged set is the "id|phase" pairs of the
+    current main log (missing file = empty) plus records merged earlier in the same
+    run; such records are skipped. A record without an id or phase token cannot be
+    checked and is always appended. Every other non-empty line is appended with
+    " late=true" and counted. The .merging file is deleted when all lines are
+    handled; on an Append error the count so far and the error are returned and the
+    .merging file is kept (a retry appends only what is missing).
+    DECISION: the duplicate check reads the current main log only, not rotated files.
+    Tests: spool_test.go (TestSP_SpoolOnFailure, PrimaryOK, SpoolFailsToo, Delegates,
+    Merge, MergeSkipsDuplicates, MergeKeepsFileOnFailure, MergeNoSpoolDir).
+  ASSUMPTIONS NOT EXPLICITLY CONFIRMED (change if Alex says so): the default log path
+  falls back to os.UserConfigDir when LOCALAPPDATA is unset; the -outputresult FILE
+  is not written when the run fails; the level mapping above.
+  PLANNED TRACKS (all agreed):
+  - Logging: one line per operation, UTC only, [INFO]/[WARNING]/[ERROR], key=value;
+    begin and end lines share id=. Fields: user (OS user with domain), host, pid,
+    source=cli|guided|mcp (+ MCP client name and version), op, cwd, absolute src and
+    dest paths, per-file results, replacements, verify, sha256_before/after (only
+    when logging is on), exit, ms. Text values (-text, -texthex, -textfile) are
+    logged as length + SHA-256 unless log_content=on. One key, log_mode = off |
+    permissive | strict. strict: write the begin line before any mutation and abort
+    if that is impossible; if the end record cannot be written after the edit, a loud
+    error and a distinct exit code. permissive: run, spool (same format,
+    logged=spool), print "The action was not logged", merge into the main log at the
+    next logged run (late=true, id-based, rename to .merging first) or with
+    `fedit -log merge`. Rotation by log_max_mb.
+  - Config: an .ini with a key registry (name, type, default, env name, flag name,
+    MCP-readable). Precedence flag > env > ini > default. -config show, get, set,
+    unset, path (syntax: -config set log_file ~/.config/fedit/x.log); validate before
+    writing; atomic write preserving comments; ~ and %APPDATA% expanded inside fedit;
+    set and unset are logged and NOT available over MCP. Unknown key = warning,
+    invalid value = error; -noconfig ignores the ini; no auto-load of ./fedit.ini;
+    MCP honours only logging and output keys. The ini may set presentation, logging
+    and output defaults and tighten safety, never weaken guards or change which text
+    gets edited.
+  - Dry-run: `dry_run` MCP parameter and `-dry` CLI flag returning a unified diff per
+    file plus the same OK/SKIP/ERROR report, marked applied=false, through the same
+    exec* code path (a commenter, Mohammed, confirmed unified diff; Alex told him it
+    is on the roadmap). Guided gets a trailing `dry` modifier.
+  - Small gaps wanted while dry-run is pending: guided ambiguity at the insert-from-
+    file source, replace -destblock and insert anchors (reuse the 6ee1f11 numbered-
+    choice helper; deterministic SKIP listing candidates for fan-out); scanner: one
+    whole-file strState pass fixes "comment opened outside a block", "block start
+    inside a comment" and "PHP heredoc outside a block"; a JS regex containing /*
+    needs a regex-literal heuristic (last); replace -match without -endmatch =
+    replace the single matched line; guided over MCP lowest priority.
+  KNOWN GAPS FOR THE WIRING: the MCP initialize handler ignores clientInfo (needed
+  for source=mcp name and version); main() returns early for `mcp` and `guided`
+  before flag parsing, so those paths need their own begin and end records.
+  Also open: multiWriteLines could get a neutral name.
+  NEXT STEPS, in order:
+  1. DONE: spool green step committed (93cbed4).
+  2. Wire logging through exitNow, starting with env vars and flags for log_mode,
+     log_file, log_max_mb, log_content (names still to agree): strict aborts before
+     any mutation, permissive spools and prints the notice, the end record is
+     written in exitNow, merge at the start of the next logged run, `fedit -log
+     merge`. Red test first (binary-level tests with a temp log).
+  3. Config + ini, then MCP integration (logging + output_file), then dry-run, then
+     the small gaps.
+  4. Housekeeping when logging becomes user-visible: status file entries, README,
+     SKILL, help text.
 PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. v1.8.1 was tagged later (see the Sept 28 notes below).
   Code commit
   touched .gitignore, CLAUDE_DESKTOP.md, main.go (~3920 lines), user_skill.md.
@@ -614,6 +701,8 @@ design_cross_file_ops.md, guide_mode_examples.md   (NEW -- fedit 2.0 design)
 import_advisory.patch, import_advisory_test.go     (NEW -- applied)
 map_hcl.go, map_hcl_test.go, infer_lang_test.go (NEW Oct 13, 2026 -- HCL and Nix map, inferLang fallback)
 lang_alias_test.go (NEW Oct 14, 2026 -- js, ts, cs, c# lang aliases)
+outputresult.go, wire_outputresult_test.go, wire_outputresult_fail_test.go (NEW Oct 19, 2026 -- -outputresult and -outappend)
+logfmt.go, logsink.go, logfile.go, spool.go (NEW Oct 18-20, 2026 -- audit log building blocks, not wired yet), spool_test.go
 Test files: mcp_test.go, texthex_test.go, extract_test.go, block_test.go,
   iac_test.go, move_copy_test.go, regex_glob_test.go, stream_fields_test.go,
   v180_test.go, map_json_csv_test.go (NEW), import_advisory_test.go (NEW)
@@ -621,5 +710,5 @@ _testsystem/          (NEW -- see TESTING SYSTEM section above)
 Demo: demo.gif, demo.tape, demo_sample.go
 
 ═══════════════════════════════════════════════════════════════
-END OF FEDIT STATUS -- October 19, 2026
+END OF FEDIT STATUS -- October 20, 2026
 ═══════════════════════════════════════════════════════════════
