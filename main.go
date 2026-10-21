@@ -24,6 +24,7 @@ func main() {
 	}
 
 	if isGuidedCall(os.Args) {
+		logSourceGuided()
 		if err := runGuided(); err != nil {
 			fmt.Fprintln(os.Stderr, "guided:", err)
 			exitNow(2)
@@ -66,7 +67,20 @@ func main() {
 	quiet := flag.Bool("quiet", false, "Suppress output on success, including the per-file batch report; exit code signals result (-quiet wins over -v)")
 	outputresult := flag.String("outputresult", "", "Write the operation report to this file (UTF-8, no BOM) and print one summary line; errors stay on stderr; the file must not be an edited file")
 	outappend := flag.Bool("outappend", false, "With -outputresult: append to the file instead of overwriting it")
+	logRegisterFlags()
 	flag.Parse()
+	if code := logStart(*op, logCLIInput{File: *file, Files: *files, Dest: flag.Lookup("dest").Value.String(), Text: *text, TextHex: *texthex, TextFile: *textFile}); code != 0 {
+		exitNow(code)
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			logFinish(2)
+			panic(r)
+		}
+		if logRun != nil {
+			exitNow(0)
+		}
+	}()
 
 	// -matchhex/-endmatchhex: hex-encoded anchors, decoded into -match/-endmatch so PowerShell never mangles embedded double quotes.
 	if *matchhex != "" {
@@ -118,16 +132,16 @@ func main() {
 
 	if *outappend && *outputresult == "" {
 		fmt.Fprintln(os.Stderr, "-outappend requires -outputresult")
-		os.Exit(1)
+		exitNow(1)
 	}
 	if *outputresult != "" {
 		if msg := outputResultRefuse(*outputresult, *file, *files, flag.Lookup("dest").Value.String()); msg != "" {
 			fmt.Fprintln(os.Stderr, msg)
-			os.Exit(1)
+			exitNow(1)
 		}
 		if err := startOutputResult(*outputresult, *outappend); err != nil {
 			fmt.Fprintf(os.Stderr, "-outputresult: %v\n", err)
-			os.Exit(1)
+			exitNow(1)
 		}
 		defer func() {
 			if r := recover(); r != nil {
@@ -208,6 +222,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "  -quiet        Suppress output on success, including the per-file batch report; exit code signals result (wins over -v)")
 		fmt.Fprintln(os.Stderr, "  -outputresult FILE  Write the operation report to FILE (UTF-8, no BOM) and print one summary line; errors stay on stderr; FILE may not be an edited file")
 		fmt.Fprintln(os.Stderr, "  -outappend    With -outputresult: append to FILE instead of overwriting it")
+		logUsage()
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Escapes in -text: \\n = newline, \\t = tab, \\\\ = literal backslash")
 		exitNow(1)

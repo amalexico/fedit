@@ -129,5 +129,5 @@ func finishOutputResult(code int) int {
 // exitNow is the single exit point: it finishes any -outputresult capture and
 // then exits with the resulting code.
 func exitNow(code int) {
-	os.Exit(finishOutputResult(code))
+	os.Exit(logFinish(finishOutputResult(code)))
 }
