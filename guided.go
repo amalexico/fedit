@@ -420,6 +420,9 @@ func runGuided() error {
 		os.Args = append([]string{os.Args[0]}, steps[0].argv...)
 		return nil
 	}
+	if code := logStartGuided(steps); code != 0 {
+		exitNow(code)
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -441,6 +444,7 @@ func runGuided() error {
 			guidedEcho(st.argv)
 		}
 		cmd := exec.Command(exe, st.argv...)
+		cmd.Env = logChildEnv()
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if e := cmd.Run(); e != nil {

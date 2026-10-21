@@ -24,6 +24,10 @@ const (
 	exitLogGap     = 5
 )
 
+// logParentEnv carries the id of a guided parent process to the child fedit
+// processes it starts, one per step.
+const logParentEnv = "FEDIT_LOG_PARENT"
+
 var (
 	// logFlagVals holds the -log-* flag values, registered before flag.Parse.
 	logFlagVals struct{ Mode, File, MaxMB, Content, Level, Scope *string }
@@ -74,7 +78,10 @@ func logFinishCode(code int, endErr error, strict bool) int {
 type logCLIInput struct {
 	Source, User, Host, Cwd string
 	Pid                     int
+	Parent                  string // id of the guided parent process, when there is one
 	File, Files, Dest       string
+	Steps                   int    // guided parent: number of steps
+	Create                  string // guided parent: comma list of files it creates
 	Text, TextHex, TextFile string
 	Content                 bool
 }
@@ -97,8 +104,9 @@ func logAbsList(spec, cwd string) string {
 }
 
 // logCLIFields builds the fields of the begin record, after op: source, user,
-// host, pid, cwd, then file, files and dest (absolute, only when given), then
-// the text (length and SHA-256, or verbatim when Content is set) and textfile.
+// host, pid, cwd, then parent (a child of a guided run), file, files and dest
+// (absolute, only when given), steps and create (a guided parent), then the
+// text (length and SHA-256, or verbatim when Content is set) and textfile.
 // -texthex is hashed after decoding; an invalid one is hashed as typed.
 func logCLIFields(in logCLIInput) []logKV {
 	kvs := []logKV{
@@ -108,10 +116,19 @@ func logCLIFields(in logCLIInput) []logKV {
 		{"pid", strconv.Itoa(in.Pid)},
 		{"cwd", in.Cwd},
 	}
+	if in.Parent != "" {
+		kvs = append(kvs, logKV{"parent", in.Parent})
+	}
 	for _, p := range []struct{ key, spec string }{{"file", in.File}, {"files", in.Files}, {"dest", in.Dest}} {
 		if v := logAbsList(p.spec, in.Cwd); v != "" {
 			kvs = append(kvs, logKV{p.key, v})
 		}
+	}
+	if in.Steps > 0 {
+		kvs = append(kvs, logKV{"steps", strconv.Itoa(in.Steps)})
+	}
+	if v := logAbsList(in.Create, in.Cwd); v != "" {
+		kvs = append(kvs, logKV{"create", v})
 	}
 	var raw []byte
 	have := false
@@ -153,22 +170,59 @@ func logIdentity() (usr, host string, pid int, cwd string) {
 	return usr, host, os.Getpid(), cwd
 }
 
-// logStart resolves the logging settings from the -log-* flags and the
+// logFlagString reads a -log-* flag value; a flag that was never registered
+// (a guided run starts logging before flag.Parse) reads as not set.
+func logFlagString(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+// logStart starts the logging of a command-line run from the -log-* flags and
+// the FEDIT_LOG_* environment. See logStartWith.
+func logStart(op string, in logCLIInput) int {
+	return logStartWith(logInputs{
+		Mode:    logFlagString(logFlagVals.Mode),
+		File:    logFlagString(logFlagVals.File),
+		MaxMB:   logFlagString(logFlagVals.MaxMB),
+		Content: logFlagString(logFlagVals.Content),
+		Level:   logFlagString(logFlagVals.Level),
+		Scope:   logFlagString(logFlagVals.Scope),
+	}, op, in)
+}
+
+// logStartGuided starts the logging of a guided parent process, the one that
+// creates files and runs one child fedit per step. It is configured from the
+// environment only, since a guided command line has no -log-* flags.
+func logStartGuided(steps []guidedStep) int {
+	var create []string
+	for _, st := range steps {
+		create = append(create, st.create...)
+	}
+	logSourceGuided()
+	return logStartWith(logInputs{}, "guided", logCLIInput{Steps: len(steps), Create: strings.Join(create, ",")})
+}
+
+// logChildEnv is the environment for a child fedit process: the parent's own,
+// plus the id of this run, so the child logs parent=<id>. It is nil (inherit)
+// when this run is not logged.
+func logChildEnv() []string {
+	if logRun == nil {
+		return nil
+	}
+	return append(os.Environ(), logParentEnv+"="+logRun.ID())
+}
+
+// logStartWith resolves the logging settings from the flag layer and the
 // FEDIT_LOG_* environment, starts the session and writes the begin record. It
 // returns 0 to go on, 1 for an invalid setting, or exitLogRefused when strict
-// mode could not write the begin record; in both cases nothing has changed.
-func logStart(op string, in logCLIInput) int {
+// mode could not write the begin record; in both cases nothing has changed. A
+// process that finds FEDIT_LOG_PARENT in its environment is a step of a guided
+// run: it logs source=guided and parent=<id>.
+func logStartWith(flags logInputs, op string, in logCLIInput) int {
 	home, _ := os.UserHomeDir()
-	settings, err := resolveLogSettings(os.Getenv, home, os.UserConfigDir,
-		logInputs{
-			Mode:    *logFlagVals.Mode,
-			File:    *logFlagVals.File,
-			MaxMB:   *logFlagVals.MaxMB,
-			Content: *logFlagVals.Content,
-			Level:   *logFlagVals.Level,
-			Scope:   *logFlagVals.Scope,
-		},
-		logInputsFromEnv(os.Getenv))
+	settings, err := resolveLogSettings(os.Getenv, home, os.UserConfigDir, flags, logInputsFromEnv(os.Getenv))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "fedit: %v\n", err)
 		return 1
@@ -178,6 +232,9 @@ func logStart(op string, in logCLIInput) int {
 	}
 
 	in.Source = logSourceName
+	if p := strings.TrimSpace(os.Getenv(logParentEnv)); p != "" {
+		in.Parent, in.Source = p, "guided"
+	}
 	in.Content = settings.Content
 	in.User, in.Host, in.Pid, in.Cwd = logIdentity()
 	notice := func() {

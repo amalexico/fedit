@@ -6,13 +6,15 @@ import "time"
 // together for one run of fedit: Begin before the operation, End when the
 // process exits. It is not wired into the operations yet.
 
-// The operations fedit knows, as listed by -op. Reads never change a file.
+// The operations fedit knows, as listed by -op, plus guided (a parent process
+// that creates files and runs one child fedit per step). Reads never change a file.
 var (
 	logReadOps  = map[string]bool{"show": true, "map": true, "find": true, "fields": true}
 	logWriteOps = map[string]bool{
 		"insert": true, "delete": true, "replace": true, "replaceall": true,
 		"write": true, "writeraw": true, "writelines": true,
 		"insertafter": true, "insertbefore": true, "move": true, "copy": true,
+		"guided": true,
 	}
 )
 
