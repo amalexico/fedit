@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: October 21, 2026
+# Last updated: October 22, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -63,9 +63,14 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
   59c6f9a (log file operations), 93cbed4 (log spool), a16da1c (docs: status file and
   user_skill.md), cfd9a00 (log settings resolver), 0d800f9 (log_level and
   log_scope), 926fd4b (log session), fecae3a (audit log wired into the CLI) and
-  bcf4edc (guided runs logged). Thirteen local commits, nothing pushed since Oct 19;
-  origin/main = 88ff116, HEAD = bcf4edc, tag v1.11.0 still at 1425a3c, no new tag.
-  The full suite was ok (about 133 s) and vet clean before bcf4edc was committed.
+  bcf4edc (guided runs logged), 5c98990 (docs: status file and user_skill.md),
+  1e3715a (result collector and the logFinish hook), 8122ff9 (single-file replaceall
+  result fields), 08b591b (-stream result fields), 8db5280 (multi -file result fields),
+  af7b4b2 (sha256 before and after for single-file writes), ff29d62 (MCP calls logged),
+  then one commit each for MCP single-file replaceall result fields and `fedit -log
+  merge`, then the docs commit for this file. Twenty-three local commits, nothing
+  pushed since Oct 19; origin/main = 88ff116, tag v1.11.0 still at 1425a3c, no new tag.
+  The full suite was ok (about 133 s) and vet clean at every step.
   -outputresult FILE and -outappend (outputresult.go). With -outputresult, stdout
   and stderr both go to one temp capture, and every os.Exit in main.go and guided.go
   is now exitNow, the single exit point that finishes the capture. Exit 0: the
@@ -195,9 +200,59 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
   is not written when the run fails; the level mapping above; the default log_max_mb
   is 10; a blank setting counts as not set; a relative log_file becomes absolute; the
   spool lives in the per-user folder even with a custom log_file; -textfile logs the
-  path only (its content is not hashed yet).
-  PLANNED TRACKS (all agreed; Oct 21 status: the logging track below is implemented
-  for CLI and guided runs except the items under KNOWN GAPS; config/ini, dry-run and
+  path only (its content is not hashed yet). Also unconfirmed: an MCP error result is
+  logged as exit 1 and a failed verification as exit 3; the MCP client name and version
+  are capped at 100 bytes; MCP lines_changed counts lines, not occurrences; `-log merge`
+  fails on any invalid FEDIT_LOG_* value even when logging is off; hashes are taken only
+  for single -file runs.
+  LOGGING SLICE B, MCP AND MERGE (Oct 22, 2026; all green, suite ok in about 133 s, vet clean):
+  - logresult.go (1e3715a): the result collector. logNote(key, val) keeps one result
+    field for the end record (the last value per key wins; it does nothing when the run
+    is not logged, so a run with logging off pays nothing); logFinish passes
+    logTakeNotes() to the end record. Helpers: logNoteReplace (replacements,
+    lines_changed), logNoteVerify (PASS | FAIL | none), logNoteHashes, logNoteBatch
+    (files_total, files_ok, files_skip, files_fail, verify, results="STATUS path; ...";
+    FAIL and ERROR count as files_fail; verify is FAIL when any file failed
+    verification, PASS when the run verified and at least one file succeeded, else
+    none), logFileSHA256 (empty when the run is not logged). Tests: logresult_test.go
+    (TestLN_*; helpers lnxStart, lnxWant).
+  - Hooks: finishVerified in regex_verified.go (single-file replaceall, literal and
+    regex: replacements, lines_changed, verify, sha256 before and after; a failed write
+    notes nothing), 8122ff9, tests loghook_test.go (TestLH_*; helpers lhxFile, lhxSum).
+    The verified -stream runner in stream_verified.go (same fields; sha256_after is the
+    read-back hash), 08b591b, tests logstream_test.go (TestLK_*). collectMultiMutate
+    (multi -file runs, CLI and MCP): logNoteBatch(results, count != nil), 8db5280, tests
+    logmulti_test.go (TestLM_*).
+  - loghash.go (af7b4b2): every single-file write operation gets sha256_before (taken
+    right after the begin record) and sha256_after (in logFinish, before the end
+    record); a hash an operation already noted is kept. Skipped: read operations,
+    guided parents, -file lists and globs, -files and -dest runs. A write that creates
+    the file has only sha256_after. Tests: loghash_test.go (TestLHT_*) and
+    loghashbin_test.go; its four binary-level cases (WriteOpHashes, ReadOpNoHashes,
+    ReplaceAllResult, MultiFileResult) are subtests of TestLW_Bin in logwire_test.go.
+  - MCP logging (ff29d62): logmcp.go. mcpLoggedExec wraps every tools/call in a logging
+    session (begin before the tool, end after); source=mcp; the initialize handler
+    remembers clientInfo (mcpNoteClient; control characters dropped, 100 bytes max) and
+    the begin record carries client= and client_version= (logCLIInput.Client and
+    ClientVersion in logwire.go). Settings come from the FEDIT_LOG_* environment only.
+    An error result is logged as exit 1, a failed verification as exit 3. Strict: a begin
+    record that cannot be written refuses the call with an error result and nothing
+    changes; an end record that cannot be written after a successful call turns the
+    result into an error saying the operation completed. The per-run globals are reset
+    around every call. Tests: logmcp_test.go (TestLMC_*; helpers lmcx*).
+  - MCP single-file replaceall (literal and regex) notes lines_changed (lines, not
+    occurrences) and verify; helpers logNoteLines and logNoteVerdict in logmcpnotes.go;
+    tests logmcpnotes_test.go (TestLMN_*).
+  - `fedit -log merge` (logmerge.go; dispatched in main() before the mcp check): merges
+    the spool into the main log now, whatever the mode, from the FEDIT_LOG_*
+    environment. On stderr: "Merged N spooled record(s) into FILE" or "No spooled
+    records to merge"; exit 1 for a usage error, an invalid setting, no log location,
+    or a merge that stops (the count so far is shown). It is not an operation and is
+    not logged. Tests: logmerge_test.go (TestLMG_*) and the LogMerge subtest of TestLW_Bin.
+  - Method: the container has no repo, so each step was checked in a scratch module with
+    stand-ins for the files it could not see; the real run on Alex's machine is the check.
+  PLANNED TRACKS (all agreed; Oct 22 status: the logging track below is implemented
+  for CLI, guided and MCP runs except the items under KNOWN GAPS; config/ini, dry-run and
   the small gaps are still planned):
   - Logging: one line per operation, UTC only, [INFO]/[WARNING]/[ERROR], key=value;
     begin and end lines share id=. Fields: user (OS user with domain), host, pid,
@@ -231,24 +286,25 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
     inside a comment" and "PHP heredoc outside a block"; a JS regex containing /*
     needs a regex-literal heuristic (last); replace -match without -endmatch =
     replace the single matched line; guided over MCP lowest priority.
-  KNOWN GAPS: the MCP initialize handler ignores clientInfo (needed for source=mcp
-  name and version) and `mcp` is not logged at all (main() returns early for it before
-  flag parsing; it needs its own begin and end records and the output_file
-  parameter). The end record has no per-file results, replacement counts, verify
-  status or sha256_before/after yet. -textfile content is not hashed. A guided parent
-  exits 1 when any child fails (a child's exit 4 or 5 is not passed through). There is
-  no `-log merge` command yet. multiWriteLines could get a neutral name.
+  KNOWN GAPS: the MCP plain write tools (insert, delete, replace, insertafter,
+  insertbefore, move, copy, write, writeraw) log hashes but no counts, because the
+  mcpDo* functions have no hooks; the MCP `output_file` parameter does not exist yet; in
+  permissive mode the "The action was not logged" notice goes to the server's stderr, not
+  into the tool result. The older unverified paths doReplaceAll, doStreamReplaceAll and the
+  glob helpers are not hooked (kept for tests only). -textfile content is not hashed. A
+  guided parent exits 1 when any child fails (a child's exit 4 or 5 is not passed
+  through). Multi-file runs report per-file results but no per-file hashes (a per-file hash
+  would read every file twice; add it only if asked). multiWriteLines could get a neutral
+  name.
   NEXT STEPS, in order:
-  1. DONE: spool (93cbed4), settings (cfd9a00, 0d800f9), session (926fd4b), CLI
-     wiring (fecae3a), guided (bcf4edc).
-  2. Slice B: per-file results, replacements, verify and sha256_before/after in the
-     end record (hooks inside the operations, only when logging is on).
-  3. `fedit -log merge` (merge now, whatever the mode) and MCP integration (begin and
-     end records with clientInfo, output_file).
-  4. Config + ini (-config show/get/set/unset/path), then dry-run (-dry / dry_run),
-     then the small gaps listed under PLANNED TRACKS.
-  5. Housekeeping: README, SKILL and help text for logging (the flags are only in the
-     usage text so far).
+  1. DONE: spool, settings, session, CLI wiring, guided, slice B (single-file, -stream,
+     multi -file, write-operation hashes), MCP logging, MCP single-file replaceall
+     fields, `fedit -log merge`.
+  2. Config + ini (-config show/get/set/unset/path), then dry-run (-dry / dry_run), then
+     the small gaps listed under PLANNED TRACKS; the MCP output_file parameter belongs
+     with the config work (MCP honours only logging and output keys).
+  3. Housekeeping: README, SKILL and help text for logging (the flags, `-log merge` and
+     the MCP behaviour are only in the usage text and this file so far).
 PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. v1.8.1 was tagged later (see the Sept 28 notes below).
   Code commit
   touched .gitignore, CLAUDE_DESKTOP.md, main.go (~3920 lines), user_skill.md.
@@ -786,7 +842,9 @@ map_hcl.go, map_hcl_test.go, infer_lang_test.go (NEW Oct 13, 2026 -- HCL and Nix
 lang_alias_test.go (NEW Oct 14, 2026 -- js, ts, cs, c# lang aliases)
 outputresult.go, wire_outputresult_test.go, wire_outputresult_fail_test.go (NEW Oct 19, 2026 -- -outputresult and -outappend)
 logfmt.go, logsink.go, logfile.go, spool.go, logcfg.go, logsession.go, logwire.go (NEW Oct 18-21, 2026 -- audit log; wired into main.go, guided.go and outputresult.go)
+logresult.go, loghash.go, logmcp.go, logmcpnotes.go, logmerge.go (NEW Oct 22, 2026 -- audit log result fields, file hashes, MCP logging, -log merge)
 spool_test.go, logcfg_test.go, logcfg_level_test.go, logsession_test.go, logwire_test.go, logguided_test.go (NEW Oct 20-21, 2026 -- audit log tests)
+logresult_test.go, loghook_test.go, logstream_test.go, logmulti_test.go, loghash_test.go, loghashbin_test.go, logmcp_test.go, logmcpnotes_test.go, logmerge_test.go (NEW Oct 22, 2026 -- audit log result field tests)
 Test files: mcp_test.go, texthex_test.go, extract_test.go, block_test.go,
   iac_test.go, move_copy_test.go, regex_glob_test.go, stream_fields_test.go,
   v180_test.go, map_json_csv_test.go (NEW), import_advisory_test.go (NEW)
@@ -794,5 +852,5 @@ _testsystem/          (NEW -- see TESTING SYSTEM section above)
 Demo: demo.gif, demo.tape, demo_sample.go
 
 ═══════════════════════════════════════════════════════════════
-END OF FEDIT STATUS -- October 21, 2026
+END OF FEDIT STATUS -- October 22, 2026
 ═══════════════════════════════════════════════════════════════
