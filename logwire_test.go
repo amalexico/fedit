@@ -210,6 +210,10 @@ func TestLW_Bin(t *testing.T) {
 		{"InvalidSettingIsError", lwxBinInvalidSettingIsError},
 		{"OutputResultAndLog", lwxBinOutputResultAndLog},
 		{"UsageIsNotAnOperation", lwxBinUsageIsNotAnOperation},
+		{"WriteOpHashes", lwxBinWriteOpHashes},
+		{"ReadOpNoHashes", lwxBinReadOpNoHashes},
+		{"ReplaceAllResult", lwxBinReplaceAllResult},
+		{"MultiFileResult", lwxBinMultiFileResult},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) { c.run(t, bin) })

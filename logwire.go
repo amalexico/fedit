@@ -250,6 +250,7 @@ func logStartWith(flags logInputs, op string, in logCLIInput) int {
 		logWarned = true
 	}
 	logRun, logRunStrict = ls, settings.Mode == logStrict
+	logHashStart(op, in)
 	return 0
 }
 
@@ -261,6 +262,7 @@ func logFinish(code int) int {
 		return code
 	}
 	logRunEnded = true
+	logHashFinish()
 	err := logRun.End(code, logTakeNotes())
 	if err != nil {
 		switch {
