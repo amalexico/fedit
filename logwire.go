@@ -261,7 +261,7 @@ func logFinish(code int) int {
 		return code
 	}
 	logRunEnded = true
-	err := logRun.End(code, nil)
+	err := logRun.End(code, logTakeNotes())
 	if err != nil {
 		switch {
 		case logRunStrict:
