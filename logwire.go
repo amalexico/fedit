@@ -83,6 +83,7 @@ type logCLIInput struct {
 	Steps                   int    // guided parent: number of steps
 	Create                  string // guided parent: comma list of files it creates
 	Text, TextHex, TextFile string
+	Client, ClientVersion   string
 	Content                 bool
 }
 
@@ -129,6 +130,12 @@ func logCLIFields(in logCLIInput) []logKV {
 	}
 	if v := logAbsList(in.Create, in.Cwd); v != "" {
 		kvs = append(kvs, logKV{"create", v})
+	}
+	if in.Client != "" {
+		kvs = append(kvs, logKV{"client", in.Client})
+		if in.ClientVersion != "" {
+			kvs = append(kvs, logKV{"client_version", in.ClientVersion})
+		}
 	}
 	var raw []byte
 	have := false

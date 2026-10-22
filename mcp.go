@@ -91,6 +91,7 @@ func runMCP() {
 		}
 		switch req.Method {
 		case "initialize":
+			mcpNoteClient(req.Params)
 			mcpSendResult(req.ID, mcpInitResult{
 				ProtocolVersion: "2024-11-05",
 				Capabilities:    mcpCaps{Tools: map[string]any{}},
@@ -106,7 +107,7 @@ func runMCP() {
 				mcpSendError(req.ID, -32602, "Invalid params")
 				continue
 			}
-			result := mcpExecTool(params.Name, params.Arguments)
+			result := mcpLoggedExec(params.Name, params.Arguments)
 			mcpSendResult(req.ID, result)
 		default:
 			mcpSendError(req.ID, -32601, fmt.Sprintf("Method not found: %s", req.Method))
