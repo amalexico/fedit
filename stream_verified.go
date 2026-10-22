@@ -55,6 +55,7 @@ func runStreamVerified(path string, xform func(string) (string, int), remaining 
 	hasher := sha256.New()
 	res := replaceAllResult{}
 	changedIn, wantLines, wantRemaining := 0, 0, 0
+	before := logFileSHA256(path)
 	linesRead, _, err := execStreamOp(path, func(_ int, line string) []string {
 		newLine, n := xform(line)
 		pieces := strings.Split(newLine, "\n")
@@ -83,9 +84,12 @@ func runStreamVerified(path string, xform func(string) (string, int), remaining 
 		return 1
 	}
 	fmt.Fprintf(out, doneFmt, changedIn, linesRead)
+	logNoteReplace(res.Occurrences, changedIn)
 	got, err := scanStreamFile(path, remaining)
 	if err != nil {
 		fmt.Fprintf(out, "VERIFY: could not re-read %s: %v\n", path, err)
+		logNoteHashes(before, "")
+		logNoteVerify("FAIL")
 		return 3
 	}
 	var want [32]byte
@@ -93,6 +97,12 @@ func runStreamVerified(path string, xform func(string) (string, int), remaining 
 	hashOK := got.sum == want
 	v := replaceVerify{WantLines: wantLines, GotLines: got.lines, Remaining: got.remaining, WantRemaining: wantRemaining}
 	v.OK = hashOK && v.WantLines == v.GotLines && v.Remaining == v.WantRemaining
+	logNoteHashes(before, fmt.Sprintf("%x", got.sum[:]))
+	if v.OK {
+		logNoteVerify("PASS")
+	} else {
+		logNoteVerify("FAIL")
+	}
 	if v.OK {
 		fmt.Fprint(out, formatReplaceVerify(res, v))
 		return 0
