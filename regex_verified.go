@@ -77,17 +77,26 @@ func verifyReplaceAllRegexOnDisk(path, pattern string, res replaceAllResult) (re
 // for every changed line. It returns the exit code: 0 verified, 1 write failed,
 // 3 written but not verified.
 func finishVerified(res replaceAllResult, path, doneMsg string, verbose bool, out io.Writer, write func(string, []string) error, verify func(string) (replaceVerify, error)) int {
+	before := logFileSHA256(path)
 	if err := write(path, res.Lines); err != nil {
 		fmt.Fprintf(out, "Error writing file: %v\n", err)
 		return 1
 	}
 	fmt.Fprint(out, doneMsg)
+	logNoteReplace(res.Occurrences, len(res.Changed))
+	logNoteHashes(before, logFileSHA256(path))
 	v, err := verify(path)
 	if err != nil {
 		fmt.Fprintf(out, "VERIFY: could not re-read %s: %v\n", path, err)
+		logNoteVerify("FAIL")
 		return 3
 	}
 	fmt.Fprint(out, formatReplaceVerify(res, v))
+	if v.OK {
+		logNoteVerify("PASS")
+	} else {
+		logNoteVerify("FAIL")
+	}
 	if verbose {
 		if disk, err := readLines(path); err == nil {
 			fmt.Fprint(out, formatHitWindows(disk, res.Changed, 2, 2))
