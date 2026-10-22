@@ -1,7 +1,7 @@
 # Amalex Brand -- Claude Working Preferences
 # Upload this file alongside the project status file at the start of every chat.
 # Applies to: fedit, amalex-handler, fwrite, website, and all Amalex Brand projects.
-# Last updated: October 20, 2026
+# Last updated: October 21, 2026
 
 ---
 
@@ -245,6 +245,37 @@ Patch file location & naming:
     No tag, no website deploy and no push without Alex's explicit go-ahead.
     The assistant proposes commit commands (files staged by name, never git add -A);
     Alex runs them.
+
+  Attachments and replacing files (added Oct 21, 2026):
+    Every file an apply line needs is attached in the SAME message as the apply line
+    (call present_files and check it); a missing file makes the guard fail harmlessly.
+    To replace a committed file, attach the whole new file under an underscore name
+    (for example _logwire_new.go; Go ignores it). The apply line checks its SHA-256 and
+    that `git status --porcelain -- FILE` is empty, then Move-Item -Force over the old
+    file, then gofmt -w. For an untracked file guard on the old file's hash instead.
+    Name-clash guards use Select-String -CaseSensitive with explicit names (a short
+    prefix plus a capital, such as lgd[A-Z], for test helpers).
+
+  Tests that run the binary (added Oct 21, 2026):
+    clhBuild runs go build on every call, about 17 s each on this machine. Build once
+    per parent test (clhBuild at the top of one Test function) and run the cases as
+    t.Run subtests; never call clhBuild from each test. 13 separate builds took the
+    suite from 118 s to 408 s.
+    When the suite or a command is suddenly slow, measure first (go test -v shows
+    per-test times; Measure-Command times one run) before guessing a cause.
+    The assistant cannot run the real fedit; it may build a scratch program with the
+    same wiring to run the new tests, and Alex's run is still the real check.
+
+  Exit codes (Oct 21, 2026): 0 ok, 1 nothing done, refused or usage error, 2 guided plan
+    error or panic, 3 FAIL (verification failed or the -outputresult file could not be
+    written),
+    4 strict logging refused the run (begin record not written, nothing changed),
+    5 strict logging: the run succeeded but its end record could not be written.
+
+  Logging decisions in force (see fedit_status.md): logs are audits, so every
+    operation is logged, reads included (-log-scope writes limits it); in strict mode
+    -log-level is forced to all; log settings are flag > FEDIT_LOG_* environment >
+    default, and off by default.
 
 ---
 

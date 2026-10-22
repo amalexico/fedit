@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: October 20, 2026
+# Last updated: October 21, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -60,10 +60,12 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
   verification, FAIL status and exit code 3 in README, SKILL, help text, status file
   and user_skill.md; stale comments fixed), 5448025 (-outputresult), a1dfa80
   (failure-path tests and flag docs), 9e602f3 (log formatter), 785b4f4 (log sink),
-  59c6f9a (log file operations) and 93cbed4 (log spool). Seven local commits,
-  nothing pushed since Oct 19; origin/main = 88ff116, HEAD = 93cbed4, tag v1.11.0
-  still at 1425a3c, no new tag. The full suite was ok (about 122 s) and vet clean
-  before 93cbed4 was committed.
+  59c6f9a (log file operations), 93cbed4 (log spool), a16da1c (docs: status file and
+  user_skill.md), cfd9a00 (log settings resolver), 0d800f9 (log_level and
+  log_scope), 926fd4b (log session), fecae3a (audit log wired into the CLI) and
+  bcf4edc (guided runs logged). Thirteen local commits, nothing pushed since Oct 19;
+  origin/main = 88ff116, HEAD = bcf4edc, tag v1.11.0 still at 1425a3c, no new tag.
+  The full suite was ok (about 133 s) and vet clean before bcf4edc was committed.
   -outputresult FILE and -outappend (outputresult.go). With -outputresult, stdout
   and stderr both go to one temp capture, and every os.Exit in main.go and guided.go
   is now exitNow, the single exit point that finishes the capture. Exit 0: the
@@ -78,9 +80,11 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
   TestOR_OverwriteAndAppend; helpers orxRun, orxWrite, orxRead, orxNorm) and
   wire_outputresult_fail_test.go (TestORF_*). Docs: usage text, README flag table,
   SKILL.md flag list. Not yet: MCP output_file (planned with the MCP integration).
-  LOGGING / AUDIT TRAIL (building blocks DONE Oct 18-20, 2026; NOT wired into any
-  operation yet, so there is no user-visible change and no README, SKILL or help text
-  for it). Tests use the prefixes TestLF_*, TestLS_*, TestLR_* and TestSP_*.
+  LOGGING / AUDIT TRAIL (building blocks Oct 18-20, 2026; wired into command-line and
+  guided runs Oct 21, 2026, off by default; MCP is NOT wired yet; README and SKILL
+  have nothing about it yet, only the usage text does). Tests use the prefixes
+  TestLF_*, TestLS_*, TestLR_*, TestSP_*, TestLC_*, TestLV_*, TestLG_*, TestLW_* and
+  TestLGD_*.
   - logfmt.go (9e602f3): logTimestamp (UTC, .000Z), logKey, logQuote (bare unless
     empty, space, quote, = or control character), formatLogLine(t, level, []logKV),
     logNewID (16 hex), logTextFields(name, bytes) -> name_len and name_sha256.
@@ -115,10 +119,86 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
     DECISION: the duplicate check reads the current main log only, not rotated files.
     Tests: spool_test.go (TestSP_SpoolOnFailure, PrimaryOK, SpoolFailsToo, Delegates,
     Merge, MergeSkipsDuplicates, MergeKeepsFileOnFailure, MergeNoSpoolDir).
+  - logcfg.go (cfd9a00, 0d800f9): resolveLogSettings(getenv, home, userConfigDir,
+    layers...) merges the layers first-wins per value (flags, then FEDIT_LOG_*
+    environment, later the ini, then defaults) into logSettings{Mode, File, MaxMB,
+    Content, Level, Scope, SpoolDir}. A blank value is not set. An invalid value is an
+    error even when the mode is off (exit 1 before any edit). Defaults: mode off,
+    log_max_mb 10, content off, level all, scope all. log_file is expanded (%VAR%, ~)
+    and made absolute; the default is %LOCALAPPDATA%\fedit\fedit.log. The spool folder
+    is "spool" in the per-user folder, or next to the log file when there is none.
+    File and SpoolDir are resolved even with the mode off (for a future `-log merge`);
+    mode on with no usable location = error telling to set log_file.
+    log_level = all | warning | error (aliases warnings, errors): all writes INFO,
+    WARNING and ERROR, warning writes WARNING and ERROR, error writes ERROR only.
+    log_scope = all | writes. DECIDED Oct 21: in strict mode the level is forced to
+    all (strict is more important), without an error; an invalid level value is still
+    an error. Tests: logcfg_test.go (TestLC_*), logcfg_level_test.go (TestLV_*).
+  - logsession.go (926fd4b, bcf4edc): logSession for one run: newLogSession(settings,
+    op, now, fileIO, notice, fields), Active, ID, Begin, End, MustAbort. Operation
+    table: show, map, find and fields are reads; insert, delete, replace, replaceall,
+    write, writeraw, writelines, insertafter, insertbefore, move, copy and guided are
+    writes; an empty or unknown -op is not an operation and is never logged. Active =
+    mode on + known op + (scope all or a write op). Begin first merges leftover spool
+    files (a failed merge never blocks the run), then writes the begin record (op
+    first, then the fields). With log_level warning or error (permissive only) the
+    begin record is held back and the end record is written only when its level
+    passes (exit 0 INFO, 1 WARNING, else ERROR); it then carries the begin fields so
+    each line stands alone. Permissive wraps the file operations in newSpoolIO; strict
+    uses the file only, and a failed write is an error with MustAbort true.
+    Tests: logsession_test.go (TestLG_*).
+  - logwire.go (fecae3a, bcf4edc): the CLI wiring. logRegisterFlags (before
+    flag.Parse), logStart (right after flag.Parse in main.go), logFinish (called by
+    exitNow after finishOutputResult), logStartGuided and logChildEnv for guided
+    parents, logCLIFields, logAbsList, logIdentity (os/user, host, pid, cwd),
+    exit codes exitLogRefused = 4 and exitLogGap = 5. main.go also has a deferred
+    function that writes the end record on a normal return or a panic, and the three
+    raw os.Exit(1) after the begin point are exitNow now.
+    Tests: logwire_test.go (TestLW_*; the binary-level cases are subtests of
+    TestLW_Bin), logguided_test.go (TestLGD_*).
+  USER-VISIBLE BEHAVIOUR (off by default, so nothing changes unless it is turned on):
+  - Flags -log-mode, -log-file, -log-max-mb, -log-content, -log-level, -log-scope, each
+    with an environment variable FEDIT_LOG_MODE, FEDIT_LOG_FILE, FEDIT_LOG_MAX_MB,
+    FEDIT_LOG_CONTENT, FEDIT_LOG_LEVEL, FEDIT_LOG_SCOPE. Precedence: flag, then
+    environment, then default. They are in the usage text (logUsage) only.
+  - Every operation is logged, reads included (DECIDED Oct 21: logs are audits);
+    -log-scope writes limits it to the operations that can change a file.
+  - Begin record fields after op: source (cli or guided), user (domain\user on Windows),
+    host, pid, cwd, parent (a guided child), file, files, dest (absolute, comma lists,
+    a glob keeps its pattern), steps and create (guided parent), then the text as
+    text_len and text_sha256 (verbatim as text with -log-content on; -texthex is
+    hashed after decoding) and textfile (the path only). The end record carries id,
+    phase=end, exit and ms.
+  - A usage error (no -op, unknown -op) is not an operation and is not logged. An
+    invalid logging setting exits 1 before any edit.
+  - Strict: an unwritable log refuses the run before any edit with exit 4 and a
+    message containing "strict". If the run succeeded but the end record cannot be
+    written the exit is 5; a run that already failed keeps its own code (the message
+    is still printed). With log_scope writes strict cannot block a read.
+  - Permissive: the edit runs, the records go to <log base dir>\spool\<id>.log with
+    logged=spool, stderr prints "The action was not logged ...", and the next logged
+    run merges them into the log with late=true.
+  - Guided: a one-step plain command stays in the process (source=guided). A run with
+    several steps or a file to create has a parent process that logs its own begin and
+    end (op=guided, steps, create=, exit) and starts one child fedit per step with
+    FEDIT_LOG_PARENT=<parent id> in its environment; each child logs source=guided and
+    parent=<id>. Strict refuses before the parent creates any file (exit 4).
+  - -outputresult: log records never go into the result file; the end record is
+    written after the capture ends.
+  LESSON (Oct 21): clhBuild runs go build on every call, about 17 s each on this
+  machine, so binary-level tests must share one build as subtests of one parent test
+  (TestLW_Bin, TestLGD_Guided). 13 separate builds had pushed the suite from 118 s to
+  408 s; it is about 133 s now. The 11 older tests that call clhBuild still build once
+  each (optional: a shared build in the helper).
   ASSUMPTIONS NOT EXPLICITLY CONFIRMED (change if Alex says so): the default log path
   falls back to os.UserConfigDir when LOCALAPPDATA is unset; the -outputresult FILE
-  is not written when the run fails; the level mapping above.
-  PLANNED TRACKS (all agreed):
+  is not written when the run fails; the level mapping above; the default log_max_mb
+  is 10; a blank setting counts as not set; a relative log_file becomes absolute; the
+  spool lives in the per-user folder even with a custom log_file; -textfile logs the
+  path only (its content is not hashed yet).
+  PLANNED TRACKS (all agreed; Oct 21 status: the logging track below is implemented
+  for CLI and guided runs except the items under KNOWN GAPS; config/ini, dry-run and
+  the small gaps are still planned):
   - Logging: one line per operation, UTC only, [INFO]/[WARNING]/[ERROR], key=value;
     begin and end lines share id=. Fields: user (OS user with domain), host, pid,
     source=cli|guided|mcp (+ MCP client name and version), op, cwd, absolute src and
@@ -151,21 +231,24 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
     inside a comment" and "PHP heredoc outside a block"; a JS regex containing /*
     needs a regex-literal heuristic (last); replace -match without -endmatch =
     replace the single matched line; guided over MCP lowest priority.
-  KNOWN GAPS FOR THE WIRING: the MCP initialize handler ignores clientInfo (needed
-  for source=mcp name and version); main() returns early for `mcp` and `guided`
-  before flag parsing, so those paths need their own begin and end records.
-  Also open: multiWriteLines could get a neutral name.
+  KNOWN GAPS: the MCP initialize handler ignores clientInfo (needed for source=mcp
+  name and version) and `mcp` is not logged at all (main() returns early for it before
+  flag parsing; it needs its own begin and end records and the output_file
+  parameter). The end record has no per-file results, replacement counts, verify
+  status or sha256_before/after yet. -textfile content is not hashed. A guided parent
+  exits 1 when any child fails (a child's exit 4 or 5 is not passed through). There is
+  no `-log merge` command yet. multiWriteLines could get a neutral name.
   NEXT STEPS, in order:
-  1. DONE: spool green step committed (93cbed4).
-  2. Wire logging through exitNow, starting with env vars and flags for log_mode,
-     log_file, log_max_mb, log_content (names still to agree): strict aborts before
-     any mutation, permissive spools and prints the notice, the end record is
-     written in exitNow, merge at the start of the next logged run, `fedit -log
-     merge`. Red test first (binary-level tests with a temp log).
-  3. Config + ini, then MCP integration (logging + output_file), then dry-run, then
-     the small gaps.
-  4. Housekeeping when logging becomes user-visible: status file entries, README,
-     SKILL, help text.
+  1. DONE: spool (93cbed4), settings (cfd9a00, 0d800f9), session (926fd4b), CLI
+     wiring (fecae3a), guided (bcf4edc).
+  2. Slice B: per-file results, replacements, verify and sha256_before/after in the
+     end record (hooks inside the operations, only when logging is on).
+  3. `fedit -log merge` (merge now, whatever the mode) and MCP integration (begin and
+     end records with clientInfo, output_file).
+  4. Config + ini (-config show/get/set/unset/path), then dry-run (-dry / dry_run),
+     then the small gaps listed under PLANNED TRACKS.
+  5. Housekeeping: README, SKILL and help text for logging (the flags are only in the
+     usage text so far).
 PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. v1.8.1 was tagged later (see the Sept 28 notes below).
   Code commit
   touched .gitignore, CLAUDE_DESKTOP.md, main.go (~3920 lines), user_skill.md.
@@ -702,7 +785,8 @@ import_advisory.patch, import_advisory_test.go     (NEW -- applied)
 map_hcl.go, map_hcl_test.go, infer_lang_test.go (NEW Oct 13, 2026 -- HCL and Nix map, inferLang fallback)
 lang_alias_test.go (NEW Oct 14, 2026 -- js, ts, cs, c# lang aliases)
 outputresult.go, wire_outputresult_test.go, wire_outputresult_fail_test.go (NEW Oct 19, 2026 -- -outputresult and -outappend)
-logfmt.go, logsink.go, logfile.go, spool.go (NEW Oct 18-20, 2026 -- audit log building blocks, not wired yet), spool_test.go
+logfmt.go, logsink.go, logfile.go, spool.go, logcfg.go, logsession.go, logwire.go (NEW Oct 18-21, 2026 -- audit log; wired into main.go, guided.go and outputresult.go)
+spool_test.go, logcfg_test.go, logcfg_level_test.go, logsession_test.go, logwire_test.go, logguided_test.go (NEW Oct 20-21, 2026 -- audit log tests)
 Test files: mcp_test.go, texthex_test.go, extract_test.go, block_test.go,
   iac_test.go, move_copy_test.go, regex_glob_test.go, stream_fields_test.go,
   v180_test.go, map_json_csv_test.go (NEW), import_advisory_test.go (NEW)
@@ -710,5 +794,5 @@ _testsystem/          (NEW -- see TESTING SYSTEM section above)
 Demo: demo.gif, demo.tape, demo_sample.go
 
 ═══════════════════════════════════════════════════════════════
-END OF FEDIT STATUS -- October 20, 2026
+END OF FEDIT STATUS -- October 21, 2026
 ═══════════════════════════════════════════════════════════════
