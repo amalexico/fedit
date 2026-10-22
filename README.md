@@ -596,6 +596,8 @@ Most mappers detect **duplicates** (functions, tables, keys, header columns, blo
 | -quiet | Suppress output on success, including the per-file report of multi-file and -dest runs (skips and errors still print); exit code signals result (since v1.11.0) |
 | -outputresult FILE | Write the operation report to FILE (UTF-8, no BOM) and print one summary line on the terminal. FILE may not be any file being edited (-file, -files, -dest) and its directory must exist. On a non-zero exit nothing is written to FILE: the whole report goes to stderr with the same exit code |
 | -outappend | With -outputresult: append to FILE instead of overwriting it |
+| -log-mode, -log-file, -log-max-mb, -log-content, -log-level, -log-scope | Audit log settings, each also an environment variable FEDIT_LOG_* (unreleased); off by default, see "Audit log" below |
+| fedit -log merge | Append the spooled audit records to the main log now (unreleased); see "Audit log" below |
 | -texthex HEX | Hex-encoded UTF-8 content, bypasses shell quoting (v1.6.0) |
 | -matchhex HEX, -endmatchhex HEX | Hex-encoded -match and -endmatch anchors, for anchors that contain double quotes (v1.8.1) |
 | -match-regex P | replaceall: regex with capture groups ($1 $2) |
@@ -625,6 +627,41 @@ With `-block NAME` (and `-sourceblock`, `-destblock`, `-beforeblock`, `-afterblo
 - Comments: `//` and `/* */` (nested in Rust), and `#` in PHP, HCL and Nix (in PHP, `#[` starts an attribute and is not a comment). Nix has no `//` comment, because `//` is its update operator.
 
 Known gaps: a JS regular expression with an unescaped `/*`, and a block comment that opens outside any block. For a block like that, check the range with `show` first and fall back to `-line`.
+
+### Audit log (unreleased, off by default)
+
+fedit can write one record per operation to an audit log: who ran what, on which files, with what result. It is off unless you turn it on, and while it is off nothing in a run changes. It covers command-line runs, `guided` runs and the MCP server.
+
+Modes (`-log-mode` or `FEDIT_LOG_MODE`):
+
+- `off` (default): nothing is written.
+- `permissive`: the operation always runs. If the log cannot be written, the records are saved in a spool folder under the fedit user folder, `The action was not logged` is printed to stderr, and the next logged run (or `fedit -log merge`) appends them to the log with `late=true`.
+- `strict`: if the begin record cannot be written, the run is refused before anything changes (exit 4). If the operation succeeded but the end record cannot be written, the exit code is 5. A run that already failed keeps its own exit code.
+
+Settings are read in this order: flag, then environment variable, then default. An invalid value is an error (exit 1, nothing edited) even when logging is off.
+
+| Flag | Environment | Meaning |
+|------|-------------|---------|
+| -log-mode M | FEDIT_LOG_MODE | off (default), permissive or strict |
+| -log-file FILE | FEDIT_LOG_FILE | Log file; `%VAR%` and `~` are expanded. Default `%LOCALAPPDATA%\fedit\fedit.log` (the user config folder when that variable is not set) |
+| -log-max-mb N | FEDIT_LOG_MAX_MB | Rotate the log at N MB (default 10, 0 = never). A rotated file is named `<log>.<UTC timestamp>` |
+| -log-content on\|off | FEDIT_LOG_CONTENT | on: log `-text` values verbatim. off (default): length and SHA-256 only |
+| -log-level L | FEDIT_LOG_LEVEL | all (default), warning or error: which severities are written. Strict always writes all |
+| -log-scope S | FEDIT_LOG_SCOPE | all (default: every operation, reads included) or writes (only operations that can change a file) |
+
+Every record is one line with a UTC timestamp, a level (`[INFO]` for exit 0, `[WARNING]` for 1, `[ERROR]` otherwise) and `key=value` pairs. The begin and end records of a run share the same `id`.
+
+- Begin record: `op`, `source` (cli, guided or mcp), `user` (with the domain on Windows), `host`, `pid`, `cwd`, then, when given, `file`, `files` and `dest` as absolute paths (a glob keeps its pattern), `text_len` and `text_sha256` (or `text` with `-log-content on`; `-texthex` is hashed after decoding) and `textfile` (the path only). Over MCP it also carries `client` and `client_version`.
+- End record: `phase=end`, `exit` and `ms`, plus the result when the operation reports one: `replacements`, `lines_changed` and `verify` (PASS or FAIL) for replaceall, and for multi-file runs `files_total`, `files_ok`, `files_skip`, `files_fail` and a per-file `results` list. A write on a single file also gets `sha256_before` and `sha256_after`.
+- A usage error (no `-op`, unknown `-op`) is not an operation and is not logged. `-outputresult` never receives log records.
+
+`fedit -log merge` appends the spooled records to the main log now, in any mode, using the `FEDIT_LOG_*` environment. It prints `Merged N spooled record(s) into FILE` or `No spooled records to merge` on stderr, and exits 1 on a usage error, an invalid setting or a merge that stops. It is not logged itself.
+
+`guided`: a plain one-step command is logged as one run with `source=guided`. A run with several steps or a file to create has a parent record (`op=guided`, `steps`, `create`) and one child run per step, each with `parent=<id of the parent>`. Strict refuses before the parent creates any file.
+
+MCP: every tool call is one logged run with `source=mcp`. The settings come from the `FEDIT_LOG_*` environment of the server process only, so set them in the `env` block of your MCP client config. An error result is logged as exit 1 and a failed verification as exit 3. In strict mode a call whose begin record cannot be written returns an error result and changes nothing; a call that succeeded but whose end record cannot be written returns an error result that says the operation completed.
+
+Limits: the plain MCP write tools (insert, delete, replace, insertafter, insertbefore, move, copy, write, writeraw) log hashes but no counts; in permissive mode the `not logged` notice goes to the server's stderr, not into the tool result; `-textfile` logs the path, not a hash of the content; multi-file runs have per-file results but no per-file hashes; a guided parent exits 1 when any step fails.
 
 ## Real-World Examples
 
