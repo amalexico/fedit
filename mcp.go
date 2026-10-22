@@ -523,6 +523,8 @@ func mcpDoReplaceAll(file, search, regex, replacement, textFile string, start ti
 		}
 		msg := fmt.Sprintf("Replaced /%s/ on %d line(s) (%d total)", regex, n, len(result))
 		ok, vtext := verifyMultiReplaceAll(file, result, multiReplaceAllCounter(multiMutOpts{matchRegex: regex}))
+		logNoteLines(n)
+		logNoteVerdict(ok)
 		msg += "\n" + vtext
 		msg += mcpStats("replaceall", file, len(result), len(result), regex, start)
 		if !ok {
@@ -544,6 +546,8 @@ func mcpDoReplaceAll(file, search, regex, replacement, textFile string, start ti
 	}
 	msg := fmt.Sprintf("Replaced '%s' on %d line(s) (%d total)", search, count, len(lines))
 	ok, vtext := verifyMultiReplaceAll(file, lines, multiReplaceAllCounter(multiMutOpts{match: search}))
+	logNoteLines(count)
+	logNoteVerdict(ok)
 	msg += "\n" + vtext
 	msg += mcpStats("replaceall", file, len(lines), len(lines), search, start)
 	if !ok {
