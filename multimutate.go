@@ -187,5 +187,6 @@ func collectMultiMutate(o multiMutOpts) ([]batchResult, int, error) {
 		}
 		results = append(results, batchResult{path: p, status: status, detail: detail})
 	}
+	logNoteBatch(results, count != nil)
 	return results, okCount, nil
 }
