@@ -214,6 +214,7 @@ func TestLW_Bin(t *testing.T) {
 		{"ReadOpNoHashes", lwxBinReadOpNoHashes},
 		{"ReplaceAllResult", lwxBinReplaceAllResult},
 		{"MultiFileResult", lwxBinMultiFileResult},
+		{"LogMerge", lwxBinLogMerge},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) { c.run(t, bin) })
