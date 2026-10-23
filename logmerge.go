@@ -23,7 +23,11 @@ func logCommand(args []string, getenv func(string) string, home string, userConf
 		fmt.Fprintln(out, "usage: fedit -log merge   (append the spooled audit records to the main log now)")
 		return 1
 	}
-	s, err := resolveLogSettings(getenv, home, userConfigDir, logInputsFromEnv(getenv))
+	ini, ok := cfgLayerRun(getenv, home, userConfigDir, out)
+	if !ok {
+		return 1
+	}
+	s, err := resolveLogSettings(getenv, home, userConfigDir, logInputsFromEnv(getenv), ini)
 	if err != nil {
 		fmt.Fprintf(out, "fedit: %v\n", err)
 		return 1

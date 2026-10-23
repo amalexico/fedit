@@ -47,6 +47,7 @@ func logRegisterFlags() {
 	logFlagVals.Content = flag.String("log-content", "", "on: log -text values verbatim; off (default): length and SHA-256 only (env FEDIT_LOG_CONTENT)")
 	logFlagVals.Level = flag.String("log-level", "", "Severities written: all (default), warning or error (env FEDIT_LOG_LEVEL)")
 	logFlagVals.Scope = flag.String("log-scope", "", "Operations logged: all (default) or writes (env FEDIT_LOG_SCOPE)")
+	cfgRegisterFlags()
 }
 
 // logSourceGuided marks the run as started through the guided front end.
@@ -63,6 +64,7 @@ func logUsage() {
 	fmt.Fprintln(os.Stderr, "  -log-level L    all (default), warning or error: which severities are written (strict always writes all)")
 	fmt.Fprintln(os.Stderr, "  -log-scope S    all (default: every operation, reads included) or writes (only operations that can change a file)")
 	fmt.Fprintln(os.Stderr, "  -log merge      Append the spooled audit records to the main log now, in any mode; it is not logged itself")
+	fmt.Fprintln(os.Stderr, "  -noconfig       Do not read the settings file (default <user config folder>\\fedit\\fedit.ini, or the file named by FEDIT_CONFIG)")
 }
 
 // logFinishCode is the exit code of a run that logs: in strict mode a run
@@ -230,7 +232,11 @@ func logChildEnv() []string {
 // run: it logs source=guided and parent=<id>.
 func logStartWith(flags logInputs, op string, in logCLIInput) int {
 	home, _ := os.UserHomeDir()
-	settings, err := resolveLogSettings(os.Getenv, home, os.UserConfigDir, flags, logInputsFromEnv(os.Getenv))
+	ini, ok := cfgLayerRun(os.Getenv, home, os.UserConfigDir, os.Stderr)
+	if !ok {
+		return 1
+	}
+	settings, err := resolveLogSettings(os.Getenv, home, os.UserConfigDir, flags, logInputsFromEnv(os.Getenv), ini)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "fedit: %v\n", err)
 		return 1

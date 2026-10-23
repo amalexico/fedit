@@ -215,6 +215,11 @@ func TestLW_Bin(t *testing.T) {
 		{"ReplaceAllResult", lwxBinReplaceAllResult},
 		{"MultiFileResult", lwxBinMultiFileResult},
 		{"LogMerge", lwxBinLogMerge},
+		{"IniLayerAndPrecedence", cwxBinIniPrecedence},
+		{"IniInvalidIsError", cwxBinIniInvalid},
+		{"IniNoConfigFlag", cwxBinIniNoConfig},
+		{"IniUnknownKeyWarns", cwxBinIniUnknownKey},
+		{"IniUsage", cwxBinIniUsage},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) { c.run(t, bin) })
