@@ -598,6 +598,7 @@ Most mappers detect **duplicates** (functions, tables, keys, header columns, blo
 | -outappend | With -outputresult: append to FILE instead of overwriting it |
 | -log-mode, -log-file, -log-max-mb, -log-content, -log-level, -log-scope | Audit log settings, each also an environment variable FEDIT_LOG_* (unreleased); off by default, see "Audit log" below |
 | fedit -log merge | Append the spooled audit records to the main log now (unreleased); see "Audit log" below |
+| -noconfig | Do not read the settings file for this run (unreleased); see "Settings file" below |
 | -texthex HEX | Hex-encoded UTF-8 content, bypasses shell quoting (v1.6.0) |
 | -matchhex HEX, -endmatchhex HEX | Hex-encoded -match and -endmatch anchors, for anchors that contain double quotes (v1.8.1) |
 | -match-regex P | replaceall: regex with capture groups ($1 $2) |
@@ -638,7 +639,7 @@ Modes (`-log-mode` or `FEDIT_LOG_MODE`):
 - `permissive`: the operation always runs. If the log cannot be written, the records are saved in a spool folder under the fedit user folder, `The action was not logged` is printed to stderr, and the next logged run (or `fedit -log merge`) appends them to the log with `late=true`.
 - `strict`: if the begin record cannot be written, the run is refused before anything changes (exit 4). If the operation succeeded but the end record cannot be written, the exit code is 5. A run that already failed keeps its own exit code.
 
-Settings are read in this order: flag, then environment variable, then default. An invalid value is an error (exit 1, nothing edited) even when logging is off.
+Settings are read in this order: flag, then environment variable, then the settings file (see "Settings file" below), then default. An invalid value is an error (exit 1, nothing edited) even when logging is off.
 
 | Flag | Environment | Meaning |
 |------|-------------|---------|
@@ -655,13 +656,33 @@ Every record is one line with a UTC timestamp, a level (`[INFO]` for exit 0, `[W
 - End record: `phase=end`, `exit` and `ms`, plus the result when the operation reports one: `replacements`, `lines_changed` and `verify` (PASS or FAIL) for replaceall, and for multi-file runs `files_total`, `files_ok`, `files_skip`, `files_fail` and a per-file `results` list. A write on a single file also gets `sha256_before` and `sha256_after`.
 - A usage error (no `-op`, unknown `-op`) is not an operation and is not logged. `-outputresult` never receives log records.
 
-`fedit -log merge` appends the spooled records to the main log now, in any mode, using the `FEDIT_LOG_*` environment. It prints `Merged N spooled record(s) into FILE` or `No spooled records to merge` on stderr, and exits 1 on a usage error, an invalid setting or a merge that stops. It is not logged itself.
+`fedit -log merge` appends the spooled records to the main log now, in any mode, using the `FEDIT_LOG_*` environment and the settings file. It prints `Merged N spooled record(s) into FILE` or `No spooled records to merge` on stderr, and exits 1 on a usage error, an invalid setting or a merge that stops. It is not logged itself.
 
 `guided`: a plain one-step command is logged as one run with `source=guided`. A run with several steps or a file to create has a parent record (`op=guided`, `steps`, `create`) and one child run per step, each with `parent=<id of the parent>`. Strict refuses before the parent creates any file.
 
-MCP: every tool call is one logged run with `source=mcp`. The settings come from the `FEDIT_LOG_*` environment of the server process only, so set them in the `env` block of your MCP client config. An error result is logged as exit 1 and a failed verification as exit 3. In strict mode a call whose begin record cannot be written returns an error result and changes nothing; a call that succeeded but whose end record cannot be written returns an error result that says the operation completed.
+MCP: every tool call is one logged run with `source=mcp`. The settings come from the `FEDIT_LOG_*` environment of the server process and from the settings file (there are no flags), so set the environment variables in the `env` block of your MCP client config; `FEDIT_CONFIG` there points the server at another settings file. An error result is logged as exit 1 and a failed verification as exit 3. In strict mode a call whose begin record cannot be written returns an error result and changes nothing; a call that succeeded but whose end record cannot be written returns an error result that says the operation completed.
 
 Limits: the plain MCP write tools (insert, delete, replace, insertafter, insertbefore, move, copy, write, writeraw) log hashes but no counts; in permissive mode the `not logged` notice goes to the server's stderr, not into the tool result; `-textfile` logs the path, not a hash of the content; multi-file runs have per-file results but no per-file hashes; a guided parent exits 1 when any step fails.
+
+### Settings file (unreleased)
+
+The logging settings can also be kept in a settings file, so you do not need environment variables on every machine or in every MCP client config. The file is optional: without it nothing changes.
+
+- Location: `fedit\fedit.ini` in the user config folder (on Windows `%APPDATA%\fedit\fedit.ini`, on Linux `~/.config/fedit/fedit.ini`). `FEDIT_CONFIG` names another file; `~` and `%VAR%` are expanded and a relative path is made absolute.
+- Format: one `key = value` per line. Blank lines and lines that start with `#` or `;` are ignored. Keys are not case-sensitive, there are no sections, and a UTF-8 byte order mark (Notepad adds one) is ignored. If a key appears twice, the last one wins.
+- Keys: `log_mode`, `log_file`, `log_max_mb`, `log_content`, `log_level` and `log_scope`, with the same values as the matching flags in the table above.
+- Order: flag, then environment variable, then settings file, then default.
+- Errors: a missing file is not an error. A file that cannot be read, a line that is not `key = value` and an invalid value are errors that name the file and the line (exit 1, before anything is edited), even when logging is off. An unknown key is a warning on stderr and is ignored.
+- `-noconfig` (command line only) ignores the file for that run. `guided` runs, the MCP server and `fedit -log merge` always read it, so a broken file also stops `fedit -log merge`.
+
+Example:
+
+```
+# fedit settings
+log_mode = permissive
+log_file = ~/fedit-audit.log
+log_scope = writes
+```
 
 ## Real-World Examples
 
