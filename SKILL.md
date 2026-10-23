@@ -280,6 +280,17 @@ Atomic: writes temp file then renames -- original untouched on interruption.
 
 Not supported with move/copy/map (those need full structure in memory).
 
+### Audit log (unreleased, off by default)
+
+fedit can write an audit record per operation: a begin line and an end line that share an id. It is off unless the user turns it on. Do not enable it or pass -log-* flags yourself unless asked.
+
+- Settings: -log-mode off|permissive|strict, -log-file, -log-max-mb, -log-content on|off, -log-level all|warning|error, -log-scope all|writes. Each has an environment variable FEDIT_LOG_*. Order: flag, environment, default. Over MCP only the environment is read, so it belongs in the server's env block.
+- Every operation is logged, reads included, unless the scope is writes. -text values are logged as length and SHA-256 unless -log-content is on.
+- permissive: the edit always runs. If the log cannot be written, stderr says "The action was not logged" and the records are spooled; the next logged run, or `fedit -log merge`, appends them to the log.
+- strict, exit 4: the begin record could not be written, so the run was refused and nothing changed. Report it to the user.
+- strict, exit 5: the edit succeeded but the end record could not be written. The file IS changed, so do not repeat the edit; tell the user the log has a gap. Over MCP this comes back as an error result that says the operation completed.
+- The end record carries exit, ms and, where available, replacements, lines_changed, verify, per-file results and sha256_before/sha256_after.
+
 ## Anti-patterns (do not do these)
 
 1. **Do not output the whole file when a fedit_* tool is available.** That defeats the purpose.
@@ -350,6 +361,8 @@ Full results: https://amalexhandler.com/fedit#benchmark
   -quiet         suppress output on success, including the per-file batch report (skips and errors still print); exit code signals result (wins over -v)
   -outputresult FILE  write the operation report to FILE (UTF-8, no BOM), one summary line on the terminal; FILE may not be an edited file; nothing is written on a failed run
   -outappend     with -outputresult: append to FILE instead of overwriting it
+  -log-mode M    audit log mode: off (default), permissive or strict; also -log-file, -log-max-mb, -log-content on|off, -log-level, -log-scope, each with an environment variable FEDIT_LOG_* (unreleased, see Audit log)
+  -log merge     append the spooled audit records to the main log now (unreleased)
   -times N       move/copy: paste N times (move cuts once)
   -after N, -before N, -aftermatch TEXT, -beforematch TEXT, -afterblock NAME, -beforeblock NAME   move/copy destination anchors (the block anchors need -lang)
   -col N         fields: column number (1-based); -delim CHAR is the field delimiter (default tab)
