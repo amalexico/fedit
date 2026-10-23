@@ -62,6 +62,7 @@ func logUsage() {
 	fmt.Fprintln(os.Stderr, "  -log-content on|off  Log -text values verbatim instead of length and SHA-256 (default off)")
 	fmt.Fprintln(os.Stderr, "  -log-level L    all (default), warning or error: which severities are written (strict always writes all)")
 	fmt.Fprintln(os.Stderr, "  -log-scope S    all (default: every operation, reads included) or writes (only operations that can change a file)")
+	fmt.Fprintln(os.Stderr, "  -log merge      Append the spooled audit records to the main log now, in any mode; it is not logged itself")
 }
 
 // logFinishCode is the exit code of a run that logs: in strict mode a run

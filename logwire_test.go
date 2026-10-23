@@ -502,7 +502,7 @@ func lwxBinUsageIsNotAnOperation(t *testing.T, bin string) {
 	if code != 1 {
 		t.Errorf("a usage error exits 1 even in strict mode (it is not an operation): exit %d", code)
 	}
-	for _, flag := range []string{"-log-mode", "-log-file", "-log-max-mb", "-log-content", "-log-level", "-log-scope"} {
+	for _, flag := range []string{"-log-mode", "-log-file", "-log-max-mb", "-log-content", "-log-level", "-log-scope", "-log merge"} {
 		if !strings.Contains(se, flag) {
 			t.Errorf("the usage text must mention %s", flag)
 		}
