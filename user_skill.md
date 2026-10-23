@@ -21,6 +21,25 @@
   NEVER provide two patch blocks in one message even with DO-NOT-RUN labels.
   Provide ONE canonical block only per turn.
   When sending patch-file content, put the command that applies it (plus the verify chain) in the SAME response, right after the content. Never split them across two turns. Recon commands come in their own earlier turn.
+---
+
+## Chat Length and Handoff (set Oct 23, 2026)
+
+  Limits:    soft limit about 20 interactions per chat, hard limit about 30. Heavy
+             patch work (inline payloads, long test output) fills the context fast, so
+             the count is an estimate; hand off earlier if details start to drift.
+  Trigger:   a clean milestone, not the count alone. At the soft limit the assistant
+             finishes the current step and offers the handoff at the next commit
+             boundary (tests green, commit run, tree clean). The assistant says
+             "handoff time" when the limit is near; Alex can ask for one at any point.
+  Never:     hand off in the middle of a red/green pair or before a patch has been run.
+  Last turn: the handoff IS the last response: pasted text, no patch block, no commands
+             to run. Code files go as uploads; the handoff text stays pasted text.
+  Order:     before the handoff, fedit_status.md is brought up to date in one docs
+             commit, so the status file and the handoff text never disagree.
+  Contents:  git state (origin/main hash, commits ahead, tree status); what is done;
+             next steps in order; decisions in force; known gaps; the last _patchN.txt
+             name; the list of files to upload; a first action for the new chat.
 
 ---
 
