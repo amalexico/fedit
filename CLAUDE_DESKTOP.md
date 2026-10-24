@@ -63,6 +63,30 @@ If `fedit` is not on your system PATH, use the full path instead:
 
 ---
 
+### Optional: audit log and settings file (unreleased)
+
+fedit can write an audit record for every tool call (a begin line and an end line, with `source=mcp`). It is off by default. Over MCP there are no flags, so the settings come from the environment of the server process and from the settings file. Set the environment variables in the `env` block of the server entry:
+
+```json
+{
+  "mcpServers": {
+    "fedit": {
+      "command": "fedit",
+      "args": ["mcp"],
+      "env": {
+        "FEDIT_LOG_MODE": "permissive",
+        "FEDIT_LOG_SCOPE": "writes"
+      }
+    }
+  }
+}
+```
+
+`FEDIT_LOG_MODE` is `off` (default), `permissive` or `strict`. The other variables are `FEDIT_LOG_FILE`, `FEDIT_LOG_MAX_MB`, `FEDIT_LOG_CONTENT`, `FEDIT_LOG_LEVEL` and `FEDIT_LOG_SCOPE`.
+
+Instead of the `env` block you can keep the same settings in the settings file (`log_mode = permissive` and so on), which is `fedit\fedit.ini` in your user config folder (on Windows `%APPDATA%\fedit\fedit.ini`). Set `FEDIT_CONFIG` in the `env` block to use another file. The environment wins over the settings file. A settings file that cannot be read, or that holds an invalid value, makes the tool call fail with an error before anything is edited. In strict mode a call whose begin record cannot be written returns an error and changes nothing. The README ("Audit log" and "Settings file") lists every value.
+
+---
 ## 4. Restart Claude Desktop
 
 Fully quit and relaunch. In the new conversation window you should see a
@@ -297,3 +321,4 @@ Restart the editor after saving.
 - v1.9.0 release notes: multi-file mutation (comma list or glob in `file`), `-dest` cross-file copy, move and replace
 - v1.10.0 release notes: MCP `dest`, `destblock`, `sourcefile` and `sourceblock`
 - Unreleased (expected v1.11.0): `fedit_map` for hcl and nix (`.tf`, `.hcl`, `.nix`), `terraform` and `tf` as map aliases, `js`, `ts` and `cs` as `lang` values, `sourcefile` and `sourceblock` with a file list, the Go import hint on cross-file transfers and on `sourcefile` inserts, `match_regex` and `textfile` on `fedit_replaceall`, an error for an invalid `get` regex in `fedit_find`, duplicate reports in `fedit_map` for markdown headings, Dockerfile stages and CSS selectors per container block (the markdown map skips fenced code); block scanners skip multi-line strings (C# verbatim and raw, Java text blocks with backslash escapes, Rust raw strings, HCL and PHP heredocs, PHP nowdocs, Nix indented strings), Rust char literals and lifetimes, and comments (PHP `#` included); CLI only: `fedit guided` (also bare, as a step-by-step Q and A, with the `silent` and `report-only` modifiers), and `-afterblock`/`-beforeblock` with insertafter/insertbefore now fail with an error pointing to `-block`
+- Unreleased (after v1.11.0): the audit log over MCP (`FEDIT_LOG_*` in the server's `env` block) and the optional settings file `fedit.ini` (`FEDIT_CONFIG`, `-noconfig` on the command line); see the README
