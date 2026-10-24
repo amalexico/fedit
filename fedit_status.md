@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: October 22, 2026
+# Last updated: October 23, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -252,7 +252,7 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
   - Method: the container has no repo, so each step was checked in a scratch module with
     stand-ins for the files it could not see; the real run on Alex's machine is the check.
   PLANNED TRACKS (all agreed; Oct 22 status: the logging track below is implemented
-  for CLI, guided and MCP runs except the items under KNOWN GAPS; config/ini, dry-run and
+  for CLI, guided and MCP runs except the items under KNOWN GAPS; the ini steps 1 and 2 are done (see Config below), the -config command, dry-run and
   the small gaps are still planned):
   - Logging: one line per operation, UTC only, [INFO]/[WARNING]/[ERROR], key=value;
     begin and end lines share id=. Fields: user (OS user with domain), host, pid,
@@ -275,6 +275,41 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
     MCP honours only logging and output keys. The ini may set presentation, logging
     and output defaults and tighten safety, never weaken guards or change which text
     gets edited.
+    STATUS (Oct 23, 2026): steps 1 and 2 of the config work are DONE and committed (d07083f,
+    4c5542d, 23828bd). config.go holds the key registry of the six log_* keys, cfgFind,
+    cfgCheck, cfgParse, cfgSet, cfgUnset and cfgLogInputs; config_load.go holds cfgPath,
+    cfgLoad and cfgLoaded; config_wire.go holds the -noconfig flag and cfgLayerRun. The ini
+    is wired into logStartWith (CLI, guided and MCP) and into logCommand (`fedit -log
+    merge`).
+    DECISIONS: flat ini, `key = value`, # or ; comment lines, keys case-insensitive. Default
+    path is <os.UserConfigDir>\fedit\fedit.ini (the log stays in %LOCALAPPDATA%\fedit);
+    FEDIT_CONFIG overrides the path (~ and %VAR% expanded). A missing file is not an error;
+    an unreadable or invalid file is an error naming file and line (exit 1, before any
+    edit); an unknown key is a warning on stderr; a UTF-8 BOM is ignored; the last of a
+    repeated key wins and set changes that last line; set and unset keep comments, blank
+    lines and CRLF. Precedence: flag > environment > ini > default. -noconfig is a CLI flag
+    only: guided runs, the MCP server and `fedit -log merge` always read the ini, so a
+    broken ini also blocks `fedit -log merge` (documented in README).
+    TESTS: config_wire_test.go has a TestMain that points FEDIT_CONFIG at a nonexistent temp
+    file for the whole test process, so no test reads the real settings file; a test that
+    wants an ini sets FEDIT_CONFIG itself (cwxIni helper).
+    DOCS DONE (Oct 23, 2026): the ini is documented in README (Settings file section and the
+    -noconfig row, 3fa26c2), SKILL (0f538e5), the usage text (logUsage lists -noconfig) and
+    CLAUDE_DESKTOP (d058acd). user_skill.md has the Chat Length and Handoff rules (4bf126f).
+    The -config command is not documented yet because it does not exist yet.
+    STILL TO DO (step 3): `fedit -config path|show|get|set|unset`, dispatched in main() like
+    -log (os.Args[1] == "-config", before flag parsing). path prints the settings file path;
+    show lists every key with its effective value and source (environment, ini or default);
+    get KEY prints the effective value (exit 1 for an unknown key); set KEY VALUE and unset
+    KEY validate with cfgCheck first, then write atomically (temp file + rename, create the
+    folder if needed) with cfgSet/cfgUnset, are logged as operations (add them to the
+    logged-op tables in logsession.go) and are NOT available over MCP. Open question: should
+    get print only the ini's own value? There is no generic atomic-write helper
+    (main.go:3765 has one inline rename; outputresult.go uses CreateTemp). Tests first (red,
+    then green).
+    GIT (Oct 23, 2026): origin/main = 88ff116, nothing pushed since Oct 19, no new tag, no
+    website deploy; the local branch was 33 commits ahead before the commit of this status
+    file.
   - Dry-run: `dry_run` MCP parameter and `-dry` CLI flag returning a unified diff per
     file plus the same OK/SKIP/ERROR report, marked applied=false, through the same
     exec* code path (a commenter, Mohammed, confirmed unified diff; Alex told him it
@@ -300,11 +335,11 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
   1. DONE: spool, settings, session, CLI wiring, guided, slice B (single-file, -stream,
      multi -file, write-operation hashes), MCP logging, MCP single-file replaceall
      fields, `fedit -log merge`.
-  2. Config + ini (-config show/get/set/unset/path), then dry-run (-dry / dry_run), then
+  2. Config: the ini steps 1 and 2 are DONE; next the -config command (path, show, get, set, unset), then dry-run (-dry / dry_run), then
      the small gaps listed under PLANNED TRACKS; the MCP output_file parameter belongs
      with the config work (MCP honours only logging and output keys).
-  3. Housekeeping: README, SKILL and help text for logging (the flags, `-log merge` and
-     the MCP behaviour are only in the usage text and this file so far).
+  3. DONE (Oct 23, 2026): README, SKILL, help text and CLAUDE_DESKTOP cover logging and the ini; -config is added when it exists. Before, the flags, `-log merge` and
+     the MCP behaviour were only in the usage text and this file.
 PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. v1.8.1 was tagged later (see the Sept 28 notes below).
   Code commit
   touched .gitignore, CLAUDE_DESKTOP.md, main.go (~3920 lines), user_skill.md.
