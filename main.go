@@ -74,7 +74,9 @@ func main() {
 	outputresult := flag.String("outputresult", "", "Write the operation report to this file (UTF-8, no BOM) and print one summary line; errors stay on stderr; the file must not be an edited file")
 	outappend := flag.Bool("outappend", false, "With -outputresult: append to the file instead of overwriting it")
 	logRegisterFlags()
+	dryRegisterFlags()
 	flag.Parse()
+	dryApply()
 	if code := logStart(*op, logCLIInput{File: *file, Files: *files, Dest: flag.Lookup("dest").Value.String(), Text: *text, TextHex: *texthex, TextFile: *textFile}); code != 0 {
 		exitNow(code)
 	}
@@ -83,7 +85,7 @@ func main() {
 			logFinish(2)
 			panic(r)
 		}
-		if logRun != nil {
+		if logRun != nil || dryRun {
 			exitNow(0)
 		}
 	}()

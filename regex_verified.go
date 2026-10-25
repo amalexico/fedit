@@ -85,6 +85,10 @@ func finishVerified(res replaceAllResult, path, doneMsg string, verbose bool, ou
 	fmt.Fprint(out, doneMsg)
 	logNoteReplace(res.Occurrences, len(res.Changed))
 	logNoteHashes(before, logFileSHA256(path))
+	if dryRun {
+		fmt.Fprintln(out, "VERIFY: SKIP (dry-run)")
+		return 0
+	}
 	v, err := verify(path)
 	if err != nil {
 		fmt.Fprintf(out, "VERIFY: could not re-read %s: %v\n", path, err)

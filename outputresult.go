@@ -129,5 +129,8 @@ func finishOutputResult(code int) int {
 // exitNow is the single exit point: it finishes any -outputresult capture and
 // then exits with the resulting code.
 func exitNow(code int) {
+	if dryRun {
+		fmt.Fprintln(os.Stderr, "dry-run: applied=false (no file was changed)")
+	}
 	os.Exit(logFinish(finishOutputResult(code)))
 }

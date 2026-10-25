@@ -225,6 +225,11 @@ func TestLW_Bin(t *testing.T) {
 		{"ConfigRejects", cfcBinRejects},
 		{"ConfigBrokenIni", cfcBinBrokenIni},
 		{"ConfigSetIsLogged", cfcBinSetIsLogged},
+		{"DryReplaceAll", drbBinReplaceAll},
+		{"DryInsertAfter", drbBinInsertAfter},
+		{"DryWriteNewFile", drbBinWriteNewFile},
+		{"DryNoMatchExit", drbBinNoMatchExit},
+		{"DryOffNoNote", drbBinOffNoNote},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) { c.run(t, bin) })
