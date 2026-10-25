@@ -417,8 +417,8 @@ func main() {
 		}
 		exitNow(runMultiDest(opts))
 	}
-	// -cleanfirst: truncate before reading so mutations start from an empty file.
-	if *cleanfirst && *file != "" {
+	// -cleanfirst: truncate before reading so mutations start from an empty file. Under -dry nothing is truncated or created: the run starts from an empty file and the diff shows the change.
+	if *cleanfirst && *file != "" && !dryRun {
 		if err := os.WriteFile(*file, []byte{}, 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "Error truncating file: %v\n", err)
 			exitNow(1)
@@ -426,7 +426,7 @@ func main() {
 	}
 
 	var lines []string
-	if *file != "" {
+	if *file != "" && !(dryRun && *cleanfirst) {
 		var rdErr error
 		lines, rdErr = readLines(*file)
 		if rdErr != nil {
