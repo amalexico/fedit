@@ -1067,6 +1067,9 @@ func readLines(path string) ([]string, error) {
 }
 
 func writeLines(path string, lines []string) error {
+	if dryRun {
+		return dryWrite(path, lines)
+	}
 	f, err := os.Create(path)
 	if err != nil {
 		return err
