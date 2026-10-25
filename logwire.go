@@ -275,6 +275,9 @@ func logStartWith(flags logInputs, op string, in logCLIInput) int {
 	}
 	logRun, logRunStrict = ls, settings.Mode == logStrict
 	logHashStart(op, in)
+	if dryRun {
+		logNote("dry", "true")
+	}
 	return 0
 }
 

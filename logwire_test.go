@@ -230,6 +230,7 @@ func TestLW_Bin(t *testing.T) {
 		{"DryWriteNewFile", drbBinWriteNewFile},
 		{"DryNoMatchExit", drbBinNoMatchExit},
 		{"DryOffNoNote", drbBinOffNoNote},
+		{"DryLogged", drbBinDryLogged},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) { c.run(t, bin) })
