@@ -14,7 +14,8 @@ var (
 		"insert": true, "delete": true, "replace": true, "replaceall": true,
 		"write": true, "writeraw": true, "writelines": true,
 		"insertafter": true, "insertbefore": true, "move": true, "copy": true,
-		"guided": true,
+		"guided":     true,
+		"config-set": true, "config-unset": true,
 	}
 )
 

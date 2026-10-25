@@ -21,6 +21,9 @@ func main() {
 	if len(os.Args) >= 2 && os.Args[1] == "-log" {
 		os.Exit(runLogCommand(os.Args[2:]))
 	}
+	if len(os.Args) >= 2 && os.Args[1] == "-config" {
+		os.Exit(runConfigCommand(os.Args[2:]))
+	}
 	if len(os.Args) >= 2 && os.Args[1] == "mcp" {
 		runMCP()
 		return

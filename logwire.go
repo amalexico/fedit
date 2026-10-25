@@ -65,6 +65,9 @@ func logUsage() {
 	fmt.Fprintln(os.Stderr, "  -log-scope S    all (default: every operation, reads included) or writes (only operations that can change a file)")
 	fmt.Fprintln(os.Stderr, "  -log merge      Append the spooled audit records to the main log now, in any mode; it is not logged itself")
 	fmt.Fprintln(os.Stderr, "  -noconfig       Do not read the settings file (default <user config folder>\\fedit\\fedit.ini, or the file named by FEDIT_CONFIG)")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Settings file command:")
+	fmt.Fprintln(os.Stderr, "  fedit -config path|show|get KEY|set KEY VALUE|unset KEY   Show where the settings file is, list or read the effective values, or change a key (set and unset are logged; not available over MCP)")
 }
 
 // logFinishCode is the exit code of a run that logs: in strict mode a run
@@ -87,6 +90,7 @@ type logCLIInput struct {
 	Create                  string // guided parent: comma list of files it creates
 	Text, TextHex, TextFile string
 	Client, ClientVersion   string
+	ConfigKey, ConfigValue  string // -config set and unset: the key and the value
 	Content                 bool
 }
 
@@ -138,6 +142,12 @@ func logCLIFields(in logCLIInput) []logKV {
 		kvs = append(kvs, logKV{"client", in.Client})
 		if in.ClientVersion != "" {
 			kvs = append(kvs, logKV{"client_version", in.ClientVersion})
+		}
+	}
+	if in.ConfigKey != "" {
+		kvs = append(kvs, logKV{"config_key", in.ConfigKey})
+		if in.ConfigValue != "" {
+			kvs = append(kvs, logKV{"config_value", in.ConfigValue})
 		}
 	}
 	var raw []byte
