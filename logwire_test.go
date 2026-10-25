@@ -231,6 +231,7 @@ func TestLW_Bin(t *testing.T) {
 		{"DryNoMatchExit", drbBinNoMatchExit},
 		{"DryOffNoNote", drbBinOffNoNote},
 		{"DryLogged", drbBinDryLogged},
+		{"DryConflict", drbBinDryConflict},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) { c.run(t, bin) })

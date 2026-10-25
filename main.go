@@ -18,6 +18,10 @@ import (
 )
 
 func main() {
+	if dryConflict(os.Args) {
+		fmt.Fprintln(os.Stderr, "fedit: -dry cannot be combined with -config or -log merge")
+		os.Exit(1)
+	}
 	if len(os.Args) >= 2 && os.Args[1] == "-log" {
 		os.Exit(runLogCommand(os.Args[2:]))
 	}
