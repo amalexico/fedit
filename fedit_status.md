@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: October 24, 2026
+# Last updated: October 25, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -341,10 +341,47 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
     GIT (Oct 23, 2026): origin/main = 88ff116, nothing pushed since Oct 19, no new tag, no
     website deploy; the local branch was 33 commits ahead before the commit of this status
     file.
-  - Dry-run: `dry_run` MCP parameter and `-dry` CLI flag returning a unified diff per
-    file plus the same OK/SKIP/ERROR report, marked applied=false, through the same
-    exec* code path (a commenter, Mohammed, confirmed unified diff; Alex told him it
-    is on the roadmap). Guided gets a trailing `dry` modifier.
+  - Dry-run (-dry / dry_run), IN PROGRESS (Oct 25, 2026; a commenter, Mohammed,
+    confirmed unified diff; Alex told him it is on the roadmap). Five decisions, all
+    confirmed by Alex: (1) the verify steps are skipped under dry-run and print "VERIFY:
+    SKIP (dry-run)" (exit 0); (2) -stream under dry-run gives counts only, no diff; (3) a
+    dry run is logged like any operation, with dry=true, and sha256_after equals
+    sha256_before; (4) the exit codes are the same as a real run, the diff goes to stdout
+    and the report ends with "dry-run: applied=false (no file was changed)" on stderr;
+    (5) -dry with -config or -log merge is a usage error, and -dry combines normally with
+    -outputresult. Guided gets a trailing `dry` modifier; the MCP tools get a `dry_run`
+    parameter.
+    DESIGN: one seam. writeLines (main.go) is the single write point of the CLI, multi-file,
+    multi-dest and MCP paths; under dryRun it calls dryWrite (dry.go), which reads the
+    file, prints a unified diff (3 lines of context, a missing file shown as /dev/null) to
+    dryOut (nil means os.Stdout at call time) and writes nothing. dryDiff trims the common
+    head and tail and uses an LCS table (a middle over 4,000,000 cells becomes one replace
+    hunk).
+    DONE (0224733 and 2bca2aa): dry.go (dryRun, dryOut, dryDiff, dryWrite and the
+    writeLines hook); dry_wire.go (the -dry flag: dryRegisterFlags before flag.Parse and
+    dryApply right after it); finishVerified (regex_verified.go) prints the skip line and
+    returns 0 under dry-run, after the hashes are noted; exitNow (outputresult.go) prints
+    the applied=false note; the deferred exit in main() now runs exitNow(0) when logRun !=
+    nil or dryRun (before, a normal run with logging off simply returned). TESTS:
+    dry_test.go (TestDRY_*: diff format and the writeLines hook) and dry_wire_test.go
+    (TestDRW_*: the two verified runners; drbBin* cases in the TestLW_Bin table after
+    ConfigSetIsLogged: DryReplaceAll, DryInsertAfter, DryWriteNewFile, DryNoMatchExit,
+    DryOffNoNote). The full suite was ok in about 131 s and vet clean.
+    OPEN, in this order: (a) logging: dry=true in the begin or end record, hashes equal;
+    (b) usage errors for -dry with -config and -log merge; (c) -cleanfirst truncates with
+    os.WriteFile in main() before readLines, so it needs a dry guard (start from an empty
+    file), and -v after a dry insert would show the unchanged file through showVerify, so
+    skip it under dry-run; (d) -stream: execStreamOp writes a temp file and renames it, so
+    dry-run gives counts only; (e) multi -file and multi-dest: verifyMultiReplaceAll, the
+    batch report and the multi-file write paths; (f) guided: the `dry` modifier and passing
+    -dry to the child runs (guided.go also creates files with os.WriteFile); (g) MCP: the
+    dry_run parameter on the mutating tools (the mcpDo* functions all call writeLines);
+    (h) docs: README, SKILL, usage text, CLAUDE_DESKTOP. Test style: new cases are
+    subtests of TestLW_Bin (hex insert after the last entry, now {"DryOffNoNote",
+    drbBinOffNoNote}).
+    GIT (Oct 25, 2026): 0224733 and 2bca2aa; the local branch is 40 commits ahead of
+    origin/main (88ff116) once this status update is committed; nothing pushed, no new
+    tag, no website deploy.
   - Small gaps wanted while dry-run is pending: guided ambiguity at the insert-from-
     file source, replace -destblock and insert anchors (reuse the 6ee1f11 numbered-
     choice helper; deterministic SKIP listing candidates for fan-out); scanner: one
@@ -366,9 +403,10 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
   1. DONE: spool, settings, session, CLI wiring, guided, slice B (single-file, -stream,
      multi -file, write-operation hashes), MCP logging, MCP single-file replaceall
      fields, `fedit -log merge`.
-  2. Config: DONE (the ini and the -config command, Oct 24); next dry-run (-dry / dry_run), then
-     the small gaps listed under PLANNED TRACKS; the MCP output_file parameter belongs
-     with the config work (MCP honours only logging and output keys).
+  2. Config: DONE (the ini and the -config command, Oct 24). Dry-run: IN PROGRESS; the
+     single-file CLI part is DONE (0224733, 2bca2aa) and the open items (a) to (h) are
+     listed under PLANNED TRACKS; then the small gaps; the MCP output_file parameter
+     belongs with the config work (MCP honours only logging and output keys).
   3. DONE (Oct 23, 2026): README, SKILL, help text and CLAUDE_DESKTOP cover logging and the ini; -config is documented too (b30ebda). Before, the flags, `-log merge` and
      the MCP behaviour were only in the usage text and this file.
 PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. v1.8.1 was tagged later (see the Sept 28 notes below).
