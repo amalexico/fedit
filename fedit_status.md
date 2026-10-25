@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: October 23, 2026
+# Last updated: October 24, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -252,7 +252,7 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
   - Method: the container has no repo, so each step was checked in a scratch module with
     stand-ins for the files it could not see; the real run on Alex's machine is the check.
   PLANNED TRACKS (all agreed; Oct 22 status: the logging track below is implemented
-  for CLI, guided and MCP runs except the items under KNOWN GAPS; the ini steps 1 and 2 are done (see Config below), the -config command, dry-run and
+  for CLI, guided and MCP runs except the items under KNOWN GAPS; the ini steps are done (see Config below), dry-run and
   the small gaps are still planned):
   - Logging: one line per operation, UTC only, [INFO]/[WARNING]/[ERROR], key=value;
     begin and end lines share id=. Fields: user (OS user with domain), host, pid,
@@ -296,8 +296,8 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
     DOCS DONE (Oct 23, 2026): the ini is documented in README (Settings file section and the
     -noconfig row, 3fa26c2), SKILL (0f538e5), the usage text (logUsage lists -noconfig) and
     CLAUDE_DESKTOP (d058acd). user_skill.md has the Chat Length and Handoff rules (4bf126f).
-    The -config command is not documented yet because it does not exist yet.
-    STILL TO DO (step 3): `fedit -config path|show|get|set|unset`, dispatched in main() like
+    The -config command is documented in README and SKILL (b30ebda).
+    WAS STILL TO DO (step 3, done Oct 24, see STEP 3 DONE below): `fedit -config path|show|get|set|unset`, dispatched in main() like
     -log (os.Args[1] == "-config", before flag parsing). path prints the settings file path;
     show lists every key with its effective value and source (environment, ini or default);
     get KEY prints the effective value (exit 1 for an unknown key); set KEY VALUE and unset
@@ -307,6 +307,37 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
     get print only the ini's own value? There is no generic atomic-write helper
     (main.go:3765 has one inline rename; outputresult.go uses CreateTemp). Tests first (red,
     then green).
+    STEP 3 DONE (Oct 24, 2026, b55112a): `fedit -config path|show|get|set|unset` is
+    implemented in config_cmd.go (configCommand, cfgWriteFile, cfgEffective, cfgEditable,
+    cfgLogOp, runConfigCommand) and dispatched in main() before flag parsing, like -log.
+    path prints the settings file path (it works even when the file is broken); show lists
+    the six keys with the effective value and its source (environment, ini or default); get
+    KEY prints the effective value (exit 1 for an unknown key); set KEY VALUE and unset KEY
+    check with cfgCheck, refuse a broken ini (exit 1, naming the line), then write
+    atomically (temp file in the same folder + rename; the folder is created; the BOM,
+    comments, blank lines and CRLF are kept). unset of an absent key prints a note and exits
+    0 without writing.
+    DECISIONS (Oct 24): get prints the effective value (show carries the source). Only set
+    and unset are logged, as the ops config-set and config-unset (write ops, so
+    log_scope=writes keeps them), with config_key and config_value in clear in the begin
+    record even when log_content=off; a usage error is not an operation and is not logged; a
+    rejected value is logged with exit 1; path, show and get are never logged; -config is
+    not available over MCP. The default log_mode stays off (a permissive default was
+    proposed and dropped).
+    TESTS: config_cmd_test.go (TestCFC_*, fixture cfcSetup/cfcFix) and
+    config_cmd_bin_test.go (cfcBin* cases, added to the TestLW_Bin table after IniUsage).
+    The full suite was ok in about 139 s and vet clean. Docs: README (flag table row and a
+    Settings file bullet) and SKILL (flag list and the Settings file bullet) in b30ebda; the
+    usage text lists -config.
+    FOLLOW-UPS: (1) a test that FEDIT_LOG_MODE=Strict (mixed case) is accepted by show and
+    get (the code lowercases env enum values, no test yet); (2) CLAUDE_DESKTOP.md could say
+    that -config is CLI only; (3) next track: dry-run (-dry / dry_run), then the small gaps
+    (MCP output_file with the config work, plain MCP write tools log no counts, the
+    permissive not-logged notice is stderr-only under MCP, -textfile content is not hashed,
+    a broken ini blocks -log merge and -noconfig does not apply to it).
+    GIT (Oct 24, 2026): b55112a (-config) and b30ebda (README and SKILL for -config); the
+    local branch is 37 commits ahead of origin/main (88ff116) once this status update is
+    committed; nothing pushed, no new tag, no website deploy.
     GIT (Oct 23, 2026): origin/main = 88ff116, nothing pushed since Oct 19, no new tag, no
     website deploy; the local branch was 33 commits ahead before the commit of this status
     file.
@@ -335,10 +366,10 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
   1. DONE: spool, settings, session, CLI wiring, guided, slice B (single-file, -stream,
      multi -file, write-operation hashes), MCP logging, MCP single-file replaceall
      fields, `fedit -log merge`.
-  2. Config: the ini steps 1 and 2 are DONE; next the -config command (path, show, get, set, unset), then dry-run (-dry / dry_run), then
+  2. Config: DONE (the ini and the -config command, Oct 24); next dry-run (-dry / dry_run), then
      the small gaps listed under PLANNED TRACKS; the MCP output_file parameter belongs
      with the config work (MCP honours only logging and output keys).
-  3. DONE (Oct 23, 2026): README, SKILL, help text and CLAUDE_DESKTOP cover logging and the ini; -config is added when it exists. Before, the flags, `-log merge` and
+  3. DONE (Oct 23, 2026): README, SKILL, help text and CLAUDE_DESKTOP cover logging and the ini; -config is documented too (b30ebda). Before, the flags, `-log merge` and
      the MCP behaviour were only in the usage text and this file.
 PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. v1.8.1 was tagged later (see the Sept 28 notes below).
   Code commit
