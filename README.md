@@ -599,6 +599,7 @@ Most mappers detect **duplicates** (functions, tables, keys, header columns, blo
 | -log-mode, -log-file, -log-max-mb, -log-content, -log-level, -log-scope | Audit log settings, each also an environment variable FEDIT_LOG_* (unreleased); off by default, see "Audit log" below |
 | fedit -log merge | Append the spooled audit records to the main log now (unreleased); see "Audit log" below |
 | -noconfig | Do not read the settings file for this run (unreleased); see "Settings file" below |
+| fedit -config path\|show\|get KEY\|set KEY VALUE\|unset KEY | Show or change the settings file (unreleased); see "Settings file" below |
 | -texthex HEX | Hex-encoded UTF-8 content, bypasses shell quoting (v1.6.0) |
 | -matchhex HEX, -endmatchhex HEX | Hex-encoded -match and -endmatch anchors, for anchors that contain double quotes (v1.8.1) |
 | -match-regex P | replaceall: regex with capture groups ($1 $2) |
@@ -674,6 +675,7 @@ The logging settings can also be kept in a settings file, so you do not need env
 - Order: flag, then environment variable, then settings file, then default.
 - Errors: a missing file is not an error. A file that cannot be read, a line that is not `key = value` and an invalid value are errors that name the file and the line (exit 1, before anything is edited), even when logging is off. An unknown key is a warning on stderr and is ignored.
 - `-noconfig` (command line only) ignores the file for that run. `guided` runs, the MCP server and `fedit -log merge` always read it, so a broken file also stops `fedit -log merge`.
+- `fedit -config` reads and changes the file without opening it by hand: `path` prints its location, `show` lists every key with its effective value and where it comes from (environment, ini or default), `get KEY` prints one effective value (exit 1 for an unknown key), and `set KEY VALUE` and `unset KEY` check the key and the value, then write the file atomically (the folder is created when needed; comments, blank lines and line endings are kept). `set` and `unset` are logged like any write operation, with `config_key` and `config_value` in the begin record, and are not available over MCP. A broken settings file stops `show`, `get`, `set` and `unset` (exit 1, naming the line); `path` still works.
 
 Example:
 

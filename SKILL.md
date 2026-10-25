@@ -285,7 +285,7 @@ Not supported with move/copy/map (those need full structure in memory).
 fedit can write an audit record per operation: a begin line and an end line that share an id. It is off unless the user turns it on. Do not enable it or pass -log-* flags yourself unless asked.
 
 - Settings: -log-mode off|permissive|strict, -log-file, -log-max-mb, -log-content on|off, -log-level all|warning|error, -log-scope all|writes. Each has an environment variable FEDIT_LOG_*. Order: flag, environment, settings file, default. Over MCP there are no flags: the environment and the settings file are read, so put FEDIT_LOG_* (and FEDIT_CONFIG, which names another settings file) in the server's env block, or the settings in the settings file.
-- Settings file (unreleased): an optional fedit.ini of `key = value` lines (log_mode, log_file, log_max_mb, log_content, log_level, log_scope; # or ; starts a comment) in <user config folder>/fedit/fedit.ini, or the file named by FEDIT_CONFIG. A missing file is fine. An unreadable file, a bad line or an invalid value is an error that names the file and line (exit 1, nothing edited); an unknown key is a warning on stderr. -noconfig skips it on the command line. Do not create or edit it unless asked.
+- Settings file (unreleased): an optional fedit.ini of `key = value` lines (log_mode, log_file, log_max_mb, log_content, log_level, log_scope; # or ; starts a comment) in <user config folder>/fedit/fedit.ini, or the file named by FEDIT_CONFIG. A missing file is fine. An unreadable file, a bad line or an invalid value is an error that names the file and line (exit 1, nothing edited); an unknown key is a warning on stderr. -noconfig skips it on the command line. Do not create or edit it, and do not run fedit -config set or unset, unless asked; fedit -config show prints the effective values.
 - Every operation is logged, reads included, unless the scope is writes. -text values are logged as length and SHA-256 unless -log-content is on.
 - permissive: the edit always runs. If the log cannot be written, stderr says "The action was not logged" and the records are spooled; the next logged run, or `fedit -log merge`, appends them to the log.
 - strict, exit 4: the begin record could not be written, so the run was refused and nothing changed. Report it to the user.
@@ -365,6 +365,7 @@ Full results: https://amalexhandler.com/fedit#benchmark
   -log-mode M    audit log mode: off (default), permissive or strict; also -log-file, -log-max-mb, -log-content on|off, -log-level, -log-scope, each with an environment variable FEDIT_LOG_* (unreleased, see Audit log)
   -log merge     append the spooled audit records to the main log now (unreleased)
   -noconfig      do not read the settings file (default <user config folder>/fedit/fedit.ini; env FEDIT_CONFIG names another file) (unreleased)
+  -config ARGS   path | show | get KEY | set KEY VALUE | unset KEY: show or change the settings file (set and unset are logged, not over MCP) (unreleased)
   -times N       move/copy: paste N times (move cuts once)
   -after N, -before N, -aftermatch TEXT, -beforematch TEXT, -afterblock NAME, -beforeblock NAME   move/copy destination anchors (the block anchors need -lang)
   -col N         fields: column number (1-based); -delim CHAR is the field delimiter (default tab)
