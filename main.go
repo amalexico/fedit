@@ -3746,6 +3746,9 @@ const streamLineBuffer = 10 * 1024 * 1024
 //
 // Returns (linesRead, linesWritten, error).
 func execStreamOp(path string, fn func(lineNum int, line string) []string) (int, int, error) {
+	if dryRun {
+		return dryStreamPass(path, fn)
+	}
 	src, err := os.Open(path)
 	if err != nil {
 		return 0, 0, fmt.Errorf("open: %v", err)

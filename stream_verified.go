@@ -85,6 +85,11 @@ func runStreamVerified(path string, xform func(string) (string, int), remaining 
 	}
 	fmt.Fprintf(out, doneFmt, changedIn, linesRead)
 	logNoteReplace(res.Occurrences, changedIn)
+	if dryRun {
+		logNoteHashes(before, logFileSHA256(path))
+		fmt.Fprintln(out, "VERIFY: SKIP (dry-run)")
+		return 0
+	}
 	got, err := scanStreamFile(path, remaining)
 	if err != nil {
 		fmt.Fprintf(out, "VERIFY: could not re-read %s: %v\n", path, err)
