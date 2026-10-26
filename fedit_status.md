@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: October 25, 2026
+# Last updated: October 26, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -367,21 +367,49 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
     (TestDRW_*: the two verified runners; drbBin* cases in the TestLW_Bin table after
     ConfigSetIsLogged: DryReplaceAll, DryInsertAfter, DryWriteNewFile, DryNoMatchExit,
     DryOffNoNote). The full suite was ok in about 131 s and vet clean.
-    OPEN, in this order: (a) logging: dry=true in the begin or end record, hashes equal;
-    (b) usage errors for -dry with -config and -log merge; (c) -cleanfirst truncates with
-    os.WriteFile in main() before readLines, so it needs a dry guard (start from an empty
-    file), and -v after a dry insert would show the unchanged file through showVerify, so
-    skip it under dry-run; (d) -stream: execStreamOp writes a temp file and renames it, so
-    dry-run gives counts only; (e) multi -file and multi-dest: verifyMultiReplaceAll, the
-    batch report and the multi-file write paths; (f) guided: the `dry` modifier and passing
-    -dry to the child runs (guided.go also creates files with os.WriteFile); (g) MCP: the
-    dry_run parameter on the mutating tools (the mcpDo* functions all call writeLines);
-    (h) docs: README, SKILL, usage text, CLAUDE_DESKTOP. Test style: new cases are
-    subtests of TestLW_Bin (hex insert after the last entry, now {"DryOffNoNote",
-    drbBinOffNoNote}).
-    GIT (Oct 25, 2026): 0224733 and 2bca2aa; the local branch is 40 commits ahead of
-    origin/main (88ff116) once this status update is committed; nothing pushed, no new
-    tag, no website deploy.
+    DONE (Oct 26, 2026): decisions 6 to 10, all confirmed by Alex (the items (a) to (d) of the
+    old open list). (6) Logging: logStartWith (logwire.go) calls logNote("dry","true") right
+    after logHashStart(op, in) when dryRun; dry=true lands in the END record (the begin record
+    has no dry field) and the hashes are equal (7fe140b). (7) Usage errors: dryConflict(os.Args)
+    in dry_conflict.go (isDryArg accepts -dry, --dry and -dry=VALUE, so -dry=false is refused
+    too); main() calls it before the -log / -config dispatch and exits 1 with "fedit: -dry
+    cannot be combined with -config or -log merge", in either order (4b21f4c). (8)
+    -cleanfirst: under -dry nothing is truncated or created (the truncate condition in main.go
+    has && !dryRun, and the read block is skipped under dryRun && *cleanfirst, so lines stays
+    empty); the diff shows the old content removed and the new added, a missing file as
+    /dev/null (16eece2). (9) -v: showVerify prints "VERIFY: SKIP (dry-run)" and returns under
+    dryRun (covers move and copy); a block in main() before `if *v && !dryRun {` prints the
+    same single line for ops that would verify (not show, map, find, fields, write, writeraw,
+    writelines, move, copy, and not when windowsShown); no VERIFY window and no STATS block
+    under -dry, but move and copy keep their own STATS block (computed from the plan, so it is
+    right) (1097992). (10) -stream: execStreamOp calls dryStreamPass (dry_stream.go: reads,
+    runs the callback, writes nothing, no temp file, no rename) under dryRun, and
+    runStreamVerified (stream_verified.go) logs the hashes, prints the skip line and returns 0
+    before the read-back pass; the old bug was that -dry -stream really rewrote the file
+    (ee1187e). New files: dry_conflict.go and dry_stream.go.
+    TESTS (new): TestLW_Bin/DryLogged (dry_log_test.go, drbBinDryLogged); TestDRC_Conflict
+    (dry_conflict_test.go) and TestLW_Bin/DryConflict; TestLW_Bin/DryCleanFirst
+    (dry_clean_test.go); TestLW_Bin/DryVerbose (dry_verbose_test.go: insert, insertafter,
+    delete, replaceall, copy); TestLW_Bin/DryStream (dry_stream_test.go: literal, regex,
+    nomatch exit 1). The full suite was ok (about 130 to 185 s) and vet clean.
+    OPEN, in this order: (e) multi -file and multi-dest: main.go sends comma-list and glob
+    runs to runMultiMutate and runMultiFile, and -dest runs to runMultiDest and
+    runMultiDestReplace (multidest.go); check verifyMultiReplaceAll, the batch report
+    (logNoteBatch, batchResult) and every writeLines caller; under -dry the diff of each file
+    goes to stdout, the report says what would happen and verify is skipped; (f) guided: a
+    trailing `dry` modifier that passes -dry to the child runs (guided.go also creates files
+    with os.WriteFile, about line 434, which must not happen under dry); (g) MCP: a dry_run
+    parameter on the mutating tools (all mcpDo* call writeLines; tool schema in mcp.go), the
+    cleanfirst of mcpDoInsert (mcp.go, about line 392) truncates for real and needs the same
+    dry handling as the CLI -cleanfirst, and MCP logging should also carry dry=true; (h) docs:
+    README, SKILL, usage text (logUsage and the main usage block), CLAUDE_DESKTOP and this
+    file. Test style: new cases are subtests of TestLW_Bin (hex insert after the last entry,
+    now {"DryStream", drbBinDryStream}).
+    GIT (Oct 26, 2026): the dry-run commits are 0224733 (core), 2bca2aa (-dry flag), 1d8d969
+    (status file, stale since), 7fe140b (dry=true in the end record), 4b21f4c (usage error
+    with -config or -log merge), 16eece2 (-cleanfirst), 1097992 (-v) and ee1187e (-stream).
+    The local branch is 46 commits ahead of origin/main (88ff116) once this status update is
+    committed; nothing pushed, v1.11.0 still at 1425a3c, no new tag, no website deploy.
   - Small gaps wanted while dry-run is pending: guided ambiguity at the insert-from-
     file source, replace -destblock and insert anchors (reuse the 6ee1f11 numbered-
     choice helper; deterministic SKIP listing candidates for fan-out); scanner: one
@@ -404,7 +432,7 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
      multi -file, write-operation hashes), MCP logging, MCP single-file replaceall
      fields, `fedit -log merge`.
   2. Config: DONE (the ini and the -config command, Oct 24). Dry-run: IN PROGRESS; the
-     single-file CLI part is DONE (0224733, 2bca2aa) and the open items (a) to (h) are
+     single-file CLI part is DONE (0224733 to ee1187e) and the open items (e) to (h) are
      listed under PLANNED TRACKS; then the small gaps; the MCP output_file parameter
      belongs with the config work (MCP honours only logging and output keys).
   3. DONE (Oct 23, 2026): README, SKILL, help text and CLAUDE_DESKTOP cover logging and the ini; -config is documented too (b30ebda). Before, the flags, `-log merge` and
