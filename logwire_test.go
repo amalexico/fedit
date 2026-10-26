@@ -233,6 +233,7 @@ func TestLW_Bin(t *testing.T) {
 		{"DryLogged", drbBinDryLogged},
 		{"DryConflict", drbBinDryConflict},
 		{"DryCleanFirst", drbBinDryCleanFirst},
+		{"DryVerbose", drbBinDryVerbose},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) { c.run(t, bin) })

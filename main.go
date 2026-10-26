@@ -678,7 +678,15 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Unknown operation: %s\n", *op)
 		exitNow(1)
 	}
-	if *v {
+	if *v && dryRun && !windowsShown {
+		switch *op {
+		case "show", "map", "find", "fields", "write", "writeraw", "writelines", "move", "copy":
+			// read-only, or verified through showVerify (move, copy)
+		default:
+			fmt.Fprintln(os.Stderr, "VERIFY: SKIP (dry-run)")
+		}
+	}
+	if *v && !dryRun {
 		switch *op {
 		case "show", "map", "find", "write", "writeraw", "writelines", "move", "copy":
 		// read-only ops, no verify
@@ -1110,6 +1118,10 @@ var verifyCenter int
 var windowsShown bool // set when the replaceall path already printed a window for every changed line
 
 func showVerify(path string, centerLine int) {
+	if dryRun {
+		fmt.Fprintln(os.Stderr, "VERIFY: SKIP (dry-run)")
+		return
+	}
 	lines, err := readLines(path)
 	if err != nil {
 		return
