@@ -236,6 +236,7 @@ func TestLW_Bin(t *testing.T) {
 		{"DryVerbose", drbBinDryVerbose},
 		{"DryStream", drbBinDryStream},
 		{"DryMultiReplaceAll", drbBinDryMultiReplaceAll},
+		{"DryMultiLogged", drbBinDryMultiLogged},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) { c.run(t, bin) })
