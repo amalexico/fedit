@@ -43,6 +43,10 @@ func multiReplaceAllCounter(o multiMutOpts) func(string) int {
 // It returns whether the file is exactly as expected and the text for the
 // per-file report line.
 func verifyMultiReplaceAll(path string, expected []string, count func(string) int) (bool, string) {
+	// Under -dry nothing was written, so there is nothing to re-read.
+	if dryRun {
+		return true, "VERIFY: SKIP (dry-run)"
+	}
 	v, err := verifyOnDiskWith(path, replaceAllResult{Lines: expectedDiskLines(expected)}, count)
 	if err != nil {
 		return false, fmt.Sprintf("VERIFY: could not re-read: %v", err)
