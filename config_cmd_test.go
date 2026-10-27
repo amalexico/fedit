@@ -167,6 +167,34 @@ func TestCFC_ShowErrors(t *testing.T) {
 	}
 }
 
+func TestCFC_EnvEnumCase(t *testing.T) {
+	for _, c := range []struct{ env, want string }{
+		{"Strict", "strict"},
+		{" PERMISSIVE ", "permissive"},
+	} {
+		f := cfcSetup(t, "")
+		f.env["FEDIT_LOG_MODE"] = c.env
+		so, se, code := f.run("get", "log_mode")
+		if code != 0 || so != c.want+"\n" {
+			t.Errorf("get with FEDIT_LOG_MODE=%q: code %d, stdout %q, stderr %q; want %q", c.env, code, so, se, c.want+"\n")
+		}
+		so, se, code = f.run("show")
+		if code != 0 {
+			t.Fatalf("show with FEDIT_LOG_MODE=%q: code %d, stderr %q", c.env, code, se)
+		}
+		line := "log_mode = " + c.want + " (environment)"
+		found := false
+		for _, l := range cfcLines(so) {
+			if l == line {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("show with FEDIT_LOG_MODE=%q: no line %q in %q", c.env, line, so)
+		}
+	}
+}
+
 func TestCFC_Get(t *testing.T) {
 	cases := []struct {
 		name string
