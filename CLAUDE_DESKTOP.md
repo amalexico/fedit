@@ -86,7 +86,10 @@ fedit can write an audit record for every tool call (a begin line and an end lin
 
 Instead of the `env` block you can keep the same settings in the settings file (`log_mode = permissive` and so on), which is `fedit\fedit.ini` in your user config folder (on Windows `%APPDATA%\fedit\fedit.ini`). Set `FEDIT_CONFIG` in the `env` block to use another file. The environment wins over the settings file. A settings file that cannot be read, or that holds an invalid value, makes the tool call fail with an error before anything is edited. In strict mode a call whose begin record cannot be written returns an error and changes nothing. The README ("Audit log" and "Settings file") lists every value.
 
+The `fedit -config` command (path, show, get, set and unset on the settings file) is CLI only: it is not available over MCP, so over MCP change the `env` block or edit the settings file by hand.
+
 ---
+
 ## 4. Restart Claude Desktop
 
 Fully quit and relaunch. In the new conversation window you should see a
