@@ -207,7 +207,11 @@ func collectMultiDest(o multiDestOpts) (multiDestOutcome, error) {
 			out.failed = true
 			return out, nil
 		}
-		out.notes = append(out.notes, fmt.Sprintf("move: removed lines %d-%d from %s", srcStart, srcEnd, o.srcFile))
+		verb := "removed"
+		if dryRun {
+			verb = "would remove"
+		}
+		out.notes = append(out.notes, fmt.Sprintf("move: %s lines %d-%d from %s", verb, srcStart, srcEnd, o.srcFile))
 	}
 	return out, nil
 }
