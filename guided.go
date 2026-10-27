@@ -14,7 +14,7 @@ import (
 
 var guidedLineRange = regexp.MustCompile(`(?i)^line\s+(\d+)-(\d+)$`)
 
-const guidedUsage = "usage: fedit guided SRCFILE SRCBLOCK VERB DESTFILE [before|after TARGET | at-end] [silent|report-only]\n" +
+const guidedUsage = "usage: fedit guided SRCFILE SRCBLOCK VERB DESTFILE [before|after TARGET | at-end] [silent|report-only] [dry]\n" +
 	"       fedit guided   (no arguments: asks the questions one at a time)\n" +
 	"       fedit guided SRCFILE SRCBLOCK replace DESTFILE [TARGET]\n" +
 	"       fedit guided SRCFILE SRCBLOCK insertbefore|insertafter DESTFILE TARGET\n" +
@@ -306,8 +306,18 @@ func guidedInsertText(args []string) ([]string, []string, error) {
 	return []string{"-op", verb, "-file", file, "-lang", lang, "-block", args[3], "-text", text, "-v"}, nil, nil
 }
 
+// guidedSplitDry removes a trailing dry word and reports whether it was there.
+// dry always comes last, after silent or report-only.
+func guidedSplitDry(args []string) ([]string, bool) {
+	if n := len(args); n > 0 && args[n-1] == "dry" {
+		return args[:n-1], true
+	}
+	return args, false
+}
+
 // planGuided takes the words after "guided" and returns the commands to run.
 func planGuided(args []string) ([]guidedStep, []string, error) {
+	args, dry := guidedSplitDry(args)
 	silent, reportOnly := false, false
 	if n := len(args); n > 0 {
 		switch args[n-1] {
@@ -345,6 +355,11 @@ func planGuided(args []string) ([]guidedStep, []string, error) {
 	}
 	if err != nil {
 		return nil, nil, err
+	}
+	if dry {
+		for i := range steps {
+			steps[i].argv = append(steps[i].argv, "-dry")
+		}
 	}
 	if reportOnly {
 		for i := range steps {
@@ -405,7 +420,8 @@ func runGuided() error {
 			return ierr
 		}
 	}
-	quietEcho := len(args) > 0 && args[len(args)-1] == "report-only"
+	rest, dry := guidedSplitDry(args)
+	quietEcho := len(rest) > 0 && rest[len(rest)-1] == "report-only"
 	steps, notes, err := planGuided(args)
 	if err != nil {
 		return err
@@ -420,6 +436,7 @@ func runGuided() error {
 		os.Args = append([]string{os.Args[0]}, steps[0].argv...)
 		return nil
 	}
+	dryRun = dry
 	if code := logStartGuided(steps); code != 0 {
 		exitNow(code)
 	}
@@ -429,6 +446,14 @@ func runGuided() error {
 	}
 	code := 0
 	for _, st := range steps {
+		if dry && len(st.create) > 0 {
+			msg := "guided: dry-run: would create " + strings.Join(st.create, ", ") + " and put the block into it"
+			if len(st.argv) > 1 && st.argv[1] == "move" {
+				msg += ", then remove it from the source"
+			}
+			fmt.Fprintln(os.Stderr, msg)
+			continue
+		}
 		failed := false
 		for _, f := range st.create {
 			if e := os.WriteFile(f, nil, 0o644); e != nil {

@@ -135,17 +135,31 @@ func guidedInteractive(in io.Reader, out io.Writer) ([]string, error) {
 	}
 
 	for try := 0; try < 3; try++ {
-		s, ok := line("Modifier (blank for none, or silent, report-only):")
+		s, ok := line("Modifier (blank for none, or silent, report-only, dry; dry may follow the first two):")
 		if !ok {
 			return args, nil
 		}
-		switch strings.ToLower(s) {
-		case "", "none":
-			return args, nil
-		case "silent", "report-only":
-			return append(args, strings.ToLower(s)), nil
+		if words, valid := guidedModWords(s); valid {
+			return append(args, words...), nil
 		}
-		fmt.Fprintln(out, "please answer blank, silent or report-only")
+		fmt.Fprintln(out, "please answer blank, silent, report-only or dry")
 	}
 	return nil, fmt.Errorf("no valid answer after 3 tries, nothing changed")
+}
+
+// guidedModWords reads the answer to the modifier question: nothing, silent,
+// report-only, dry, or silent or report-only followed by dry.
+func guidedModWords(s string) ([]string, bool) {
+	f := strings.Fields(strings.ToLower(s))
+	if len(f) == 1 && f[0] == "none" {
+		return nil, true
+	}
+	i := 0
+	if i < len(f) && (f[i] == "silent" || f[i] == "report-only") {
+		i++
+	}
+	if i < len(f) && f[i] == "dry" {
+		i++
+	}
+	return f, i == len(f)
 }
