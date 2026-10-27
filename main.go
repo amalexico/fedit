@@ -3164,7 +3164,11 @@ func printBatchReport(op string, results []batchResult) {
 			okCount++
 		}
 	}
-	fmt.Fprintf(os.Stderr, "%s: %d/%d file(s) succeeded\n", op, okCount, len(results))
+	verb := "succeeded"
+	if dryRun {
+		verb = "would succeed"
+	}
+	fmt.Fprintf(os.Stderr, "%s: %d/%d file(s) %s\n", op, okCount, len(results), verb)
 }
 func doMoveOp(lines []string, path string, lineFlag, endFlag int, matchFlag, endmatchFlag string,
 	afterFlag, beforeFlag int, afterMatchFlag, beforeMatchFlag string,

@@ -72,7 +72,7 @@ func drbBinDryMultiOps(t *testing.T, bin string) {
 					t.Errorf("want 2 added %q lines, got %d in %q", c.added, n, so)
 				}
 			}
-			if !strings.Contains(se, "2/2 file(s) succeeded") {
+			if !strings.Contains(se, "2/2 file(s) would succeed") {
 				t.Errorf("stderr lacks the batch total: %q", se)
 			}
 			if !strings.Contains(se, "dry-run: applied=false") {
