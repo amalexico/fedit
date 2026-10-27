@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: October 26, 2026
+# Last updated: October 27, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -392,6 +392,20 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
     (dry_clean_test.go); TestLW_Bin/DryVerbose (dry_verbose_test.go: insert, insertafter,
     delete, replaceall, copy); TestLW_Bin/DryStream (dry_stream_test.go: literal, regex,
     nomatch exit 1). The full suite was ok (about 130 to 185 s) and vet clean.
+    DONE for (e) so far (Oct 27, 2026; each step was a red test, then a green fix). (1) Multi
+    -file replaceall under -dry: collectMultiMutate writes through multiWriteLines and that
+    already ends in writeLines/dryWrite, so the diffs on stdout and the untouched files were
+    right; the bug was the per-file verify re-reading a file that was never written (exit 3,
+    VERIFY: FAIL). Fix: verifyMultiReplaceAll (multi_verify.go) returns "VERIFY: SKIP
+    (dry-run)" under dryRun, shown in the report line of every file, exit 0 (05b79fd; test
+    TestLW_Bin/DryMultiReplaceAll in dry_multi_test.go). (2) collectMultiMutate calls
+    logNoteBatch(results, count != nil && !dryRun): a dry batch logs verify=none, not PASS
+    (9766989; TestLW_Bin/DryMultiLogged in dry_multilog_test.go). (3) -dest move under -dry:
+    the note reads "move: would remove lines N-M from SRC" instead of "removed" (a46624a;
+    TestLW_Bin/DryMultiDestMove in dry_dest_test.go; collectMultiDest in multidest.go).
+    Still to check for (e): the other multi -file ops (insertafter, insertbefore, delete,
+    replace, write) and -dest copy and replace under -dry (guard tests; expected green, since
+    they all go through writeLines), and whether runMultiFile needs anything (it is read-only).
     OPEN, in this order: (e) multi -file and multi-dest: main.go sends comma-list and glob
     runs to runMultiMutate and runMultiFile, and -dest runs to runMultiDest and
     runMultiDestReplace (multidest.go); check verifyMultiReplaceAll, the batch report
@@ -404,12 +418,15 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
     dry handling as the CLI -cleanfirst, and MCP logging should also carry dry=true; (h) docs:
     README, SKILL, usage text (logUsage and the main usage block), CLAUDE_DESKTOP and this
     file. Test style: new cases are subtests of TestLW_Bin (hex insert after the last entry,
-    now {"DryStream", drbBinDryStream}).
-    GIT (Oct 26, 2026): the dry-run commits are 0224733 (core), 2bca2aa (-dry flag), 1d8d969
+    now {"DryMultiDestMove", drbBinDryMultiDestMove}).
+    GIT (Oct 27, 2026): the dry-run commits are 0224733 (core), 2bca2aa (-dry flag), 1d8d969
     (status file, stale since), 7fe140b (dry=true in the end record), 4b21f4c (usage error
-    with -config or -log merge), 16eece2 (-cleanfirst), 1097992 (-v) and ee1187e (-stream).
-    The local branch is 46 commits ahead of origin/main (88ff116) once this status update is
-    committed; nothing pushed, v1.11.0 still at 1425a3c, no new tag, no website deploy.
+    with -config or -log merge), 16eece2 (-cleanfirst), 1097992 (-v), ee1187e (-stream),
+    8a979cf (status file for (a) to (d)), 273416e (TestCFC_EnvEnumCase), fcaaa29 (CLAUDE_DESKTOP:
+    -config is CLI only), 05b79fd (multi -file verify skip), 9766989 (batch log verdict none)
+    and a46624a (-dest move note). The local branch is 52 commits ahead of origin/main (88ff116)
+    once this status update is committed; nothing pushed, v1.11.0 still at 1425a3c, no new
+    tag, no website deploy.
   - Small gaps wanted while dry-run is pending: guided ambiguity at the insert-from-
     file source, replace -destblock and insert anchors (reuse the 6ee1f11 numbered-
     choice helper; deterministic SKIP listing candidates for fan-out); scanner: one
