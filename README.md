@@ -381,7 +381,7 @@ fedit -file b.go -op insertafter -match '// helpers' -sourcefile a.go -sourceblo
 `fedit guided` takes the source, the verb and the destination in plain order and turns them into the explicit `-op` command, which it prints to stderr before running it. It is a CLI shortcut only: there is no MCP tool for it, and the engine and the explicit flags are unchanged.
 
 ```
-fedit guided SRCFILE SRCBLOCK copy|move DESTFILE [before TARGET | after TARGET | at-end] [silent|report-only]
+fedit guided SRCFILE SRCBLOCK copy|move DESTFILE [before TARGET | after TARGET | at-end] [silent|report-only] [dry]
 fedit guided SRCFILE SRCBLOCK replace DESTFILE [TARGET]
 fedit guided SRCFILE SRCBLOCK insertbefore|insertafter DESTFILE TARGET
 fedit guided "new text" insertbefore|insertafter FILE TARGET
@@ -400,7 +400,33 @@ fedit guided a.go Helper replace b.go
 - `replace` overwrites TARGET (default: the same name as the source) in each destination and skips a destination that does not have it.
 - `silent` runs the plan with `-quiet`: no echo, no notes, and no engine report when every file succeeded (skips and errors still print).
 - `report-only` runs the plan without the verify output and without the echo line, but keeps the notes and the engine's own summary. Both modifiers go last and work with every verb.
+- `dry` goes last, after `silent` or `report-only` when you use one. It adds `-dry` to every step, so each step prints its diff and writes nothing, and the parent log record carries `dry=true`. A destination file that does not exist is not created: the plan says `guided: dry-run: would create FILE and put the block into it` instead (for a move it adds that the block would then be removed from the source), and no diff is shown for that file. The bare prompt accepts `dry`, `silent dry` and `report-only dry`. A target block literally named dry cannot be the last word.
 - Bare `fedit guided` (no other arguments) asks the questions one at a time: the operation, the source file and block, the destination, the position, then the modifier. Operation and position can be answered by name or by number, and a wrong choice is asked again (three tries). The prompts go to stderr and the answers are read from stdin, one per line, so piped input works. If the input ends before the last answer, nothing is changed.
+
+### -dry -- Preview a change without writing it (unreleased)
+
+`-dry` turns an operation that changes files into a preview. Nothing is written, truncated or created. fedit prints a unified diff (three lines of context, and `/dev/null` for a file that does not exist yet) to stdout, and the report on stderr ends with `dry-run: applied=false (no file was changed)`. Exit codes are the same as for a real run, so a script can try a change before it makes it.
+
+```bash
+# Preview, then apply
+fedit -file app.conf -op replaceall -match old.example.com -text new.example.com -dry
+fedit -file app.conf -op replaceall -match old.example.com -text new.example.com
+
+# Preview a multi-file run: one diff per file, and the total reads would succeed
+fedit -file "*.conf" -op replaceall -match old.example.com -text new.example.com -dry
+
+# Preview a cross-file copy
+fedit -file a.go -op copy -block Helper -lang go -dest b.go,c.go -afterblock Init -dry
+```
+
+- The verify step is skipped, because nothing was written: replaceall and `-v` print `VERIFY: SKIP (dry-run)` and the exit code is 0. There is no VERIFY window and no STATS block; `move` and `copy` keep their own STATS block, which is computed from the plan.
+- Multi-file and `-dest` runs print one diff per file. The batch total reads `N/M file(s) would succeed`, each file line says `VERIFY: SKIP (dry-run)`, and a `-dest` move reports `move: would remove lines N-M from SRC` instead of removing them.
+- `-stream` with `-dry` reads the file, runs the replacement and prints counts only: no diff, no temporary file, nothing written.
+- `-cleanfirst` with `-dry` truncates nothing; the diff shows the old content removed and the new content added.
+- A run that would fail still fails: no match or a missing block gives the usual error and exit code, with no diff.
+- `-dry` works with `-outputresult`. It cannot be combined with `fedit -config` or `fedit -log merge` (usage error, exit 1), and `-dry=false` is refused too.
+- A dry run is logged like any run: its end record carries `dry=true` (see "Audit log" below). In `fedit guided` add the word `dry` at the end; over MCP pass `dry_run` (see "MCP Server Mode" below).
+- Limits: a guided dry run shows no diff for a destination file that does not exist yet, and a guided target block literally named dry cannot be the last word.
 
 ### -cleanfirst — Truncate before writing (v1.6.0)
 
@@ -596,6 +622,7 @@ Most mappers detect **duplicates** (functions, tables, keys, header columns, blo
 | -quiet | Suppress output on success, including the per-file report of multi-file and -dest runs (skips and errors still print); exit code signals result (since v1.11.0) |
 | -outputresult FILE | Write the operation report to FILE (UTF-8, no BOM) and print one summary line on the terminal. FILE may not be any file being edited (-file, -files, -dest) and its directory must exist. On a non-zero exit nothing is written to FILE: the whole report goes to stderr with the same exit code |
 | -outappend | With -outputresult: append to FILE instead of overwriting it |
+| -dry | Dry run: print a unified diff of what the operation would change and write nothing; the report ends with applied=false (unreleased); see "-dry" above |
 | -log-mode, -log-file, -log-max-mb, -log-content, -log-level, -log-scope | Audit log settings, each also an environment variable FEDIT_LOG_* (unreleased); off by default, see "Audit log" below |
 | fedit -log merge | Append the spooled audit records to the main log now (unreleased); see "Audit log" below |
 | -noconfig | Do not read the settings file for this run (unreleased); see "Settings file" below |
@@ -655,6 +682,7 @@ Every record is one line with a UTC timestamp, a level (`[INFO]` for exit 0, `[W
 
 - Begin record: `op`, `source` (cli, guided or mcp), `user` (with the domain on Windows), `host`, `pid`, `cwd`, then, when given, `file`, `files` and `dest` as absolute paths (a glob keeps its pattern), `text_len` and `text_sha256` (or `text` with `-log-content on`; `-texthex` is hashed after decoding) and `textfile` (the path only). Over MCP it also carries `client` and `client_version`.
 - End record: `phase=end`, `exit` and `ms`, plus the result when the operation reports one: `replacements`, `lines_changed` and `verify` (PASS or FAIL) for replaceall, and for multi-file runs `files_total`, `files_ok`, `files_skip`, `files_fail` and a per-file `results` list. A write on a single file also gets `sha256_before` and `sha256_after`.
+- Dry run: a run with `-dry` (also guided `dry` and MCP `dry_run`) is logged like any other run, and its end record carries `dry=true`. For an existing file `sha256_after` is the same as `sha256_before`, and a dry multi-file run logs `verify=none`.
 - A usage error (no `-op`, unknown `-op`) is not an operation and is not logged. `-outputresult` never receives log records.
 
 `fedit -log merge` appends the spooled records to the main log now, in any mode, using the `FEDIT_LOG_*` environment and the settings file. It prints `Merged N spooled record(s) into FILE` or `No spooled records to merge` on stderr, and exits 1 on a usage error, an invalid setting or a merge that stops. It is not logged itself.
@@ -909,6 +937,8 @@ This starts a JSON-RPC 2.0 server on stdin/stdout. The server exposes all 14 edi
 | `fedit_move` | Move a line range to a new position; destination-overlap rejected; `dest` moves the block into other files |
 | `fedit_copy` | Copy a line range; snapshot semantics, overlap allowed, -times N; `dest` copies it into other files |
 | `fedit_fields` | Extract column N from CSV/TSV/delimited file (`-col N -delim CHAR`); always streaming |
+
+The ten tools that change files (`fedit_insert`, `fedit_delete`, `fedit_replace`, `fedit_write`, `fedit_writeraw`, `fedit_replaceall`, `fedit_insertafter`, `fedit_insertbefore`, `fedit_move` and `fedit_copy`) also take an optional boolean `dry_run` (unreleased). With `dry_run` true nothing is written, truncated or created. The result text starts with `dry-run: applied=false (no file was changed)`, followed by a unified diff of each file that would change and then the usual summary of the tool, which still uses past-tense wording. A multi-file total reads `N/M file(s) would succeed`. A call that would fail is still an error, and the read-only tools have no `dry_run` parameter. A dry call is logged like any call, with `dry=true` on its end record.
 
 ### Configuring with Claude Desktop
 
