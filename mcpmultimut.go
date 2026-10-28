@@ -100,7 +100,7 @@ func mcpRunMultiMutate(o multiMutOpts) mcpCallResult {
 			failCount++
 		}
 	}
-	fmt.Fprintf(&b, "multi file %s: %d/%d file(s) succeeded", o.op, okCount, len(results))
+	fmt.Fprintf(&b, "multi file %s: %d/%d file(s) %s", o.op, okCount, len(results), mcpBatchVerb())
 	if failCount > 0 {
 		fmt.Fprintf(&b, "\nVERIFY: FAIL on %d file(s)", failCount)
 		return mcpErrorResult(b.String())

@@ -126,7 +126,7 @@ func mcpSendError(id json.RawMessage, code int, msg string) {
 	data, _ := json.Marshal(resp)
 	fmt.Fprintf(os.Stdout, "%s\n", data)
 }
-func mcpToolDefs() []mcpToolDef {
+func mcpBaseToolDefs() []mcpToolDef {
 	s := func(s string) json.RawMessage { return json.RawMessage(s) }
 	return []mcpToolDef{
 		{Name: "fedit_show", Description: "Display file with line numbers. The file param may be a comma list or glob, with one header per file. block+lang for named blocks. raw=true strips prefix for piping.", InputSchema: s(`{"type":"object","properties":{"file":{"type":"string"},"line":{"type":"integer"},"end":{"type":"integer"},"block":{"type":"string","description":"Named block (func/class/resource)"},"lang":{"type":"string","description":"Language: go python js hcl nix etc"},"raw":{"type":"boolean","description":"Bare content, no line numbers (for piping)"},"match":{"type":"string","description":"Content anchor for start of range"},"endmatch":{"type":"string","description":"Content anchor for end of range"},"nth":{"type":"integer","description":"Which occurrence of match (default 1, -1 for last)"}},"required":["file"]}`)},
@@ -147,6 +147,9 @@ func mcpToolDefs() []mcpToolDef {
 }
 
 func mcpExecTool(name string, args map[string]any) mcpCallResult {
+	if mcpWantsDry(name, args) && !dryRun {
+		return mcpRunDry(name, args)
+	}
 	start := time.Now()
 	getStr := func(key string) string {
 		if v, ok := args[key]; ok {

@@ -89,7 +89,7 @@ func mcpRunMultiDest(o multiDestOpts) mcpCallResult {
 	for _, n := range out.notes {
 		fmt.Fprintf(&b, "%s\n", n)
 	}
-	fmt.Fprintf(&b, "%s: %d/%d file(s) succeeded", label, out.okCount, len(out.results))
+	fmt.Fprintf(&b, "%s: %d/%d file(s) %s", label, out.okCount, len(out.results), mcpBatchVerb())
 	if out.failed {
 		return mcpErrorResult(b.String())
 	}
