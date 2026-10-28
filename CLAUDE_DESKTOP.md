@@ -140,6 +140,9 @@ Once connected, try these in Claude Desktop:
 **Insert a block taken from another file**
 > In b.go, insert the `Helper` function from a.go after the `// helpers` comment
 
+**Preview a change without writing it**
+> Show me what replacing `old.example.com` with `new.example.com` in every .conf file would change, but do not write anything
+
 ---
 
 ## 6. All available tools
@@ -162,6 +165,8 @@ Once connected, try these in Claude Desktop:
 | `fedit_fields` | Extract column N from CSV/TSV/delimited file (`col`, `delim`); `x=true` suppresses the stats footer |
 
 Tool parameters use the schema names (for example `raw`, `x`, `stream`, `match_regex`), not the CLI flag spellings. Section 7 shows the cross-file tools (`dest`, `sourcefile`) and many-files edits with examples.
+
+The ten tools that change files (every tool except `fedit_show`, `fedit_map`, `fedit_find` and `fedit_fields`) also take an optional boolean `dry_run` (unreleased) that previews the change and writes nothing. See "Preview a change with dry_run" in section 7.
 
 ---
 
@@ -267,6 +272,26 @@ Pass a comma list or glob in `file` and the same call runs on each file on its o
 ```
 `sourcefile`, `sourceblock` and `lang` go together and replace `text`. `file` may also be a comma list or glob: the block is read once and inserted at each file's own `match` (list support since v1.11.0).
 
+### Preview a change with dry_run (unreleased)
+
+The ten tools that change files (`fedit_insert`, `fedit_delete`, `fedit_replace`, `fedit_write`, `fedit_writeraw`, `fedit_replaceall`, `fedit_insertafter`, `fedit_insertbefore`, `fedit_move` and `fedit_copy`) take an optional boolean `dry_run`. With `dry_run` set to true nothing is written, truncated or created, and the result shows what would have happened.
+
+**Preview a replace in every .conf file (fedit_replaceall)**
+```json
+{
+  "file": "*.conf",
+  "match": "old.example.com",
+  "text": "new.example.com",
+  "dry_run": true
+}
+```
+
+- The result text starts with `dry-run: applied=false (no file was changed)`, followed by a unified diff of each file that would change (a new file is shown against `/dev/null`) and then the usual summary of the tool, which still uses past-tense wording.
+- A call on many files, or with `dest`, gives one diff per file and a total that reads `N/M file(s) would succeed`.
+- The verify step is skipped (`VERIFY: SKIP (dry-run)`), so a dry `fedit_replaceall` is not proof that the write would verify.
+- A call that would fail is still an error, with no diff. The read-only tools have no `dry_run`.
+- Nothing is printed on the server stdout: the diff comes back inside the result. With the audit log on, a dry call is logged like any call and its end record carries `dry=true`.
+
 ---
 
 ## 8. Cursor / Cline / Windsurf
@@ -309,6 +334,7 @@ Restart the editor after saving.
 
 **A parameter is ignored or rejected**
 - `dest`, `destblock`, `sourcefile` and `sourceblock` need v1.10.0 or newer; `sourcefile` with a file list, map for hcl and nix, and `js`, `ts` and `cs` as `lang` need v1.11.0. Run `fedit` and compare the usage block with section 6.
+- `dry_run` is accepted only by the ten changing tools, not by `fedit_show`, `fedit_find`, `fedit_map` or `fedit_fields`, and it needs a build newer than v1.11.0 (unreleased). Run `fedit` and look for `-dry` in the usage block.
 
 ---
 
@@ -325,3 +351,4 @@ Restart the editor after saving.
 - v1.10.0 release notes: MCP `dest`, `destblock`, `sourcefile` and `sourceblock`
 - Unreleased (expected v1.11.0): `fedit_map` for hcl and nix (`.tf`, `.hcl`, `.nix`), `terraform` and `tf` as map aliases, `js`, `ts` and `cs` as `lang` values, `sourcefile` and `sourceblock` with a file list, the Go import hint on cross-file transfers and on `sourcefile` inserts, `match_regex` and `textfile` on `fedit_replaceall`, an error for an invalid `get` regex in `fedit_find`, duplicate reports in `fedit_map` for markdown headings, Dockerfile stages and CSS selectors per container block (the markdown map skips fenced code); block scanners skip multi-line strings (C# verbatim and raw, Java text blocks with backslash escapes, Rust raw strings, HCL and PHP heredocs, PHP nowdocs, Nix indented strings), Rust char literals and lifetimes, and comments (PHP `#` included); CLI only: `fedit guided` (also bare, as a step-by-step Q and A, with the `silent` and `report-only` modifiers), and `-afterblock`/`-beforeblock` with insertafter/insertbefore now fail with an error pointing to `-block`
 - Unreleased (after v1.11.0): the audit log over MCP (`FEDIT_LOG_*` in the server's `env` block) and the optional settings file `fedit.ini` (`FEDIT_CONFIG`, `-noconfig` on the command line); see the README
+- Unreleased (after v1.11.0), dry run: `-dry` on the command line, a trailing `dry` in `fedit guided`, and the `dry_run` parameter on the ten changing MCP tools (section 7)
