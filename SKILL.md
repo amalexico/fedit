@@ -48,6 +48,8 @@ Mutation operations, in order of safety:
 
 **Ordering rule:** when a sequence mixes line-number ops (delete, insert, replace) with content-matching ops (insertafter, insertbefore), ALWAYS run the line-number ops FIRST. Once an insertion shifts line numbers, any subsequent line-number op targets the wrong lines.
 
+**Preview rule (unreleased):** when a change is large, spans many files, or you are not sure an anchor resolves where you expect, call the changing tool with `dry_run=true` first (CLI: `-dry`). Nothing is written. The result starts with `dry-run: applied=false (no file was changed)` and shows a unified diff. Check the diff, then repeat the same call without `dry_run`. Under dry_run the verify step is skipped (`VERIFY: SKIP (dry-run)`), and the per-tool summary line may still be worded in the past tense: trust the applied=false line, not the wording, and never report a dry run as done.
+
 ### Step 3: Verify
 
 All mutation tools auto-emit a verify block showing the surrounding lines and a stats block with line delta and elapsed time. Always read this output before reporting success to the user. fedit_replaceall goes further: it re-reads the written file from disk and reports VERIFY: PASS or VERIFY: FAIL, and a FAIL comes back as an error result. Never report a replaceall as done when the result says VERIFY: FAIL.
@@ -280,6 +282,18 @@ Atomic: writes temp file then renames -- original untouched on interruption.
 
 Not supported with move/copy/map (those need full structure in memory).
 
+### Preview a change with dry_run (unreleased)
+
+Add `dry_run=true` to any of the ten tools that change files (fedit_insert, fedit_delete, fedit_replace, fedit_write, fedit_writeraw, fedit_replaceall, fedit_insertafter, fedit_insertbefore, fedit_move, fedit_copy) and nothing is written, truncated or created. The result starts with `dry-run: applied=false (no file was changed)`, then a unified diff of each file that would change (a new file is shown against /dev/null). A call that would fail is still an error.
+
+    fedit_replaceall (file="*.conf", match="old.example.com", text="new.example.com", dry_run=true)
+
+- Multi-file and dest calls give one diff per file and a total that reads "N/M file(s) would succeed".
+- Verify is skipped, so there is no VERIFY: PASS to report. Say that the change was previewed, not applied, then repeat the call without dry_run to apply it.
+- CLI: -dry on the command line, and the word dry at the end of a `fedit guided` command. -dry cannot be combined with -config or -log merge.
+- The read-only tools (fedit_show, fedit_find, fedit_map, fedit_fields) have no dry_run parameter.
+- A dry run is logged like any run; its end record carries dry=true.
+
 ### Audit log (unreleased, off by default)
 
 fedit can write an audit record per operation: a begin line and an end line that share an id. It is off unless the user turns it on. Do not enable it or pass -log-* flags yourself unless asked.
@@ -291,6 +305,7 @@ fedit can write an audit record per operation: a begin line and an end line that
 - strict, exit 4: the begin record could not be written, so the run was refused and nothing changed. Report it to the user.
 - strict, exit 5: the edit succeeded but the end record could not be written. The file IS changed, so do not repeat the edit; tell the user the log has a gap. Over MCP this comes back as an error result that says the operation completed.
 - The end record carries exit, ms and, where available, replacements, lines_changed, verify, per-file results and sha256_before/sha256_after.
+- A dry run (dry_run=true or -dry) is logged like any run: its end record carries dry=true and the two hashes are equal.
 
 ## Anti-patterns (do not do these)
 
