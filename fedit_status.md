@@ -15,7 +15,7 @@ CURRENT TAG:  v1.11.0 (tagged and pushed Oct 17, 2026, 1425a3c; module proxy ser
 UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (head 88ff116, tree clean); no new tag, no website deploy. The v1.11.0 website deploy and LinkedIn post were Oct 17, 2026.
   Commits, oldest first: 510cff2, 290f9b5, 8bf0dad, 0d15f8d, 462badd, bad1b27,
   0a380fe, 87aaa80, 354ec2b, 419489d, 97e8892, 88ff116.
-LOCAL (Oct 28, 2026): the local branch is 62 commits ahead of origin/main (88ff116) once this status update is committed; nothing pushed since Oct 19, no new tag (v1.11.0 still at 1425a3c), no website deploy. The dry-run work (CLI, guided, MCP) is complete and unreleased.
+LOCAL (Oct 28, 2026): the local branch is 67 commits ahead of origin/main (88ff116) once this status update is committed; nothing pushed since Oct 19, no new tag (v1.11.0 still at 1425a3c), no website deploy. The dry-run work (CLI, guided, MCP) is complete and unreleased. MCP output_file is done (68862d9), documented and unreleased.
   REPLACEALL VERIFICATION (step 3 done, full suite ok, vet clean). Every replaceall
   path re-reads the written file from disk and reports a verdict. It is ALWAYS on
   (not only -v): VERIFY: PASS or FAIL plus the complete changed-line list; under -v
@@ -85,7 +85,7 @@ LOCAL (Oct 28, 2026): the local branch is 62 commits ahead of origin/main (88ff1
   wire_outputresult_test.go (TestOR_Success, TestOR_RefuseSameFile,
   TestOR_OverwriteAndAppend; helpers orxRun, orxWrite, orxRead, orxNorm) and
   wire_outputresult_fail_test.go (TestORF_*). Docs: usage text, README flag table,
-  SKILL.md flag list. Not yet: MCP output_file (planned with the MCP integration).
+  SKILL.md flag list. MCP output_file is done Oct 28 (see MCP OUTPUT_FILE STATUS).
   LOGGING / AUDIT TRAIL (building blocks Oct 18-20, 2026; wired into command-line and
   guided runs Oct 21, 2026, off by default; MCP is NOT wired yet; README and SKILL
   have nothing about it yet, only the usage text does). Tests use the prefixes
@@ -438,6 +438,14 @@ LOCAL (Oct 28, 2026): the local branch is 62 commits ahead of origin/main (88ff1
     - LIMITATIONS (documented in the README): a guided target block literally named dry cannot be the last word; a guided dry run shows no diff for a destination file that does not exist yet; -stream under dry gives counts only, no diff. Under MCP dry the per-tool summary after the applied=false line still uses past tense (Inserted, Wrote); optional wording polish.
     - Test helpers added: mdrCall, mdrNames (mcp_dry_test.go); gdrCount, gdrMissing, gdrSame (guided_dry_test.go); drbDryPair, drbDryUnchanged (dry_multiops_test.go); mlgEnds (mcp_dry_log_test.go). Dry-run work was done in a chat with about 12 interactions; commits: 77aa6b1, 9503f3e, 5b3e3c0, a9658d1, 93fa4a9, fd00f80, afbfac5, 40c8f61, bd2aef0, then the status file commit.
     - NEXT: the small gaps (the MCP output_file parameter, MCP plain write tools log no counts, the permissive not-logged notice is stderr-only under MCP, -textfile content is not hashed, a broken ini blocks -log merge); ask before any push or tag.
+    MCP OUTPUT_FILE STATUS (Oct 28, 2026): DONE, documented and unreleased. Code: 68862d9 (mcp: output_file and output_append, on top of c99332c); docs: 54b5271 (README), 6b46bdd (CLAUDE_DESKTOP), d85fc01 (SKILL); then the status file commit.
+    - Parameters: `output_file` (string) and `output_append` (boolean) on ALL 14 tools, injected into every schema by mcpAddOutput (mcpout.go); mcpToolDefs (mcpdry.go) now returns mcpAddOutput(mcpAddDryRun(mcpBaseToolDefs())).
+    - Hook: the first thing in mcpExecTool (mcp.go), before the dry hook: if mcpWantsOutput(args) { return mcpRunOutput(name, args) }. mcpRunOutput refuses BEFORE the tool runs: output_append without output_file ("output_append requires output_file"); a result file that is an edited file (file, dest or glob matches; it reuses outputResultRefuse; message "output_file: PATH is also an edited file (X); choose a different result file"); a missing folder ("output_file: directory D does not exist"). It then runs the tool on a copy of the args without the two keys.
+    - Result: an error result comes back in full and the result file is untouched. On success the full result text (all content items joined by newline, BOM stripped, trailing newline ensured) goes to the file, UTF-8, overwritten or appended, and the tool returns only "result written to FILE (N lines)" or "result appended to FILE (N lines)". With dry_run the dry-run text (the applied=false line and the diff) is what is written. A write failure after a successful operation is an error that says the operation succeeded and carries the text.
+    - Tests: mcp_output_test.go (TestMCPOutput_Find, OverwriteAndAppend, ErrorLeavesFile (a guard, it was already green), RefusesEditedFile, MissingDir, AppendNeedsFile, DryRun, MutationRuns, Schema) and mcp_output_schema_test.go (TestMCPOutput_SchemaIsValidJSON). Test helpers added: mopFix, mopRead, mopMissing, mopFind. MCP results carry timing (stats), so a test that compares two calls uses fedit_find with x=true.
+    - Facts: a relative output_file path resolves against the MCP server cwd, like every other path. The settings file has no output keys (only the six log_* keys), so output_file is not configurable there. The audit log begin record logs file, dest, text and textfile only, NOT output_file (not a bug; optional follow-up: log output_file in the begin record). The usage text is unchanged (MCP-only parameter; the CLI has -outputresult).
+    - Docs: README (an MCP paragraph after the dry_run paragraph), CLAUDE_DESKTOP.md (a section 5 prompt, a section 6 note, a section 7 subsection, a troubleshooting bullet and a changelog line) and SKILL.md (an output rule in Step 2, a subsection after the dry_run section, a reference line under the MCP tools list and anti-pattern 13).
+    - NEXT: the remaining small gaps (MCP plain write tools log no counts, the permissive not-logged notice is stderr-only under MCP, -textfile content is not hashed, a broken ini blocks -log merge; optional: log output_file in the begin record, per-tool summary under MCP dry still past tense); then propose v1.12.0 notes and a website row list; ask before any push or tag.
   - Small gaps wanted while dry-run is pending: guided ambiguity at the insert-from-
     file source, replace -destblock and insert anchors (reuse the 6ee1f11 numbered-
     choice helper; deterministic SKIP listing candidates for fan-out); scanner: one
@@ -447,7 +455,7 @@ LOCAL (Oct 28, 2026): the local branch is 62 commits ahead of origin/main (88ff1
     replace the single matched line; guided over MCP lowest priority.
   KNOWN GAPS: the MCP plain write tools (insert, delete, replace, insertafter,
   insertbefore, move, copy, write, writeraw) log hashes but no counts, because the
-  mcpDo* functions have no hooks; the MCP `output_file` parameter does not exist yet; in
+  mcpDo* functions have no hooks; the MCP `output_file` parameter exists now (see MCP OUTPUT_FILE STATUS); in
   permissive mode the "The action was not logged" notice goes to the server's stderr, not
   into the tool result. The older unverified paths doReplaceAll, doStreamReplaceAll and the
   glob helpers are not hooked (kept for tests only). -textfile content is not hashed. A
@@ -462,7 +470,7 @@ LOCAL (Oct 28, 2026): the local branch is 62 commits ahead of origin/main (88ff1
   2. Config: DONE (the ini and the -config command, Oct 24). Dry-run: DONE (Oct 28; see DRY-RUN STATUS). Earlier plan: the
      single-file CLI part is DONE (0224733 to ee1187e) and the open items (e) to (h) are
      listed under PLANNED TRACKS; then the small gaps; the MCP output_file parameter
-     belongs with the config work (MCP honours only logging and output keys).
+     is DONE (Oct 28, see MCP OUTPUT_FILE STATUS); the settings file has only the six log_* keys, no output keys.
   3. DONE (Oct 23, 2026): README, SKILL, help text and CLAUDE_DESKTOP cover logging and the ini; -config is documented too (b30ebda). Before, the flags, `-log merge` and
      the MCP behaviour were only in the usage text and this file.
 PUSHED (Sept 27, 2026): 9050667 and e53e37c are on origin/main. v1.8.1 was tagged later (see the Sept 28 notes below).
@@ -1005,6 +1013,8 @@ logfmt.go, logsink.go, logfile.go, spool.go, logcfg.go, logsession.go, logwire.g
 logresult.go, loghash.go, logmcp.go, logmcpnotes.go, logmerge.go (NEW Oct 22, 2026 -- audit log result fields, file hashes, MCP logging, -log merge)
 spool_test.go, logcfg_test.go, logcfg_level_test.go, logsession_test.go, logwire_test.go, logguided_test.go (NEW Oct 20-21, 2026 -- audit log tests)
 logresult_test.go, loghook_test.go, logstream_test.go, logmulti_test.go, loghash_test.go, loghashbin_test.go, logmcp_test.go, logmcpnotes_test.go, logmerge_test.go (NEW Oct 22, 2026 -- audit log result field tests)
+mcpdry.go, mcp_dry_test.go, mcp_dry_log_test.go, guided_dry_test.go, dry_multiops_test.go, usage_dry_test.go (NEW Oct 28, 2026 -- dry-run)
+mcpout.go, mcp_output_test.go, mcp_output_schema_test.go (NEW Oct 28, 2026 -- MCP output_file and output_append)
 Test files: mcp_test.go, texthex_test.go, extract_test.go, block_test.go,
   iac_test.go, move_copy_test.go, regex_glob_test.go, stream_fields_test.go,
   v180_test.go, map_json_csv_test.go (NEW), import_advisory_test.go (NEW)
