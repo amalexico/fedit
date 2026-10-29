@@ -147,6 +147,9 @@ func mcpBaseToolDefs() []mcpToolDef {
 }
 
 func mcpExecTool(name string, args map[string]any) mcpCallResult {
+	if mcpWantsOutput(args) {
+		return mcpRunOutput(name, args)
+	}
 	if mcpWantsDry(name, args) && !dryRun {
 		return mcpRunDry(name, args)
 	}

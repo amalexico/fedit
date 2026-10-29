@@ -20,7 +20,7 @@ const mcpDryProp = "\"dry_run\":{\"type\":\"boolean\",\"description\":\"Preview 
 // mcpToolDefs is the tool list the server advertises: the base list with the
 // dry_run property added to every tool that changes files.
 func mcpToolDefs() []mcpToolDef {
-	return mcpAddDryRun(mcpBaseToolDefs())
+	return mcpAddOutput(mcpAddDryRun(mcpBaseToolDefs()))
 }
 
 func mcpAddDryRun(defs []mcpToolDef) []mcpToolDef {
