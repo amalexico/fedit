@@ -320,6 +320,7 @@ fedit can write an audit record per operation: a begin line and an end line that
 - strict, exit 5: the edit succeeded but the end record could not be written. The file IS changed, so do not repeat the edit; tell the user the log has a gap. Over MCP this comes back as an error result that says the operation completed.
 - The end record carries exit, ms and, where available, replacements, lines_changed, verify, per-file results and sha256_before/sha256_after.
 - A dry run (dry_run=true or -dry) is logged like any run: its end record carries dry=true and the two hashes are equal.
+- A call with output_file is logged like any call: its begin record also carries output_file (an absolute path) and, when it is set, output_append=true.
 
 ## Anti-patterns (do not do these)
 
