@@ -56,7 +56,7 @@ func mcpRunDry(name string, args map[string]any) mcpCallResult {
 	res := mcpExecTool(name, args)
 	head := "dry-run: applied=false (no file was changed)\n" + buf.String()
 	if len(res.Content) > 0 {
-		res.Content[0].Text = head + res.Content[0].Text
+		res.Content[0].Text = head + mcpDryWould(res.Content[0].Text)
 	} else {
 		res.Content = []mcpContent{{Type: "text", Text: head}}
 	}
