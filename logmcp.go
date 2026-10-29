@@ -79,9 +79,11 @@ func mcpLoggedExec(name string, args map[string]any) mcpCallResult {
 		Dest:          mcpArgString(args, "dest"),
 		Text:          mcpArgString(args, "text"),
 		TextFile:      mcpArgString(args, "textfile"),
+		OutputFile:    mcpArgString(args, "output_file"),
 		Client:        mcpClientName,
 		ClientVersion: mcpClientVersion,
 	}
+	in.OutputAppend, _ = args["output_append"].(bool)
 	switch logStartWith(logInputs{}, strings.TrimPrefix(name, "fedit_"), in) {
 	case 0:
 	case exitLogRefused:

@@ -91,6 +91,8 @@ type logCLIInput struct {
 	Text, TextHex, TextFile string
 	Client, ClientVersion   string
 	ConfigKey, ConfigValue  string // -config set and unset: the key and the value
+	OutputFile              string // MCP output_file: the result file the call writes to
+	OutputAppend            bool   // MCP output_append: append to that file
 	Content                 bool
 }
 
@@ -142,6 +144,12 @@ func logCLIFields(in logCLIInput) []logKV {
 		kvs = append(kvs, logKV{"client", in.Client})
 		if in.ClientVersion != "" {
 			kvs = append(kvs, logKV{"client_version", in.ClientVersion})
+		}
+	}
+	if v := logAbsList(in.OutputFile, in.Cwd); v != "" {
+		kvs = append(kvs, logKV{"output_file", v})
+		if in.OutputAppend {
+			kvs = append(kvs, logKV{"output_append", "true"})
 		}
 	}
 	if in.ConfigKey != "" {
