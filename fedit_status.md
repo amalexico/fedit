@@ -1,6 +1,6 @@
 # fedit -- Session Status File
 # Upload alongside user_skill.md at the start of any fedit-focused chat.
-# Last updated: October 27, 2026
+# Last updated: October 28, 2026
 
 ═══════════════════════════════════════════════════════════════
 FEDIT -- PROJECT STATE
@@ -15,6 +15,7 @@ CURRENT TAG:  v1.11.0 (tagged and pushed Oct 17, 2026, 1425a3c; module proxy ser
 UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (head 88ff116, tree clean); no new tag, no website deploy. The v1.11.0 website deploy and LinkedIn post were Oct 17, 2026.
   Commits, oldest first: 510cff2, 290f9b5, 8bf0dad, 0d15f8d, 462badd, bad1b27,
   0a380fe, 87aaa80, 354ec2b, 419489d, 97e8892, 88ff116.
+LOCAL (Oct 28, 2026): the local branch is 62 commits ahead of origin/main (88ff116) once this status update is committed; nothing pushed since Oct 19, no new tag (v1.11.0 still at 1425a3c), no website deploy. The dry-run work (CLI, guided, MCP) is complete and unreleased.
   REPLACEALL VERIFICATION (step 3 done, full suite ok, vet clean). Every replaceall
   path re-reads the written file from disk and reports a verdict. It is ALWAYS on
   (not only -v): VERIFY: PASS or FAIL plus the complete changed-line list; under -v
@@ -252,7 +253,7 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
   - Method: the container has no repo, so each step was checked in a scratch module with
     stand-ins for the files it could not see; the real run on Alex's machine is the check.
   PLANNED TRACKS (all agreed; Oct 22 status: the logging track below is implemented
-  for CLI, guided and MCP runs except the items under KNOWN GAPS; the ini steps are done (see Config below), dry-run and
+  for CLI, guided and MCP runs except the items under KNOWN GAPS; the ini steps are done (see Config below), dry-run is done too (Oct 28, see DRY-RUN STATUS) and
   the small gaps are still planned):
   - Logging: one line per operation, UTC only, [INFO]/[WARNING]/[ERROR], key=value;
     begin and end lines share id=. Fields: user (OS user with domain), host, pid,
@@ -427,6 +428,16 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
     and a46624a (-dest move note). The local branch is 52 commits ahead of origin/main (88ff116)
     once this status update is committed; nothing pushed, v1.11.0 still at 1425a3c, no new
     tag, no website deploy.
+    DRY-RUN STATUS (Oct 28, 2026): items (e) to (h) are DONE. Dry-run is complete and unreleased.
+    - (e) multi -file and -dest ops: dry_multiops_test.go (DryMultiOps in TestLW_Bin; subtests insertafter, insertbefore, delete, replace, write, writemissing, destcopy, destreplace) guards that no file changes, a diff per file is printed, the exit code is 0 and applied=false is reported. printBatchReport (main.go) now ends with "N/M file(s) would succeed" under -dry; OK, SKIP, FAIL words, exit codes and detail lines are unchanged (77aa6b1 guard tests, 9503f3e total).
+    - (f) guided: a trailing word dry after the optional silent or report-only (guidedSplitDry in guided.go; planGuided appends -dry to every step; runGuided sets dryRun before logStartGuided, so the parent record carries dry=true). A step that creates a missing destination is not run: the parent prints "guided: dry-run: would create D and put the block into it", plus ", then remove it from the source" for a move. The bare prompt accepts blank, none, silent, report-only, dry, "silent dry" and "report-only dry" (guidedModWords in guided_interactive.go); the usage line shows [dry]. Tests: guided_dry_test.go (5b3e3c0).
+    - (g) MCP: boolean parameter dry_run on the ten changing tools only (insert, delete, replace, write, writeraw, replaceall, insertafter, insertbefore, move, copy). mcpdry.go: mcpExecTool starts with the mcpWantsDry check and calls mcpRunDry, which sets dryRun, points dryOut at a buffer (stdout is the JSON-RPC channel), restores both with defer, calls logNote("dry","true") and prefixes the result text with "dry-run: applied=false (no file was changed)" and the unified diff. Errors stay errors. The schema property is injected by string into the ten schemas (mcpToolDefs wraps mcpBaseToolDefs); the two MCP batch formatters use mcpBatchVerb(). The server handles one request at a time, so the two globals are safe. Tests: mcp_dry_test.go (14 tests, a9658d1) and mcp_dry_log_test.go (TestMCPDryRunLogged, 93fa4a9: a logged call writes dry=true on its end record and the flag does not leak into the next call; logNote does nothing when no session runs, so mcpRunDry needs no guard).
+    - Usage text: one line for -dry in the main usage block of main.go, after the -outappend line, and TestUsageMentionsDry in usage_dry_test.go (fd00f80). logUsage is unchanged.
+    - (h) docs: README (a -dry section before -cleanfirst, the flags table row, the guided syntax line and a dry bullet, an audit log bullet and an MCP paragraph; afbfac5), SKILL.md (a preview rule in Step 2, a Preview section and an audit bullet; 40c8f61), CLAUDE_DESKTOP.md (a section 5 prompt, a section 6 note, a section 7 subsection, a troubleshooting bullet and a changelog line; bd2aef0) and this file.
+    - CORRECTIONS to older notes: -cleanfirst needs no special MCP handling (mcpDoInsert only empties the in-memory lines and then writes through writeLines); single-file MCP delete and replace need line plus end (or match plus endmatch), not match alone.
+    - LIMITATIONS (documented in the README): a guided target block literally named dry cannot be the last word; a guided dry run shows no diff for a destination file that does not exist yet; -stream under dry gives counts only, no diff. Under MCP dry the per-tool summary after the applied=false line still uses past tense (Inserted, Wrote); optional wording polish.
+    - Test helpers added: mdrCall, mdrNames (mcp_dry_test.go); gdrCount, gdrMissing, gdrSame (guided_dry_test.go); drbDryPair, drbDryUnchanged (dry_multiops_test.go); mlgEnds (mcp_dry_log_test.go). Dry-run work was done in a chat with about 12 interactions; commits: 77aa6b1, 9503f3e, 5b3e3c0, a9658d1, 93fa4a9, fd00f80, afbfac5, 40c8f61, bd2aef0, then the status file commit.
+    - NEXT: the small gaps (the MCP output_file parameter, MCP plain write tools log no counts, the permissive not-logged notice is stderr-only under MCP, -textfile content is not hashed, a broken ini blocks -log merge); ask before any push or tag.
   - Small gaps wanted while dry-run is pending: guided ambiguity at the insert-from-
     file source, replace -destblock and insert anchors (reuse the 6ee1f11 numbered-
     choice helper; deterministic SKIP listing candidates for fan-out); scanner: one
@@ -448,7 +459,7 @@ UNRELEASED (Oct 19, 2026): 12 commits since v1.11.0 are pushed to origin/main (h
   1. DONE: spool, settings, session, CLI wiring, guided, slice B (single-file, -stream,
      multi -file, write-operation hashes), MCP logging, MCP single-file replaceall
      fields, `fedit -log merge`.
-  2. Config: DONE (the ini and the -config command, Oct 24). Dry-run: IN PROGRESS; the
+  2. Config: DONE (the ini and the -config command, Oct 24). Dry-run: DONE (Oct 28; see DRY-RUN STATUS). Earlier plan: the
      single-file CLI part is DONE (0224733 to ee1187e) and the open items (e) to (h) are
      listed under PLANNED TRACKS; then the small gaps; the MCP output_file parameter
      belongs with the config work (MCP honours only logging and output keys).
@@ -1001,5 +1012,5 @@ _testsystem/          (NEW -- see TESTING SYSTEM section above)
 Demo: demo.gif, demo.tape, demo_sample.go
 
 ═══════════════════════════════════════════════════════════════
-END OF FEDIT STATUS -- October 22, 2026
+END OF FEDIT STATUS -- October 28, 2026
 ═══════════════════════════════════════════════════════════════
