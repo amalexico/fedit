@@ -50,6 +50,8 @@ Mutation operations, in order of safety:
 
 **Preview rule (unreleased):** when a change is large, spans many files, or you are not sure an anchor resolves where you expect, call the changing tool with `dry_run=true` first (CLI: `-dry`). Nothing is written. The result starts with `dry-run: applied=false (no file was changed)` and shows a unified diff. Check the diff, then repeat the same call without `dry_run`. Under dry_run the verify step is skipped (`VERIFY: SKIP (dry-run)`), and the per-tool summary line may still be worded in the past tense: trust the applied=false line, not the wording, and never report a dry run as done.
 
+**Output rule (unreleased):** when the result of fedit_show, fedit_find or fedit_map would be very large and does not need to enter the context (for example a find over many files whose list is only to be saved), pass `output_file=PATH` (and `output_append=true` to add to an existing file). The full result text goes to the file and only `result written to FILE (N lines)` comes back, so read the parts you need with a ranged fedit_show. Do not use it when you need the result to decide the next step, and never describe the content of a result file you have not read. CLI: `-outputresult FILE` (and `-outappend`).
+
 ### Step 3: Verify
 
 All mutation tools auto-emit a verify block showing the surrounding lines and a stats block with line delta and elapsed time. Always read this output before reporting success to the user. fedit_replaceall goes further: it re-reads the written file from disk and reports VERIFY: PASS or VERIFY: FAIL, and a FAIL comes back as an error result. Never report a replaceall as done when the result says VERIFY: FAIL.
@@ -294,6 +296,18 @@ Add `dry_run=true` to any of the ten tools that change files (fedit_insert, fedi
 - The read-only tools (fedit_show, fedit_find, fedit_map, fedit_fields) have no dry_run parameter.
 - A dry run is logged like any run; its end record carries dry=true.
 
+### Send a result to a file with output_file (unreleased)
+
+Every MCP tool (all 14) takes an optional `output_file` (string) and `output_append` (boolean). The full result text (all content, UTF-8, no BOM) is written to the file, overwritten or appended, and the tool returns only `result written to FILE (N lines)` or `result appended to FILE (N lines)`. The operation itself runs as usual, so a changing tool still changes its files; with dry_run the dry-run text is what is written.
+
+    fedit_find (file="*.go", match="TODO", output_file="todo.txt")
+
+- Refused before the tool runs, nothing written: output_append without output_file; a result file that is also an edited file (file, dest or a glob match); a result file whose folder does not exist.
+- A call that fails returns its error in full and leaves the result file untouched. If the file cannot be written after the operation succeeded, the error says so and carries the text: do not repeat the edit.
+- A relative path resolves against the working directory of the MCP server, like every other path. Use an absolute path when unsure.
+- Only the summary line comes back: read the file (a ranged fedit_show) before you say what it contains.
+- CLI: -outputresult FILE and -outappend.
+
 ### Audit log (unreleased, off by default)
 
 fedit can write an audit record per operation: a begin line and an end line that share an id. It is off unless the user turns it on. Do not enable it or pass -log-* flags yourself unless asked.
@@ -321,6 +335,7 @@ fedit can write an audit record per operation: a begin line and an end line that
 10. **Do not anchor insertbefore on headings or separators when content precedes them.** A `---` or `## N.` heading anchor places content after the separator, outside the intended section. Anchor on the last line of actual content with insertafter instead.
 11. **Do not combine -dest with a comma list or glob in -file, and do not expect -dest to carry imports.** Multi -file and -dest never combine; after a Go transfer add the missing import in the destination yourself (the hint tells you which).
 12. **Do not pass block, line, stream or files together with a comma list or glob in file.** They are rejected; use match (plus endmatch) so each file resolves its own anchor.
+13. **Do not describe a result file you have not read.** With output_file only a one-line summary comes back; read the file (a ranged fedit_show) before you report what is in it, and do not point output_file at a file you are editing.
 
 ## Why this skill exists
 
@@ -345,6 +360,7 @@ Full results: https://amalexhandler.com/fedit#benchmark
   fedit_replaceall, fedit_delete, fedit_write, fedit_writeraw,
   fedit_move, fedit_copy, fedit_fields
   (writelines is interactive stdin only -- no MCP tool)
+  Every MCP tool also takes output_file (string) and output_append (boolean) (unreleased): the full result goes to the file and only a one-line summary comes back
 
 **Map languages (21):**
   Go, HTML, SQL, Python, JavaScript, TypeScript, CSS, Rust,
