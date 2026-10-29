@@ -143,6 +143,9 @@ Once connected, try these in Claude Desktop:
 **Preview a change without writing it**
 > Show me what replacing `old.example.com` with `new.example.com` in every .conf file would change, but do not write anything
 
+**Send a large result to a file instead of the chat**
+> Find every TODO in all .go files and write the result to todo.txt instead of showing it here
+
 ---
 
 ## 6. All available tools
@@ -167,6 +170,8 @@ Once connected, try these in Claude Desktop:
 Tool parameters use the schema names (for example `raw`, `x`, `stream`, `match_regex`), not the CLI flag spellings. Section 7 shows the cross-file tools (`dest`, `sourcefile`) and many-files edits with examples.
 
 The ten tools that change files (every tool except `fedit_show`, `fedit_map`, `fedit_find` and `fedit_fields`) also take an optional boolean `dry_run` (unreleased) that previews the change and writes nothing. See "Preview a change with dry_run" in section 7.
+
+All 14 tools also take two optional parameters, `output_file` (string) and `output_append` (boolean) (unreleased), that write the full result text to a file and return only a one-line summary. See the subsection on output_file in section 7.
 
 ---
 
@@ -292,6 +297,25 @@ The ten tools that change files (`fedit_insert`, `fedit_delete`, `fedit_replace`
 - A call that would fail is still an error, with no diff. The read-only tools have no `dry_run`.
 - Nothing is printed on the server stdout: the diff comes back inside the result. With the audit log on, a dry call is logged like any call and its end record carries `dry=true`.
 
+### Send a result to a file with output_file (unreleased)
+
+All 14 tools take an optional string `output_file` and an optional boolean `output_append`. Use them when a result is large (a long `fedit_show`, `fedit_find` or `fedit_map` result) and should not enter the conversation: the full result text goes to the file and only a one-line summary comes back.
+
+**Write every match to a file (fedit_find)**
+```json
+{
+  "file": "*.go",
+  "match": "TODO",
+  "output_file": "todo.txt"
+}
+```
+
+- The file receives the full result text (UTF-8, no BOM, a trailing newline), overwritten, or appended when `output_append` is true. The tool returns only `result written to FILE (N lines)` or `result appended to FILE (N lines)`.
+- The operation runs as usual, so a changing tool still changes its files. With `dry_run` the dry-run text (the `applied=false` line and the diff) is what is written.
+- Refused before the tool runs, with nothing written: `output_append` without `output_file` (`output_append requires output_file`); a result file that is also an edited file (`file`, `dest` or a glob match), with the message `output_file: PATH is also an edited file (X); choose a different result file`; and a result file whose folder does not exist (`output_file: directory D does not exist`).
+- A call that fails returns its error in full and leaves the result file untouched. If the file cannot be written after the operation succeeded, the error says the operation succeeded and carries the text.
+- A relative path resolves against the working directory of the server, like every other path. The CLI equivalent is `-outputresult` with `-outappend`.
+
 ---
 
 ## 8. Cursor / Cline / Windsurf
@@ -335,6 +359,7 @@ Restart the editor after saving.
 **A parameter is ignored or rejected**
 - `dest`, `destblock`, `sourcefile` and `sourceblock` need v1.10.0 or newer; `sourcefile` with a file list, map for hcl and nix, and `js`, `ts` and `cs` as `lang` need v1.11.0. Run `fedit` and compare the usage block with section 6.
 - `dry_run` is accepted only by the ten changing tools, not by `fedit_show`, `fedit_find`, `fedit_map` or `fedit_fields`, and it needs a build newer than v1.11.0 (unreleased). Run `fedit` and look for `-dry` in the usage block.
+- `output_file` and `output_append` are accepted by all 14 tools and need a build newer than v1.11.0 (unreleased). If a call is refused, read the message: `output_append requires output_file`, `output_file: PATH is also an edited file (X); choose a different result file` or `output_file: directory D does not exist`. A relative path resolves against the working directory of the server, not the folder of your project.
 
 ---
 
@@ -352,3 +377,4 @@ Restart the editor after saving.
 - Unreleased (expected v1.11.0): `fedit_map` for hcl and nix (`.tf`, `.hcl`, `.nix`), `terraform` and `tf` as map aliases, `js`, `ts` and `cs` as `lang` values, `sourcefile` and `sourceblock` with a file list, the Go import hint on cross-file transfers and on `sourcefile` inserts, `match_regex` and `textfile` on `fedit_replaceall`, an error for an invalid `get` regex in `fedit_find`, duplicate reports in `fedit_map` for markdown headings, Dockerfile stages and CSS selectors per container block (the markdown map skips fenced code); block scanners skip multi-line strings (C# verbatim and raw, Java text blocks with backslash escapes, Rust raw strings, HCL and PHP heredocs, PHP nowdocs, Nix indented strings), Rust char literals and lifetimes, and comments (PHP `#` included); CLI only: `fedit guided` (also bare, as a step-by-step Q and A, with the `silent` and `report-only` modifiers), and `-afterblock`/`-beforeblock` with insertafter/insertbefore now fail with an error pointing to `-block`
 - Unreleased (after v1.11.0): the audit log over MCP (`FEDIT_LOG_*` in the server's `env` block) and the optional settings file `fedit.ini` (`FEDIT_CONFIG`, `-noconfig` on the command line); see the README
 - Unreleased (after v1.11.0), dry run: `-dry` on the command line, a trailing `dry` in `fedit guided`, and the `dry_run` parameter on the ten changing MCP tools (section 7)
+- Unreleased (after v1.11.0), MCP output_file: the `output_file` and `output_append` parameters on all 14 MCP tools write the full result text to a file and return a one-line summary (section 7); the CLI equivalent is `-outputresult`
