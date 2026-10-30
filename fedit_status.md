@@ -446,7 +446,7 @@ LOCAL (Oct 28, 2026): the local branch is 71 commits ahead of origin/main (88ff1
     - Facts: a relative output_file path resolves against the MCP server cwd, like every other path. The settings file has no output keys (only the six log_* keys), so output_file is not configurable there. The audit log begin record carries output_file (absolute) and output_append=true since 62e4658 (mcpLoggedExec sets OutputFile and OutputAppend on logCLIInput, logCLIFields appends them; the CLI never sets them). The usage text is unchanged (MCP-only parameter; the CLI has -outputresult).
     - Begin record (Oct 29, 2026): the begin record of an MCP call carries output_file (absolute path) and output_append=true when it is set (commit 62e4658; test mcp_output_log_test.go: TestMCPOutputLogged, helper mogBegins). Documented in the README audit log section and in SKILL.md; the docs and this status update are one commit.
     - Docs: README (an MCP paragraph after the dry_run paragraph), CLAUDE_DESKTOP.md (a section 5 prompt, a section 6 note, a section 7 subsection, a troubleshooting bullet and a changelog line) and SKILL.md (an output rule in Step 2, a subsection after the dry_run section, a reference line under the MCP tools list and anti-pattern 13).
-    - NEXT: the remaining small gaps, all to be closed before v1.12.0 in this order (c: -textfile content is not hashed; b: the permissive not-logged notice is stderr-only under MCP; d: a broken ini blocks -log merge; a: MCP plain write tools log no counts); gap e is done (765927d, the MCP dry summary reads Would ...); then propose v1.12.0 notes and a website row list; ask before any push or tag.
+    - NEXT: the remaining small gaps, all to be closed before v1.12.0 in this order (b: the permissive not-logged notice is stderr-only under MCP; d: a broken ini blocks -log merge; a: MCP plain write tools log no counts); gaps e and c are done (e: 765927d, the MCP dry summary reads Would ...; c: the begin record carries textfile_len and textfile_sha256); then propose v1.12.0 notes and a website row list; ask before any push or tag.
   - Small gaps wanted while dry-run is pending: guided ambiguity at the insert-from-
     file source, replace -destblock and insert anchors (reuse the 6ee1f11 numbered-
     choice helper; deterministic SKIP listing candidates for fan-out); scanner: one
@@ -459,7 +459,7 @@ LOCAL (Oct 28, 2026): the local branch is 71 commits ahead of origin/main (88ff1
   mcpDo* functions have no hooks; the MCP `output_file` parameter exists now (see MCP OUTPUT_FILE STATUS); in
   permissive mode the "The action was not logged" notice goes to the server's stderr, not
   into the tool result. The older unverified paths doReplaceAll, doStreamReplaceAll and the
-  glob helpers are not hooked (kept for tests only). -textfile content is not hashed. A
+  glob helpers are not hooked (kept for tests only). -textfile content is hashed in the begin record. A
   guided parent exits 1 when any child fails (a child's exit 4 or 5 is not passed
   through). Multi-file runs report per-file results but no per-file hashes (a per-file hash
   would read every file twice; add it only if asked). multiWriteLines could get a neutral

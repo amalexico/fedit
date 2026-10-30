@@ -116,7 +116,7 @@ func logAbsList(spec, cwd string) string {
 // logCLIFields builds the fields of the begin record, after op: source, user,
 // host, pid, cwd, then parent (a child of a guided run), file, files and dest
 // (absolute, only when given), steps and create (a guided parent), then the
-// text (length and SHA-256, or verbatim when Content is set) and textfile.
+// text (length and SHA-256, or verbatim when Content is set) and textfile (the path, then the length and SHA-256 of its content; the content is never logged).
 // -texthex is hashed after decoding; an invalid one is hashed as typed.
 func logCLIFields(in logCLIInput) []logKV {
 	kvs := []logKV{
@@ -180,6 +180,12 @@ func logCLIFields(in logCLIInput) []logKV {
 	}
 	if v := logAbsList(in.TextFile, in.Cwd); v != "" {
 		kvs = append(kvs, logKV{"textfile", v})
+	}
+	// The content of a -textfile is never logged, only its length and SHA-256.
+	if v := logAbsList(in.TextFile, in.Cwd); v != "" {
+		if b, err := os.ReadFile(v); err == nil {
+			kvs = append(kvs, logTextFields("textfile", b)...)
+		}
 	}
 	return kvs
 }
