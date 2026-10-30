@@ -291,7 +291,7 @@ The ten tools that change files (`fedit_insert`, `fedit_delete`, `fedit_replace`
 }
 ```
 
-- The result text starts with `dry-run: applied=false (no file was changed)`, followed by a unified diff of each file that would change (a new file is shown against `/dev/null`) and then the usual summary of the tool, which still uses past-tense wording.
+- The result text starts with `dry-run: applied=false (no file was changed)`, followed by a unified diff of each file that would change (a new file is shown against `/dev/null`) and then the summary of the tool, worded as a preview (`Would insert ...`, `Would replace ...`, `Would write ...`) because nothing was done; a real call keeps its past tense.
 - A call on many files, or with `dest`, gives one diff per file and a total that reads `N/M file(s) would succeed`.
 - The verify step is skipped (`VERIFY: SKIP (dry-run)`), so a dry `fedit_replaceall` is not proof that the write would verify.
 - A call that would fail is still an error, with no diff. The read-only tools have no `dry_run`.
