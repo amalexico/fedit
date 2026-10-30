@@ -74,7 +74,7 @@ func logUsage() {
 	fmt.Fprintln(os.Stderr, "  -log-content on|off  Log -text values verbatim instead of length and SHA-256 (default off)")
 	fmt.Fprintln(os.Stderr, "  -log-level L    all (default), warning or error: which severities are written (strict always writes all)")
 	fmt.Fprintln(os.Stderr, "  -log-scope S    all (default: every operation, reads included) or writes (only operations that can change a file)")
-	fmt.Fprintln(os.Stderr, "  -log merge      Append the spooled audit records to the main log now, in any mode; it is not logged itself")
+	fmt.Fprintln(os.Stderr, "  -log merge      Append the spooled audit records to the main log now, in any mode; it is not logged itself; add -noconfig to skip the settings file")
 	fmt.Fprintln(os.Stderr, "  -noconfig       Do not read the settings file (default <user config folder>\\fedit\\fedit.ini, or the file named by FEDIT_CONFIG)")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Settings file command:")

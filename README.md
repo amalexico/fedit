@@ -702,7 +702,7 @@ The logging settings can also be kept in a settings file, so you do not need env
 - Keys: `log_mode`, `log_file`, `log_max_mb`, `log_content`, `log_level` and `log_scope`, with the same values as the matching flags in the table above.
 - Order: flag, then environment variable, then settings file, then default.
 - Errors: a missing file is not an error. A file that cannot be read, a line that is not `key = value` and an invalid value are errors that name the file and the line (exit 1, before anything is edited), even when logging is off. An unknown key is a warning on stderr and is ignored.
-- `-noconfig` (command line only) ignores the file for that run. `guided` runs, the MCP server and `fedit -log merge` always read it, so a broken file also stops `fedit -log merge`.
+- `-noconfig` (command line only) ignores the file for that run. `guided` runs and the MCP server always read it. `fedit -log merge -noconfig` skips it for that merge; without `-noconfig` a broken file stops `fedit -log merge`, and the message names `-noconfig` (unreleased).
 - `fedit -config` reads and changes the file without opening it by hand: `path` prints its location, `show` lists every key with its effective value and where it comes from (environment, ini or default), `get KEY` prints one effective value (exit 1 for an unknown key), and `set KEY VALUE` and `unset KEY` check the key and the value, then write the file atomically (the folder is created when needed; comments, blank lines and line endings are kept). `set` and `unset` are logged like any write operation, with `config_key` and `config_value` in the begin record, and are not available over MCP. A broken settings file stops `show`, `get`, `set` and `unset` (exit 1, naming the line); `path` still works.
 
 Example:

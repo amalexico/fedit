@@ -11,7 +11,7 @@ import (
 // logging settings.
 
 // logFlagNoConfig is the -noconfig flag. It is nil until logRegisterFlags has
-// run, so guided runs, the MCP server and "fedit -log merge", which have no
+// run, so guided runs and the MCP server, which have no
 // flags, always read the settings file.
 var logFlagNoConfig *bool
 
