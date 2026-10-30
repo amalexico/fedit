@@ -53,6 +53,17 @@ func logRegisterFlags() {
 // logSourceGuided marks the run as started through the guided front end.
 func logSourceGuided() { logSourceName = "guided" }
 
+// logNoticeHook, when set, also receives every not-logged notice; the MCP server sets it for the call so the notice can go into the tool result.
+var logNoticeHook func(string)
+
+// logNotify prints a not-logged notice to stderr and passes it to logNoticeHook.
+func logNotify(msg string) {
+	fmt.Fprintln(os.Stderr, msg)
+	if logNoticeHook != nil {
+		logNoticeHook(msg)
+	}
+}
+
 // logUsage prints the audit log part of the usage text.
 func logUsage() {
 	fmt.Fprintln(os.Stderr, "")
@@ -276,7 +287,7 @@ func logStartWith(flags logInputs, op string, in logCLIInput) int {
 	in.Content = settings.Content
 	in.User, in.Host, in.Pid, in.Cwd = logIdentity()
 	notice := func() {
-		fmt.Fprintln(os.Stderr, "fedit: The action was not logged: the audit log could not be written, so the records were saved in the spool and the next logged run will merge them into the log")
+		logNotify("fedit: The action was not logged: the audit log could not be written, so the records were saved in the spool and the next logged run will merge them into the log")
 	}
 	ls := newLogSession(settings, op, time.Now, fileLogIO(), notice, logCLIFields(in))
 	if err := ls.Begin(); err != nil {
@@ -284,7 +295,7 @@ func logStartWith(flags logInputs, op string, in logCLIInput) int {
 			fmt.Fprintf(os.Stderr, "fedit: log_mode=strict: cannot write the audit log (%v); nothing was changed\n", err)
 			return exitLogRefused
 		}
-		fmt.Fprintf(os.Stderr, "fedit: The action was not logged: %v\n", err)
+		logNotify(fmt.Sprintf("fedit: The action was not logged: %v", err))
 		logWarned = true
 	}
 	logRun, logRunStrict = ls, settings.Mode == logStrict
@@ -310,7 +321,7 @@ func logFinish(code int) int {
 		case logRunStrict:
 			fmt.Fprintf(os.Stderr, "fedit: log_mode=strict: the end record could not be written (%v); the audit log has a gap for this run\n", err)
 		case !logWarned:
-			fmt.Fprintf(os.Stderr, "fedit: The action was not logged: %v\n", err)
+			logNotify(fmt.Sprintf("fedit: The action was not logged: %v", err))
 		}
 	}
 	return logFinishCode(code, err, logRunStrict)

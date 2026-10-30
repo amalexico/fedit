@@ -664,7 +664,7 @@ fedit can write one record per operation to an audit log: who ran what, on which
 Modes (`-log-mode` or `FEDIT_LOG_MODE`):
 
 - `off` (default): nothing is written.
-- `permissive`: the operation always runs. If the log cannot be written, the records are saved in a spool folder under the fedit user folder, `The action was not logged` is printed to stderr, and the next logged run (or `fedit -log merge`) appends them to the log with `late=true`.
+- `permissive`: the operation always runs. If the log cannot be written, the records are saved in a spool folder under the fedit user folder, `The action was not logged` is printed to stderr (over MCP it is also returned in the tool result as an extra text item), and the next logged run (or `fedit -log merge`) appends them to the log with `late=true`.
 - `strict`: if the begin record cannot be written, the run is refused before anything changes (exit 4). If the operation succeeded but the end record cannot be written, the exit code is 5. A run that already failed keeps its own exit code.
 
 Settings are read in this order: flag, then environment variable, then the settings file (see "Settings file" below), then default. An invalid value is an error (exit 1, nothing edited) even when logging is off.
@@ -680,7 +680,7 @@ Settings are read in this order: flag, then environment variable, then the setti
 
 Every record is one line with a UTC timestamp, a level (`[INFO]` for exit 0, `[WARNING]` for 1, `[ERROR]` otherwise) and `key=value` pairs. The begin and end records of a run share the same `id`.
 
-- Begin record: `op`, `source` (cli, guided or mcp), `user` (with the domain on Windows), `host`, `pid`, `cwd`, then, when given, `file`, `files` and `dest` as absolute paths (a glob keeps its pattern), `text_len` and `text_sha256` (or `text` with `-log-content on`; `-texthex` is hashed after decoding) and `textfile` (the path), then `textfile_len` and `textfile_sha256` of that file when it can be read (the content itself is never logged, not even with `-log-content on`; unreleased). Over MCP a call that uses `output_file` also logs it (an absolute path, plus `output_append=true` when it is set; unreleased), and every call carries `client` and `client_version`.
+- Begin record: `op`, `source` (cli, guided or mcp), `user` (with the domain on Windows), `host`, `pid`, `cwd`, then, when given, `file`, `files` and `dest` as absolute paths (a glob keeps its pattern), `text_len` and `text_sha256` (or `text` with `-log-content on`; `-texthex` is hashed after decoding) and `textfile` (the path), then `textfile_len` and `textfile_sha256` of that file when it can be read (the content itself is never logged, not even with `-log-content on`; unreleased). Over MCP a call that uses `output_file` also logs it (an absolute path, plus `output_append=true` when it is set; unreleased), and every call carries `client` and `client_version`. In permissive mode a `not logged` notice (the audit log could not be written, so the record went to the spool) is also returned in the MCP tool result as an extra text item after the result, besides the server stderr (unreleased).
 - End record: `phase=end`, `exit` and `ms`, plus the result when the operation reports one: `replacements`, `lines_changed` and `verify` (PASS or FAIL) for replaceall, and for multi-file runs `files_total`, `files_ok`, `files_skip`, `files_fail` and a per-file `results` list. A write on a single file also gets `sha256_before` and `sha256_after`.
 - Dry run: a run with `-dry` (also guided `dry` and MCP `dry_run`) is logged like any other run, and its end record carries `dry=true`. For an existing file `sha256_after` is the same as `sha256_before`, and a dry multi-file run logs `verify=none`.
 - A usage error (no `-op`, unknown `-op`) is not an operation and is not logged. `-outputresult` never receives log records.
@@ -691,7 +691,7 @@ Every record is one line with a UTC timestamp, a level (`[INFO]` for exit 0, `[W
 
 MCP: every tool call is one logged run with `source=mcp`. The settings come from the `FEDIT_LOG_*` environment of the server process and from the settings file (there are no flags), so set the environment variables in the `env` block of your MCP client config; `FEDIT_CONFIG` there points the server at another settings file. An error result is logged as exit 1 and a failed verification as exit 3. In strict mode a call whose begin record cannot be written returns an error result and changes nothing; a call that succeeded but whose end record cannot be written returns an error result that says the operation completed.
 
-Limits: the plain MCP write tools (insert, delete, replace, insertafter, insertbefore, move, copy, write, writeraw) log hashes but no counts; in permissive mode the `not logged` notice goes to the server's stderr, not into the tool result; multi-file runs have per-file results but no per-file hashes; a guided parent exits 1 when any step fails.
+Limits: the plain MCP write tools (insert, delete, replace, insertafter, insertbefore, move, copy, write, writeraw) log hashes but no counts; multi-file runs have per-file results but no per-file hashes; a guided parent exits 1 when any step fails.
 
 ### Settings file (unreleased)
 

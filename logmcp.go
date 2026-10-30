@@ -69,6 +69,9 @@ func mcpLogReset() {
 func mcpLoggedExec(name string, args map[string]any) mcpCallResult {
 	mcpLogReset()
 	savedSource := logSourceName
+	var notices []string
+	logNoticeHook = func(m string) { notices = append(notices, m) }
+	defer func() { logNoticeHook = nil }()
 	logSourceName = "mcp"
 	defer func() {
 		logSourceName = savedSource
@@ -102,6 +105,9 @@ func mcpLoggedExec(name string, args map[string]any) mcpCallResult {
 	if logFinish(code) == exitLogGap {
 		res.IsError = true
 		res.Content = append(res.Content, mcpContent{Type: "text", Text: "fedit: log_mode=strict: the operation completed, but the end record could not be written; the audit log has a gap for this run"})
+	}
+	for _, n := range notices {
+		res.Content = append(res.Content, mcpContent{Type: "text", Text: n})
 	}
 	return res
 }
