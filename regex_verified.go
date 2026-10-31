@@ -83,7 +83,7 @@ func finishVerified(res replaceAllResult, path, doneMsg string, verbose bool, ou
 		return 1
 	}
 	fmt.Fprint(out, doneMsg)
-	logNoteReplace(res.Occurrences, len(res.Changed))
+	logNoteReplacements(res.Occurrences, len(res.Changed))
 	logNoteHashes(before, logFileSHA256(path))
 	if dryRun {
 		fmt.Fprintln(out, "VERIFY: SKIP (dry-run)")

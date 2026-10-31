@@ -84,7 +84,7 @@ func runStreamVerified(path string, xform func(string) (string, int), remaining 
 		return 1
 	}
 	fmt.Fprintf(out, doneFmt, changedIn, linesRead)
-	logNoteReplace(res.Occurrences, changedIn)
+	logNoteReplacements(res.Occurrences, changedIn)
 	if dryRun {
 		logNoteHashes(before, logFileSHA256(path))
 		fmt.Fprintln(out, "VERIFY: SKIP (dry-run)")
