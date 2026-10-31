@@ -11,6 +11,24 @@ func logNoteLines(n int) {
 	}
 }
 
+// logNoteReplacements records the occurrences replaced and the lines changed by
+// replaceall over MCP, the same two fields the command line notes. A dry run
+// changes nothing, so it notes neither.
+func logNoteReplacements(occurrences, lines int) {
+	if !dryRun {
+		logNoteReplace(occurrences, lines)
+	}
+}
+
+// logCountOccurrences sums a per-line match counter over lines.
+func logCountOccurrences(lines []string, count func(string) int) int {
+	n := 0
+	for _, l := range lines {
+		n += count(l)
+	}
+	return n
+}
+
 // logNoteVerdict records a verification result as PASS or FAIL.
 func logNoteVerdict(ok bool) {
 	if ok {

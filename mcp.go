@@ -521,7 +521,9 @@ func mcpDoReplaceAll(file, search, regex, replacement, textFile string, start ti
 		return mcpErrorResult(fmt.Sprintf("Error reading file: %v", err))
 	}
 	count := 0
+	occ := 0
 	if regex != "" {
+		occ = logCountOccurrences(lines, multiReplaceAllCounter(multiMutOpts{matchRegex: regex}))
 		result, n, rxErr := execReplaceAllRegex(lines, regex, replacement)
 		if rxErr != nil {
 			return mcpErrorResult(fmt.Sprintf("Error: %v", rxErr))
@@ -534,7 +536,7 @@ func mcpDoReplaceAll(file, search, regex, replacement, textFile string, start ti
 		}
 		msg := fmt.Sprintf("Replaced /%s/ on %d line(s) (%d total)", regex, n, len(result))
 		ok, vtext := verifyMultiReplaceAll(file, result, multiReplaceAllCounter(multiMutOpts{matchRegex: regex}))
-		logNoteLines(n)
+		logNoteReplacements(occ, n)
 		logNoteVerdict(ok)
 		msg += "\n" + vtext
 		msg += mcpStats("replaceall", file, len(result), len(result), regex, start)
@@ -546,6 +548,7 @@ func mcpDoReplaceAll(file, search, regex, replacement, textFile string, start ti
 	for i, line := range lines {
 		if strings.Contains(line, search) {
 			lines[i] = strings.ReplaceAll(line, search, replacement)
+			occ += strings.Count(line, search)
 			count++
 		}
 	}
@@ -557,7 +560,7 @@ func mcpDoReplaceAll(file, search, regex, replacement, textFile string, start ti
 	}
 	msg := fmt.Sprintf("Replaced '%s' on %d line(s) (%d total)", search, count, len(lines))
 	ok, vtext := verifyMultiReplaceAll(file, lines, multiReplaceAllCounter(multiMutOpts{match: search}))
-	logNoteLines(count)
+	logNoteReplacements(occ, count)
 	logNoteVerdict(ok)
 	msg += "\n" + vtext
 	msg += mcpStats("replaceall", file, len(lines), len(lines), search, start)
