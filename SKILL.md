@@ -48,9 +48,9 @@ Mutation operations, in order of safety:
 
 **Ordering rule:** when a sequence mixes line-number ops (delete, insert, replace) with content-matching ops (insertafter, insertbefore), ALWAYS run the line-number ops FIRST. Once an insertion shifts line numbers, any subsequent line-number op targets the wrong lines.
 
-**Preview rule (unreleased):** when a change is large, spans many files, or you are not sure an anchor resolves where you expect, call the changing tool with `dry_run=true` first (CLI: `-dry`). Nothing is written. The result starts with `dry-run: applied=false (no file was changed)` and shows a unified diff. Check the diff, then repeat the same call without `dry_run`. Under dry_run the verify step is skipped (`VERIFY: SKIP (dry-run)`), and the per-tool summary line is worded as a preview (Would insert ..., Would write ...): trust the applied=false line, and never report a dry run as done.
+**Preview rule (since v1.12.0):** when a change is large, spans many files, or you are not sure an anchor resolves where you expect, call the changing tool with `dry_run=true` first (CLI: `-dry`). Nothing is written. The result starts with `dry-run: applied=false (no file was changed)` and shows a unified diff. Check the diff, then repeat the same call without `dry_run`. Under dry_run the verify step is skipped (`VERIFY: SKIP (dry-run)`), and the per-tool summary line is worded as a preview (Would insert ..., Would write ...): trust the applied=false line, and never report a dry run as done.
 
-**Output rule (unreleased):** when the result of fedit_show, fedit_find or fedit_map would be very large and does not need to enter the context (for example a find over many files whose list is only to be saved), pass `output_file=PATH` (and `output_append=true` to add to an existing file). The full result text goes to the file and only `result written to FILE (N lines)` comes back, so read the parts you need with a ranged fedit_show. Do not use it when you need the result to decide the next step, and never describe the content of a result file you have not read. CLI: `-outputresult FILE` (and `-outappend`).
+**Output rule (since v1.12.0):** when the result of fedit_show, fedit_find or fedit_map would be very large and does not need to enter the context (for example a find over many files whose list is only to be saved), pass `output_file=PATH` (and `output_append=true` to add to an existing file). The full result text goes to the file and only `result written to FILE (N lines)` comes back, so read the parts you need with a ranged fedit_show. Do not use it when you need the result to decide the next step, and never describe the content of a result file you have not read. CLI: `-outputresult FILE` (and `-outappend`).
 
 ### Step 3: Verify
 
@@ -284,7 +284,7 @@ Atomic: writes temp file then renames -- original untouched on interruption.
 
 Not supported with move/copy/map (those need full structure in memory).
 
-### Preview a change with dry_run (unreleased)
+### Preview a change with dry_run (since v1.12.0)
 
 Add `dry_run=true` to any of the ten tools that change files (fedit_insert, fedit_delete, fedit_replace, fedit_write, fedit_writeraw, fedit_replaceall, fedit_insertafter, fedit_insertbefore, fedit_move, fedit_copy) and nothing is written, truncated or created. The result starts with `dry-run: applied=false (no file was changed)`, then a unified diff of each file that would change (a new file is shown against /dev/null). A call that would fail is still an error.
 
@@ -296,7 +296,7 @@ Add `dry_run=true` to any of the ten tools that change files (fedit_insert, fedi
 - The read-only tools (fedit_show, fedit_find, fedit_map, fedit_fields) have no dry_run parameter.
 - A dry run is logged like any run; its end record carries dry=true.
 
-### Send a result to a file with output_file (unreleased)
+### Send a result to a file with output_file (since v1.12.0)
 
 Every MCP tool (all 14) takes an optional `output_file` (string) and `output_append` (boolean). The full result text (all content, UTF-8, no BOM) is written to the file, overwritten or appended, and the tool returns only `result written to FILE (N lines)` or `result appended to FILE (N lines)`. The operation itself runs as usual, so a changing tool still changes its files; with dry_run the dry-run text is what is written.
 
@@ -308,12 +308,12 @@ Every MCP tool (all 14) takes an optional `output_file` (string) and `output_app
 - Only the summary line comes back: read the file (a ranged fedit_show) before you say what it contains.
 - CLI: -outputresult FILE and -outappend.
 
-### Audit log (unreleased, off by default)
+### Audit log (since v1.12.0, off by default)
 
 fedit can write an audit record per operation: a begin line and an end line that share an id. It is off unless the user turns it on. Do not enable it or pass -log-* flags yourself unless asked.
 
 - Settings: -log-mode off|permissive|strict, -log-file, -log-max-mb, -log-content on|off, -log-level all|warning|error, -log-scope all|writes. Each has an environment variable FEDIT_LOG_*. Order: flag, environment, settings file, default. Over MCP there are no flags: the environment and the settings file are read, so put FEDIT_LOG_* (and FEDIT_CONFIG, which names another settings file) in the server's env block, or the settings in the settings file.
-- Settings file (unreleased): an optional fedit.ini of `key = value` lines (log_mode, log_file, log_max_mb, log_content, log_level, log_scope; # or ; starts a comment) in <user config folder>/fedit/fedit.ini, or the file named by FEDIT_CONFIG. A missing file is fine. An unreadable file, a bad line or an invalid value is an error that names the file and line (exit 1, nothing edited); an unknown key is a warning on stderr. -noconfig skips it on the command line. Do not create or edit it, and do not run fedit -config set or unset, unless asked; fedit -config show prints the effective values.
+- Settings file (since v1.12.0): an optional fedit.ini of `key = value` lines (log_mode, log_file, log_max_mb, log_content, log_level, log_scope; # or ; starts a comment) in <user config folder>/fedit/fedit.ini, or the file named by FEDIT_CONFIG. A missing file is fine. An unreadable file, a bad line or an invalid value is an error that names the file and line (exit 1, nothing edited); an unknown key is a warning on stderr. -noconfig skips it on the command line. Do not create or edit it, and do not run fedit -config set or unset, unless asked; fedit -config show prints the effective values.
 - Every operation is logged, reads included, unless the scope is writes. -text values are logged as length and SHA-256 unless -log-content is on.
 - permissive: the edit always runs. If the log cannot be written, stderr says "The action was not logged" (over MCP the tool result carries it too, as an extra text item) and the records are spooled; the next logged run, or `fedit -log merge`, appends them to the log.
 - strict, exit 4: the begin record could not be written, so the run was refused and nothing changed. Report it to the user.
@@ -361,7 +361,7 @@ Full results: https://amalexhandler.com/fedit#benchmark
   fedit_replaceall, fedit_delete, fedit_write, fedit_writeraw,
   fedit_move, fedit_copy, fedit_fields
   (writelines is interactive stdin only -- no MCP tool)
-  Every MCP tool also takes output_file (string) and output_append (boolean) (unreleased): the full result goes to the file and only a one-line summary comes back
+  Every MCP tool also takes output_file (string) and output_append (boolean) (since v1.12.0): the full result goes to the file and only a one-line summary comes back
 
 **Map languages (21):**
   Go, HTML, SQL, Python, JavaScript, TypeScript, CSS, Rust,
@@ -394,10 +394,10 @@ Full results: https://amalexhandler.com/fedit#benchmark
   -quiet         suppress output on success, including the per-file batch report (skips and errors still print); exit code signals result (wins over -v)
   -outputresult FILE  write the operation report to FILE (UTF-8, no BOM), one summary line on the terminal; FILE may not be an edited file; nothing is written on a failed run
   -outappend     with -outputresult: append to FILE instead of overwriting it
-  -log-mode M    audit log mode: off (default), permissive or strict; also -log-file, -log-max-mb, -log-content on|off, -log-level, -log-scope, each with an environment variable FEDIT_LOG_* (unreleased, see Audit log)
-  -log merge     append the spooled audit records to the main log now (unreleased)
-  -noconfig      do not read the settings file (default <user config folder>/fedit/fedit.ini; env FEDIT_CONFIG names another file) (unreleased)
-  -config ARGS   path | show | get KEY | set KEY VALUE | unset KEY: show or change the settings file (set and unset are logged, not over MCP) (unreleased)
+  -log-mode M    audit log mode: off (default), permissive or strict; also -log-file, -log-max-mb, -log-content on|off, -log-level, -log-scope, each with an environment variable FEDIT_LOG_* (since v1.12.0, see Audit log)
+  -log merge     append the spooled audit records to the main log now (since v1.12.0)
+  -noconfig      do not read the settings file (default <user config folder>/fedit/fedit.ini; env FEDIT_CONFIG names another file) (since v1.12.0)
+  -config ARGS   path | show | get KEY | set KEY VALUE | unset KEY: show or change the settings file (set and unset are logged, not over MCP) (since v1.12.0)
   -times N       move/copy: paste N times (move cuts once)
   -after N, -before N, -aftermatch TEXT, -beforematch TEXT, -afterblock NAME, -beforeblock NAME   move/copy destination anchors (the block anchors need -lang)
   -col N         fields: column number (1-based); -delim CHAR is the field delimiter (default tab)

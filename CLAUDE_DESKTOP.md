@@ -63,7 +63,7 @@ If `fedit` is not on your system PATH, use the full path instead:
 
 ---
 
-### Optional: audit log and settings file (unreleased)
+### Optional: audit log and settings file (since v1.12.0)
 
 fedit can write an audit record for every tool call (a begin line and an end line, with `source=mcp`). It is off by default. Over MCP there are no flags, so the settings come from the environment of the server process and from the settings file. Set the environment variables in the `env` block of the server entry:
 
@@ -169,9 +169,9 @@ Once connected, try these in Claude Desktop:
 
 Tool parameters use the schema names (for example `raw`, `x`, `stream`, `match_regex`), not the CLI flag spellings. Section 7 shows the cross-file tools (`dest`, `sourcefile`) and many-files edits with examples.
 
-The ten tools that change files (every tool except `fedit_show`, `fedit_map`, `fedit_find` and `fedit_fields`) also take an optional boolean `dry_run` (unreleased) that previews the change and writes nothing. See "Preview a change with dry_run" in section 7.
+The ten tools that change files (every tool except `fedit_show`, `fedit_map`, `fedit_find` and `fedit_fields`) also take an optional boolean `dry_run` (since v1.12.0) that previews the change and writes nothing. See "Preview a change with dry_run" in section 7.
 
-All 14 tools also take two optional parameters, `output_file` (string) and `output_append` (boolean) (unreleased), that write the full result text to a file and return only a one-line summary. See the subsection on output_file in section 7.
+All 14 tools also take two optional parameters, `output_file` (string) and `output_append` (boolean) (since v1.12.0), that write the full result text to a file and return only a one-line summary. See the subsection on output_file in section 7.
 
 ---
 
@@ -277,7 +277,7 @@ Pass a comma list or glob in `file` and the same call runs on each file on its o
 ```
 `sourcefile`, `sourceblock` and `lang` go together and replace `text`. `file` may also be a comma list or glob: the block is read once and inserted at each file's own `match` (list support since v1.11.0).
 
-### Preview a change with dry_run (unreleased)
+### Preview a change with dry_run (since v1.12.0)
 
 The ten tools that change files (`fedit_insert`, `fedit_delete`, `fedit_replace`, `fedit_write`, `fedit_writeraw`, `fedit_replaceall`, `fedit_insertafter`, `fedit_insertbefore`, `fedit_move` and `fedit_copy`) take an optional boolean `dry_run`. With `dry_run` set to true nothing is written, truncated or created, and the result shows what would have happened.
 
@@ -297,7 +297,7 @@ The ten tools that change files (`fedit_insert`, `fedit_delete`, `fedit_replace`
 - A call that would fail is still an error, with no diff. The read-only tools have no `dry_run`.
 - Nothing is printed on the server stdout: the diff comes back inside the result. With the audit log on, a dry call is logged like any call and its end record carries `dry=true` and no `lines_changed`; a real call to a plain write tool carries `lines_changed`.
 
-### Send a result to a file with output_file (unreleased)
+### Send a result to a file with output_file (since v1.12.0)
 
 All 14 tools take an optional string `output_file` and an optional boolean `output_append`. Use them when a result is large (a long `fedit_show`, `fedit_find` or `fedit_map` result) and should not enter the conversation: the full result text goes to the file and only a one-line summary comes back.
 
@@ -358,8 +358,8 @@ Restart the editor after saving.
 
 **A parameter is ignored or rejected**
 - `dest`, `destblock`, `sourcefile` and `sourceblock` need v1.10.0 or newer; `sourcefile` with a file list, map for hcl and nix, and `js`, `ts` and `cs` as `lang` need v1.11.0. Run `fedit` and compare the usage block with section 6.
-- `dry_run` is accepted only by the ten changing tools, not by `fedit_show`, `fedit_find`, `fedit_map` or `fedit_fields`, and it needs a build newer than v1.11.0 (unreleased). Run `fedit` and look for `-dry` in the usage block.
-- `output_file` and `output_append` are accepted by all 14 tools and need a build newer than v1.11.0 (unreleased). If a call is refused, read the message: `output_append requires output_file`, `output_file: PATH is also an edited file (X); choose a different result file` or `output_file: directory D does not exist`. A relative path resolves against the working directory of the server, not the folder of your project.
+- `dry_run` is accepted only by the ten changing tools, not by `fedit_show`, `fedit_find`, `fedit_map` or `fedit_fields`, and it needs v1.12.0 or newer. Run `fedit` and look for `-dry` in the usage block.
+- `output_file` and `output_append` are accepted by all 14 tools and need v1.12.0 or newer. If a call is refused, read the message: `output_append requires output_file`, `output_file: PATH is also an edited file (X); choose a different result file` or `output_file: directory D does not exist`. A relative path resolves against the working directory of the server, not the folder of your project.
 
 ---
 
@@ -374,7 +374,7 @@ Restart the editor after saving.
 - v1.8.1 release notes: `-matchhex`/`-endmatchhex`, multi-file `show`, `find` and `map`
 - v1.9.0 release notes: multi-file mutation (comma list or glob in `file`), `-dest` cross-file copy, move and replace
 - v1.10.0 release notes: MCP `dest`, `destblock`, `sourcefile` and `sourceblock`
-- Unreleased (expected v1.11.0): `fedit_map` for hcl and nix (`.tf`, `.hcl`, `.nix`), `terraform` and `tf` as map aliases, `js`, `ts` and `cs` as `lang` values, `sourcefile` and `sourceblock` with a file list, the Go import hint on cross-file transfers and on `sourcefile` inserts, `match_regex` and `textfile` on `fedit_replaceall`, an error for an invalid `get` regex in `fedit_find`, duplicate reports in `fedit_map` for markdown headings, Dockerfile stages and CSS selectors per container block (the markdown map skips fenced code); block scanners skip multi-line strings (C# verbatim and raw, Java text blocks with backslash escapes, Rust raw strings, HCL and PHP heredocs, PHP nowdocs, Nix indented strings), Rust char literals and lifetimes, and comments (PHP `#` included); CLI only: `fedit guided` (also bare, as a step-by-step Q and A, with the `silent` and `report-only` modifiers), and `-afterblock`/`-beforeblock` with insertafter/insertbefore now fail with an error pointing to `-block`
-- Unreleased (after v1.11.0): the audit log over MCP (`FEDIT_LOG_*` in the server's `env` block) and the optional settings file `fedit.ini` (`FEDIT_CONFIG`, `-noconfig` on the command line); see the README
-- Unreleased (after v1.11.0), dry run: `-dry` on the command line, a trailing `dry` in `fedit guided`, and the `dry_run` parameter on the ten changing MCP tools (section 7)
-- Unreleased (after v1.11.0), MCP output_file: the `output_file` and `output_append` parameters on all 14 MCP tools write the full result text to a file and return a one-line summary (section 7); the CLI equivalent is `-outputresult`
+- v1.11.0 release notes: `fedit_map` for hcl and nix (`.tf`, `.hcl`, `.nix`), `terraform` and `tf` as map aliases, `js`, `ts` and `cs` as `lang` values, `sourcefile` and `sourceblock` with a file list, the Go import hint on cross-file transfers and on `sourcefile` inserts, `match_regex` and `textfile` on `fedit_replaceall`, an error for an invalid `get` regex in `fedit_find`, duplicate reports in `fedit_map` for markdown headings, Dockerfile stages and CSS selectors per container block (the markdown map skips fenced code); block scanners skip multi-line strings (C# verbatim and raw, Java text blocks with backslash escapes, Rust raw strings, HCL and PHP heredocs, PHP nowdocs, Nix indented strings), Rust char literals and lifetimes, and comments (PHP `#` included); CLI only: `fedit guided` (also bare, as a step-by-step Q and A, with the `silent` and `report-only` modifiers), and `-afterblock`/`-beforeblock` with insertafter/insertbefore now fail with an error pointing to `-block`
+- v1.12.0 release notes: the audit log over MCP (`FEDIT_LOG_*` in the server's `env` block) and the optional settings file `fedit.ini` (`FEDIT_CONFIG`, `-noconfig` on the command line); see the README
+- v1.12.0 release notes, dry run: `-dry` on the command line, a trailing `dry` in `fedit guided`, and the `dry_run` parameter on the ten changing MCP tools (section 7)
+- v1.12.0 release notes, MCP output_file: the `output_file` and `output_append` parameters on all 14 MCP tools write the full result text to a file and return a one-line summary (section 7); the CLI equivalent is `-outputresult`
