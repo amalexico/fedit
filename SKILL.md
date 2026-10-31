@@ -318,7 +318,7 @@ fedit can write an audit record per operation: a begin line and an end line that
 - permissive: the edit always runs. If the log cannot be written, stderr says "The action was not logged" (over MCP the tool result carries it too, as an extra text item) and the records are spooled; the next logged run, or `fedit -log merge`, appends them to the log.
 - strict, exit 4: the begin record could not be written, so the run was refused and nothing changed. Report it to the user.
 - strict, exit 5: the edit succeeded but the end record could not be written. The file IS changed, so do not repeat the edit; tell the user the log has a gap. Over MCP this comes back as an error result that says the operation completed.
-- The end record carries exit, ms and, where available, replacements, lines_changed, verify, per-file results and sha256_before/sha256_after.
+- The end record carries exit, ms and, where available, lines_changed (every plain write operation and replaceall; none for a dry run or a failed call), replacements, verify, per-file results and sha256_before/sha256_after.
 - A dry run (dry_run=true or -dry) is logged like any run: its end record carries dry=true and the two hashes are equal.
 - A call with output_file is logged like any call: its begin record also carries output_file (an absolute path) and, when it is set, output_append=true.
 

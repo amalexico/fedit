@@ -295,7 +295,7 @@ The ten tools that change files (`fedit_insert`, `fedit_delete`, `fedit_replace`
 - A call on many files, or with `dest`, gives one diff per file and a total that reads `N/M file(s) would succeed`.
 - The verify step is skipped (`VERIFY: SKIP (dry-run)`), so a dry `fedit_replaceall` is not proof that the write would verify.
 - A call that would fail is still an error, with no diff. The read-only tools have no `dry_run`.
-- Nothing is printed on the server stdout: the diff comes back inside the result. With the audit log on, a dry call is logged like any call and its end record carries `dry=true`.
+- Nothing is printed on the server stdout: the diff comes back inside the result. With the audit log on, a dry call is logged like any call and its end record carries `dry=true` and no `lines_changed`; a real call to a plain write tool carries `lines_changed`.
 
 ### Send a result to a file with output_file (unreleased)
 

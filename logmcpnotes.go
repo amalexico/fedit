@@ -4,8 +4,12 @@ import "strconv"
 
 // Result fields the MCP tool handlers note for the end record.
 
-// logNoteLines records how many lines an operation changed.
-func logNoteLines(n int) { logNote("lines_changed", strconv.Itoa(n)) }
+// logNoteLines records how many lines an operation changed. A dry run changes nothing, so it notes nothing.
+func logNoteLines(n int) {
+	if !dryRun {
+		logNote("lines_changed", strconv.Itoa(n))
+	}
+}
 
 // logNoteVerdict records a verification result as PASS or FAIL.
 func logNoteVerdict(ok bool) {

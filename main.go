@@ -329,6 +329,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
 			exitNow(1)
 		}
+		logNoteLines(len(content))
 		fmt.Fprintf(os.Stderr, "Wrote %d line(s) to %s\n", len(content), *file)
 		return
 	}
@@ -1320,6 +1321,7 @@ func doInsertMatch(lines []string, path, match string, nth int, newLines []strin
 		exitNow(1)
 	}
 	verifyCenter = insertAfter + 1
+	logNoteLines(len(newLines))
 	fmt.Fprintf(os.Stderr, "Inserted %d line(s) %s line %d (%d total now)\n",
 		len(newLines), direction, targetLine, len(result))
 }
@@ -1381,6 +1383,7 @@ func doInsert(lines []string, path string, afterLine int, newLines []string) {
 		exitNow(1)
 	}
 	verifyCenter = afterLine + 1
+	logNoteLines(len(newLines))
 	fmt.Fprintf(os.Stderr, "Inserted %d line(s) after line %d (%d total now)\n",
 		len(newLines), afterLine, len(result))
 }
@@ -1408,6 +1411,7 @@ func doDelete(lines []string, path string, start, end int) {
 		exitNow(1)
 	}
 	verifyCenter = start
+	logNoteLines(end - start + 1)
 	fmt.Fprintf(os.Stderr, "Deleted lines %d-%d (%d total now)\n", start, end, len(result))
 }
 
@@ -1435,6 +1439,7 @@ func doReplace(lines []string, path string, start, end int, newLines []string) {
 		exitNow(1)
 	}
 	verifyCenter = start
+	logNoteLines(end - start + 1)
 	fmt.Fprintf(os.Stderr, "Replaced lines %d-%d with %d line(s) (%d total now)\n",
 		start, end, len(newLines), len(result))
 }
@@ -3196,6 +3201,7 @@ func doMoveOp(lines []string, path string, lineFlag, endFlag int, matchFlag, end
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
 		exitNow(1)
 	}
+	logNoteLines((srcEnd - srcStart + 1) * times)
 
 	if times == 1 {
 		fmt.Fprintf(os.Stderr, "Moved lines %d-%d %s (%d total now)\n", srcStart, srcEnd, destDesc, len(result))
@@ -3234,6 +3240,7 @@ func doCopyOp(lines []string, path string, lineFlag, endFlag int, matchFlag, end
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
 		exitNow(1)
 	}
+	logNoteLines((srcEnd - srcStart + 1) * times)
 
 	if times == 1 {
 		fmt.Fprintf(os.Stderr, "Copied lines %d-%d %s (%d total now)\n", srcStart, srcEnd, destDesc, len(result))

@@ -372,6 +372,7 @@ func mcpDoWrite(file, text string, start time.Time) mcpCallResult {
 	if err := writeLines(file, content); err != nil {
 		return mcpErrorResult(fmt.Sprintf("Error writing file: %v", err))
 	}
+	logNoteLines(len(content))
 	msg := fmt.Sprintf("Wrote %d line(s) to %s", len(content), file)
 	msg += mcpStats("write", file, 0, len(content), "", start)
 	return mcpOK(msg)
@@ -385,6 +386,7 @@ func mcpDoWriteRaw(file, text string, start time.Time) mcpCallResult {
 	if err := writeLines(file, content); err != nil {
 		return mcpErrorResult(fmt.Sprintf("Error writing file: %v", err))
 	}
+	logNoteLines(len(content))
 	msg := fmt.Sprintf("Wrote %d line(s) to %s (raw, no escape expansion)", len(content), file)
 	msg += mcpStats("writeraw", file, 0, len(content), "", start)
 	return mcpOK(msg)
@@ -414,6 +416,7 @@ func mcpDoInsert(file string, afterLine int, text string, cleanfirst bool, start
 	if err := writeLines(file, result); err != nil {
 		return mcpErrorResult(fmt.Sprintf("Error writing file: %v", err))
 	}
+	logNoteLines(len(newLines))
 	msg := fmt.Sprintf("Inserted %d line(s) after line %d (%d total now)", len(newLines), afterLine, len(result))
 	msg += mcpStats("insert", file, linesBefore, len(result), "", start)
 	return mcpOK(msg)
@@ -448,6 +451,7 @@ func mcpDoDelete(file string, startLine, endLine, nth int, match, endmatch strin
 	if err := writeLines(file, result); err != nil {
 		return mcpErrorResult(fmt.Sprintf("Error writing file: %v", err))
 	}
+	logNoteLines(endLine - startLine + 1)
 	msg := fmt.Sprintf("Deleted lines %d-%d (%d total now)", startLine, endLine, len(result))
 	msg += mcpStats("delete", file, linesBefore, len(result), "", start)
 	return mcpOK(msg)
@@ -489,6 +493,7 @@ func mcpDoReplace(file string, startLine, endLine, nth int, match, endmatch, blo
 	if err := writeLines(file, result); err != nil {
 		return mcpErrorResult(fmt.Sprintf("Error writing file: %v", err))
 	}
+	logNoteLines(endLine - startLine + 1)
 	msg := fmt.Sprintf("Replaced lines %d-%d with %d line(s) (%d total now)", startLine, endLine, len(newLines), len(result))
 	msg += mcpStats("replace", file, linesBefore, len(result), "", start)
 	return mcpOK(msg)
@@ -743,6 +748,7 @@ func mcpDoInsertMatchLines(file, match string, nth int, newLines []string, befor
 	if block != "" {
 		targetDesc = block
 	}
+	logNoteLines(len(newLines))
 	msg := fmt.Sprintf("Inserted %d line(s) %s %q (%d total now)", len(newLines), direction, targetDesc, len(result))
 	if h := sourceBlockHint(srcFile, srcBlock, file, newLines, lines); h != "" {
 		msg += "\n" + h
@@ -804,6 +810,7 @@ func mcpDoMove(file string, lineFlag, endFlag int, matchFlag, endmatchFlag strin
 		return mcpErrorResult(fmt.Sprintf("Error writing file: %v", err))
 	}
 	blockSize := srcEnd - srcStart + 1
+	logNoteLines(blockSize * times)
 	var msg string
 	if times == 1 {
 		msg = fmt.Sprintf("Moved lines %d-%d (%d lines) %s (%d total now)", srcStart, srcEnd, blockSize, destDesc, len(result))
@@ -867,6 +874,7 @@ func mcpDoCopy(file string, lineFlag, endFlag int, matchFlag, endmatchFlag strin
 		return mcpErrorResult(fmt.Sprintf("Error writing file: %v", err))
 	}
 	blockSize := srcEnd - srcStart + 1
+	logNoteLines(blockSize * times)
 	var msg string
 	if times == 1 {
 		msg = fmt.Sprintf("Copied lines %d-%d (%d lines) %s (%d total now)", srcStart, srcEnd, blockSize, destDesc, len(result))

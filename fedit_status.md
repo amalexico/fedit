@@ -446,7 +446,8 @@ LOCAL (Oct 28, 2026): the local branch is 74 commits ahead of origin/main (88ff1
     - Facts: a relative output_file path resolves against the MCP server cwd, like every other path. The settings file has no output keys (only the six log_* keys), so output_file is not configurable there. The audit log begin record carries output_file (absolute) and output_append=true since 62e4658 (mcpLoggedExec sets OutputFile and OutputAppend on logCLIInput, logCLIFields appends them; the CLI never sets them). The usage text is unchanged (MCP-only parameter; the CLI has -outputresult).
     - Begin record (Oct 29, 2026): the begin record of an MCP call carries output_file (absolute path) and output_append=true when it is set (commit 62e4658; test mcp_output_log_test.go: TestMCPOutputLogged, helper mogBegins). Documented in the README audit log section and in SKILL.md; the docs and this status update are one commit.
     - Docs: README (an MCP paragraph after the dry_run paragraph), CLAUDE_DESKTOP.md (a section 5 prompt, a section 6 note, a section 7 subsection, a troubleshooting bullet and a changelog line) and SKILL.md (an output rule in Step 2, a subsection after the dry_run section, a reference line under the MCP tools list and anti-pattern 13).
-    - NEXT: the remaining small gaps, all to be closed before v1.12.0 in this order (a: MCP plain write tools log no counts); gaps e, c, b and d are done (e: 765927d, the MCP dry summary reads Would ...; c: the begin record carries textfile_len and textfile_sha256; b: the not-logged notice is also returned in the MCP tool result; d: fedit -log merge -noconfig skips a broken ini); then propose v1.12.0 notes and a website row list; ask before any push or tag.
+    - Gap a (Oct 30, 2026): every plain write operation (insert, insertafter, insertbefore, delete, replace, write, writeraw, move, copy), from the CLI and over MCP, notes lines_changed in the end record: lines inserted, deleted, replaced or written, or the block size times -times for move and copy. logNoteLines is a no-op under dry runs, which also fixes MCP replaceall claiming a count under dry_run; a failed call notes nothing. Hooks: the do* functions and the write block in main.go, the mcpDo* functions in mcp.go. Test: loglines_test.go (TestLLN_Bin: cli_* and mcp_* per operation, dry and failed cases). Documented in the README audit log section, SKILL.md and CLAUDE_DESKTOP.md; code, test and docs are one commit.
+    - NEXT: no small gaps remain: gap a is done (every plain write operation, CLI and MCP, notes lines_changed in the end record; a dry run or a failed call notes none) and so are gaps e, c, b and d (e: 765927d, the MCP dry summary reads Would ...; c: the begin record carries textfile_len and textfile_sha256; b: the not-logged notice is also returned in the MCP tool result; d: fedit -log merge -noconfig skips a broken ini); then propose v1.12.0 notes and a website row list; ask before any push or tag.
   - Small gaps wanted while dry-run is pending: guided ambiguity at the insert-from-
     file source, replace -destblock and insert anchors (reuse the 6ee1f11 numbered-
     choice helper; deterministic SKIP listing candidates for fan-out); scanner: one
@@ -454,9 +455,9 @@ LOCAL (Oct 28, 2026): the local branch is 74 commits ahead of origin/main (88ff1
     inside a comment" and "PHP heredoc outside a block"; a JS regex containing /*
     needs a regex-literal heuristic (last); replace -match without -endmatch =
     replace the single matched line; guided over MCP lowest priority.
-  KNOWN GAPS: the MCP plain write tools (insert, delete, replace, insertafter,
-  insertbefore, move, copy, write, writeraw) log hashes but no counts, because the
-  mcpDo* functions have no hooks; the MCP `output_file` parameter exists now (see MCP OUTPUT_FILE STATUS); in
+  KNOWN GAPS: none for the end record counts (the plain write tools note lines_changed: insert, delete, replace, insertafter,
+  insertbefore, move, copy, write, writeraw, from the CLI and over MCP);
+  the MCP `output_file` parameter exists now (see MCP OUTPUT_FILE STATUS); in
   permissive mode the "The action was not logged" notice goes to the server's stderr, not
   into the tool result. The older unverified paths doReplaceAll, doStreamReplaceAll and the
   glob helpers are not hooked (kept for tests only). -textfile content is hashed in the begin record. A
