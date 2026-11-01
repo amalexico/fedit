@@ -330,7 +330,7 @@ func main() {
 			exitNow(1)
 		}
 		logNoteLines(len(content))
-		fmt.Fprintf(os.Stderr, "Wrote %d line(s) to %s\n", len(content), *file)
+		summaryf("Wrote %d line(s) to %s\n", len(content), *file)
 		return
 	}
 
@@ -1322,7 +1322,7 @@ func doInsertMatch(lines []string, path, match string, nth int, newLines []strin
 	}
 	verifyCenter = insertAfter + 1
 	logNoteLines(len(newLines))
-	fmt.Fprintf(os.Stderr, "Inserted %d line(s) %s line %d (%d total now)\n",
+	summaryf("Inserted %d line(s) %s line %d (%d total now)\n",
 		len(newLines), direction, targetLine, len(result))
 }
 
@@ -1384,7 +1384,7 @@ func doInsert(lines []string, path string, afterLine int, newLines []string) {
 	}
 	verifyCenter = afterLine + 1
 	logNoteLines(len(newLines))
-	fmt.Fprintf(os.Stderr, "Inserted %d line(s) after line %d (%d total now)\n",
+	summaryf("Inserted %d line(s) after line %d (%d total now)\n",
 		len(newLines), afterLine, len(result))
 }
 
@@ -1412,7 +1412,7 @@ func doDelete(lines []string, path string, start, end int) {
 	}
 	verifyCenter = start
 	logNoteLines(end - start + 1)
-	fmt.Fprintf(os.Stderr, "Deleted lines %d-%d (%d total now)\n", start, end, len(result))
+	summaryf("Deleted lines %d-%d (%d total now)\n", start, end, len(result))
 }
 
 // execReplace is the pure core of doReplace: it validates the range and returns
@@ -1440,7 +1440,7 @@ func doReplace(lines []string, path string, start, end int, newLines []string) {
 	}
 	verifyCenter = start
 	logNoteLines(end - start + 1)
-	fmt.Fprintf(os.Stderr, "Replaced lines %d-%d with %d line(s) (%d total now)\n",
+	summaryf("Replaced lines %d-%d with %d line(s) (%d total now)\n",
 		start, end, len(newLines), len(result))
 }
 
@@ -1477,7 +1477,7 @@ func doReplaceAll(lines []string, path, search, replacement string) {
 		fmt.Fprintf(os.Stderr, "Error writing file: %v\n", err)
 		exitNow(1)
 	}
-	fmt.Fprintf(os.Stderr, "Replaced '%s' on %d line(s) (%d total)\n", search, count, len(result))
+	summaryf("Replaced '%s' on %d line(s) (%d total)\n", search, count, len(result))
 }
 
 // ════════════════════════════════════════════════════════════
@@ -3204,9 +3204,9 @@ func doMoveOp(lines []string, path string, lineFlag, endFlag int, matchFlag, end
 	logNoteLines((srcEnd - srcStart + 1) * times)
 
 	if times == 1 {
-		fmt.Fprintf(os.Stderr, "Moved lines %d-%d %s (%d total now)\n", srcStart, srcEnd, destDesc, len(result))
+		summaryf("Moved lines %d-%d %s (%d total now)\n", srcStart, srcEnd, destDesc, len(result))
 	} else {
-		fmt.Fprintf(os.Stderr, "Moved lines %d-%d %s x%d (%d total now)\n", srcStart, srcEnd, destDesc, times, len(result))
+		summaryf("Moved lines %d-%d %s x%d (%d total now)\n", srcStart, srcEnd, destDesc, times, len(result))
 	}
 
 	if verify {
@@ -3243,9 +3243,9 @@ func doCopyOp(lines []string, path string, lineFlag, endFlag int, matchFlag, end
 	logNoteLines((srcEnd - srcStart + 1) * times)
 
 	if times == 1 {
-		fmt.Fprintf(os.Stderr, "Copied lines %d-%d %s (%d total now)\n", srcStart, srcEnd, destDesc, len(result))
+		summaryf("Copied lines %d-%d %s (%d total now)\n", srcStart, srcEnd, destDesc, len(result))
 	} else {
-		fmt.Fprintf(os.Stderr, "Copied lines %d-%d %s x%d (%d total now)\n", srcStart, srcEnd, destDesc, times, len(result))
+		summaryf("Copied lines %d-%d %s x%d (%d total now)\n", srcStart, srcEnd, destDesc, times, len(result))
 	}
 
 	if verify {

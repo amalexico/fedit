@@ -83,7 +83,7 @@ func runStreamVerified(path string, xform func(string) (string, int), remaining 
 		fmt.Fprintln(out, noMatchMsg)
 		return 1
 	}
-	fmt.Fprintf(out, doneFmt, changedIn, linesRead)
+	fmt.Fprint(out, dryText(fmt.Sprintf(doneFmt, changedIn, linesRead)))
 	logNoteReplacements(res.Occurrences, changedIn)
 	if dryRun {
 		logNoteHashes(before, logFileSHA256(path))

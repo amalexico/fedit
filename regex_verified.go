@@ -124,7 +124,7 @@ func runReplaceAllRegexVerified(lines []string, path, pattern, replacement strin
 		}
 		return 1
 	}
-	msg := fmt.Sprintf("Regex-replaced on %d line(s) (%d total)\n", len(res.Changed), len(res.Lines))
+	msg := dryText(fmt.Sprintf("Regex-replaced on %d line(s) (%d total)\n", len(res.Changed), len(res.Lines)))
 	return finishVerified(res, path, msg, verbose, out, write, func(p string) (replaceVerify, error) {
 		return verifyReplaceAllRegexOnDisk(p, pattern, res)
 	})

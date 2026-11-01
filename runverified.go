@@ -16,7 +16,7 @@ func runReplaceAllVerified(lines []string, path, search, replacement string, ver
 		fmt.Fprintln(out, err)
 		return 1
 	}
-	msg := fmt.Sprintf("Replaced '%s' on %d line(s) (%d total)\n", search, len(res.Changed), len(res.Lines))
+	msg := dryText(fmt.Sprintf("Replaced '%s' on %d line(s) (%d total)\n", search, len(res.Changed), len(res.Lines)))
 	return finishVerified(res, path, msg, verbose, out, write, func(p string) (replaceVerify, error) {
 		return verifyReplaceAllOnDisk(p, search, res)
 	})
