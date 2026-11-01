@@ -292,7 +292,7 @@ The ten tools that change files (`fedit_insert`, `fedit_delete`, `fedit_replace`
 ```
 
 - The result text starts with `dry-run: applied=false (no file was changed)`, followed by a unified diff of each file that would change (a new file is shown against `/dev/null`) and then the summary of the tool, worded as a preview (`Would insert ...`, `Would replace ...`, `Would write ...`) because nothing was done; a real call keeps its past tense.
-- A call on many files, or with `dest`, gives one diff per file and a total that reads `N/M file(s) would succeed`.
+- A call on many files, or with `dest`, gives one diff per file and a total that reads `N/M file(s) would succeed`, and each file line is worded as a preview, for example `would replace on 1 line(s)`.
 - The verify step is skipped (`VERIFY: SKIP (dry-run)`), so a dry `fedit_replaceall` is not proof that the write would verify.
 - A call that would fail is still an error, with no diff. The read-only tools have no `dry_run`.
 - Nothing is printed on the server stdout: the diff comes back inside the result. With the audit log on, a dry call is logged like any call and its end record carries `dry=true` and neither `lines_changed` nor `replacements`; a real call to a plain write tool carries `lines_changed`.

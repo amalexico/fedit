@@ -277,7 +277,7 @@ func collectMultiDestReplace(o multiDestOpts) (multiDestOutcome, error) {
 			continue
 		}
 		out.okCount++
-		out.results = append(out.results, batchResult{d, "OK", fmt.Sprintf("block %q replaced with %d line(s)", o.destBlock, len(srcBlock))})
+		out.results = append(out.results, batchResult{d, "OK", fmt.Sprintf("block %q %s %d line(s)", o.destBlock, dryVerb("replaced with", "would be replaced with"), len(srcBlock))})
 		if hint != "" {
 			out.notes = append(out.notes, hint)
 		}

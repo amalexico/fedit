@@ -420,7 +420,7 @@ fedit -file a.go -op copy -block Helper -lang go -dest b.go,c.go -afterblock Ini
 ```
 
 - The verify step is skipped, because nothing was written: replaceall and `-v` print `VERIFY: SKIP (dry-run)` and the exit code is 0. There is no VERIFY window and no STATS block; `move` and `copy` keep their own STATS block, which is computed from the plan.
-- Multi-file and `-dest` runs print one diff per file. The batch total reads `N/M file(s) would succeed`, each file line says `VERIFY: SKIP (dry-run)`, and a `-dest` move reports `move: would remove lines N-M from SRC` instead of removing them.
+- Multi-file and `-dest` runs print one diff per file. The batch total reads `N/M file(s) would succeed`, each file line is worded as a preview (`would replace on 1 line(s)`, `would insert 1 line(s) at match on line 3`, `block "X" would be replaced with N line(s)`) and a replaceall line ends with `VERIFY: SKIP (dry-run)`, and a `-dest` move reports `move: would remove lines N-M from SRC` instead of removing them.
 - `-stream` with `-dry` reads the file, runs the replacement and prints counts only: no diff, no temporary file, nothing written.
 - `-cleanfirst` with `-dry` truncates nothing; the diff shows the old content removed and the new content added.
 - A run that would fail still fails: no match or a missing block gives the usual error and exit code, with no diff.

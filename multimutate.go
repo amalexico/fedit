@@ -21,6 +21,15 @@ type multiMutOpts struct {
 	srcBlock    string
 }
 
+// dryVerb picks the wording of a per-file report line: the past tense for a real
+// run, the preview wording (would ...) for a dry run, which changes nothing.
+func dryVerb(past, preview string) string {
+	if dryRun {
+		return preview
+	}
+	return past
+}
+
 // multiMutateOne applies the op to one file's lines using the pure exec*
 // functions. It returns the new lines and a short detail for the report.
 func multiMutateOne(o multiMutOpts, lines []string) ([]string, string, error) {
@@ -31,19 +40,19 @@ func multiMutateOne(o multiMutOpts, lines []string) ([]string, string, error) {
 			if err != nil {
 				return nil, "", err
 			}
-			return result, fmt.Sprintf("replaced on %d line(s) (regex)", count), nil
+			return result, fmt.Sprintf("%s on %d line(s) (regex)", dryVerb("replaced", "would replace"), count), nil
 		}
 		result, count, err := execReplaceAll(lines, o.match, o.replacement)
 		if err != nil {
 			return nil, "", err
 		}
-		return result, fmt.Sprintf("replaced on %d line(s)", count), nil
+		return result, fmt.Sprintf("%s on %d line(s)", dryVerb("replaced", "would replace"), count), nil
 	case "insertafter", "insertbefore":
 		result, target, _, err := execInsertMatch(lines, o.match, o.nth, o.newLines, o.op == "insertbefore")
 		if err != nil {
 			return nil, "", err
 		}
-		return result, fmt.Sprintf("inserted %d line(s) at match on line %d", len(o.newLines), target), nil
+		return result, fmt.Sprintf("%s %d line(s) at match on line %d", dryVerb("inserted", "would insert"), len(o.newLines), target), nil
 	case "delete":
 		var start, end int
 		if o.endmatch == "" {
@@ -64,7 +73,7 @@ func multiMutateOne(o multiMutOpts, lines []string) ([]string, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
-		return result, fmt.Sprintf("deleted lines %d-%d", start, end), nil
+		return result, fmt.Sprintf("%s lines %d-%d", dryVerb("deleted", "would delete"), start, end), nil
 	case "replace":
 		var start, end int
 		if o.endmatch == "" {
@@ -85,9 +94,9 @@ func multiMutateOne(o multiMutOpts, lines []string) ([]string, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
-		return result, fmt.Sprintf("replaced lines %d-%d", start, end), nil
+		return result, fmt.Sprintf("%s lines %d-%d", dryVerb("replaced", "would replace"), start, end), nil
 	case "write":
-		return o.newLines, fmt.Sprintf("wrote %d line(s)", len(o.newLines)), nil
+		return o.newLines, fmt.Sprintf("%s %d line(s)", dryVerb("wrote", "would write"), len(o.newLines)), nil
 	}
 	return nil, "", fmt.Errorf("unsupported op %s", o.op)
 }

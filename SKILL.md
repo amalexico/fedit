@@ -290,7 +290,7 @@ Add `dry_run=true` to any of the ten tools that change files (fedit_insert, fedi
 
     fedit_replaceall (file="*.conf", match="old.example.com", text="new.example.com", dry_run=true)
 
-- Multi-file and dest calls give one diff per file and a total that reads "N/M file(s) would succeed".
+- Multi-file and dest calls give one diff per file and a total that reads "N/M file(s) would succeed", and each file line is worded as a preview, for example "would replace on 1 line(s)".
 - Verify is skipped, so there is no VERIFY: PASS to report. Say that the change was previewed, not applied, then repeat the call without dry_run to apply it.
 - CLI: -dry on the command line, and the word dry at the end of a `fedit guided` command. -dry cannot be combined with -config or -log merge.
 - The read-only tools (fedit_show, fedit_find, fedit_map, fedit_fields) have no dry_run parameter.
