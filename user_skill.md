@@ -1,7 +1,7 @@
 # Amalex Brand -- Claude Working Preferences
 # Upload this file alongside the project status file at the start of every chat.
 # Applies to: fedit, amalex-handler, fwrite, website, and all Amalex Brand projects.
-# Last updated: October 21, 2026
+# Last updated: November 2, 2026
 
 ---
 
@@ -295,6 +295,18 @@ Patch file location & naming:
     operation is logged, reads included (-log-scope writes limits it); in strict mode
     -log-level is forced to all; log settings are flag > FEDIT_LOG_* environment >
     default, and off by default.
+  Lessons from the v1.12.0 release chat (added Nov 2, 2026):
+    Run the FULL suite (go test -count=1 ./..., vet, gofmt -l on a clean clone) BEFORE the tag;
+    a pushed tag cannot be moved once the module proxy has cached it. gofmt -l lists six
+    entries: demo_sample.go, extract_test.go, _testsystem/test/go/main1.go to main4.go.
+    Pre-tests: real Go toolchain when the skeleton compiles (only the fake fedit on PATH);
+    blocks under about 12 KB; the edit loop stops at the first failure; files outside the git
+    repo get a backup in the Windows temp folder (not the website folder) and a restore.
+    .NET file methods ([IO.File]::ReadAllText etc.) resolve a relative path against the PROCESS
+    working directory, which cd does not change: pass an absolute path. Cmdlets follow cd.
+    Pre-test from a different working directory than the target folder.
+    r/devops: self promotion only in the weekly self promotion thread, affiliation disclosed at
+    the top, one full URL; use the Markdown editor mode for comments with code blocks.
 
 ---
 
@@ -356,6 +368,10 @@ Patch file location & naming:
     git add FILES ; git commit -m "message"   (stage files by name, never git add -A)
     git tag vX.Y.Z ; git push ; git push --tags
     (Go module proxy handles distribution -- no GoReleaser needed)
+    Before the tag: the full suite, vet and gofmt -l on a clean clone (see the Nov 2 lessons).
+    After the tag: GitHub release from the EXISTING tag, as a draft first, with unsigned
+    binaries built from a clean clone of the tag (windows amd64, linux amd64 and arm64, macos
+    amd64 and arm64, plus checksums.txt) in the Windows temp folder; the first one was v1.12.0.
 
   amalex-handler release:
     git tag vX.Y.Z ; git push ; git push --tags
