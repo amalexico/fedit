@@ -3438,7 +3438,7 @@ func getJSBlocks(lines []string) []blockEntry {
 	reFunc := regexp.MustCompile(`^(?:export\s+)?(?:async\s+)?function\s+(\w+)`)
 	reArrow := regexp.MustCompile(`^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\(`)
 
-	return braceTrackedBlocks(lines, func(line string) (name, key string, ok bool) {
+	return braceTrackedBlocksLang(lines, "js", func(line string) (name, key string, ok bool) {
 		t := strings.TrimSpace(line)
 		if m := reClass.FindStringSubmatch(t); m != nil {
 			return "class " + m[1], m[1], true

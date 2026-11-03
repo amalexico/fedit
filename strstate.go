@@ -26,6 +26,9 @@ const (
 // brace-tracked languages), anything else backtick strings only.
 // The "java" lang is "clike" plus backslash escapes inside text blocks, and "php"
 // is "clike" plus heredocs, nowdocs and # comments.
+// The "js" lang is "clike" plus regex literals: a slash that cannot be a division
+// starts a regex that is skipped as a string, so a "/*" or a brace inside it is
+// never read as a comment or counted.
 type strState struct {
 	mode    strMode
 	n       int    // quote count (smQuotes) or hash count (smRustRaw)
@@ -52,6 +55,51 @@ func skipQuoted(line string, i int) int {
 		}
 	}
 	return len(line)
+}
+
+// regexKeyword lists the words after which a slash starts a regex literal.
+var regexKeyword = map[string]bool{
+	"return": true, "typeof": true, "case": true, "delete": true, "void": true,
+	"throw": true, "in": true, "of": true, "instanceof": true, "yield": true,
+	"await": true, "else": true, "do": true, "new": true,
+}
+
+// regexAllowed reports whether a slash after the code text so far (prev is its last
+// byte that is not a space, 0 at the start of a line) can start a regex literal.
+func regexAllowed(code string, prev byte) bool {
+	if prev == 0 {
+		return true
+	}
+	if isIdentByte(prev) {
+		code = strings.TrimRight(code, " \t")
+		k := len(code)
+		for k > 0 && isIdentByte(code[k-1]) {
+			k--
+		}
+		return regexKeyword[code[k:]]
+	}
+	return strings.IndexByte("(,=:[!&|?{};+-*%<>~^", prev) >= 0
+}
+
+// regexEnd returns the index just past the regex literal that opens at line[i], or
+// -1 when it does not close on this line (then the slash is a division).
+func regexEnd(line string, i int) int {
+	inClass := false
+	for j := i + 1; j < len(line); j++ {
+		switch line[j] {
+		case '\\':
+			j++
+		case '[':
+			inClass = true
+		case ']':
+			inClass = false
+		case '/':
+			if !inClass {
+				return j + 1
+			}
+		}
+	}
+	return -1
 }
 
 // lineComment reports whether rest starts a comment that runs to the end of the
@@ -99,6 +147,10 @@ func (s *strState) strip(line, lang string) string {
 	if java {
 		lang = "clike"
 	}
+	js := lang == "js"
+	if js {
+		lang = "clike"
+	}
 	if s.mode == smHeredoc {
 		if lang != "php" {
 			if strings.TrimSpace(line) == s.tag {
@@ -114,6 +166,7 @@ func (s *strState) strip(line, lang string) string {
 		line = rest
 	}
 	var b strings.Builder
+	var prev byte // last byte of code or string seen on this line, 0 at the start
 	i := 0
 	for i < len(line) {
 		if s.mode != smNone {
@@ -123,6 +176,7 @@ func (s *strState) strip(line, lang string) string {
 				break
 			}
 			s.mode = smNone
+			prev = '"'
 			continue
 		}
 		if lineComment(line[i:], lang) {
@@ -133,9 +187,17 @@ func (s *strState) strip(line, lang string) string {
 			i += 2
 			continue
 		}
+		if js && line[i] == '/' && regexAllowed(b.String(), prev) {
+			if e := regexEnd(line, i); e > 0 {
+				prev = '"'
+				i = e
+				continue
+			}
+		}
 		if n := s.open(line, i, lang); n > 0 {
 			s.esc = java && s.mode == smQuotes
 			i += n
+			prev = '"'
 			continue
 		}
 		c := line[i]
@@ -145,9 +207,13 @@ func (s *strState) strip(line, lang string) string {
 		}
 		if c == '"' || c == '\'' {
 			i = skipQuoted(line, i)
+			prev = '"'
 			continue
 		}
 		b.WriteByte(c)
+		if c != ' ' && c != '\t' {
+			prev = c
+		}
 		i++
 	}
 	if s.pending {
