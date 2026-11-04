@@ -204,6 +204,7 @@ fedit -file Makefile -op replaceall -match "1.1.0" -text "1.2.0" -v
 
 - Every replaceall is verified by default: after the write, fedit re-reads the file from disk and prints `VERIFY: PASS` or `VERIFY: FAIL` followed by the changed lines. This covers a single file, `-match-regex`, `-stream`, `-files` and a file list in `-file`, and `fedit_replaceall` over MCP. `-v` adds a context window for every match (not printed with `-stream`).
 - Exit codes for replaceall: 0 ok, 1 the edit did not happen, 3 the file was written but verification failed or could not be done. With several files, one FAIL file makes the exit code 3 even when the others succeeded, and the MCP result is an error.
+- `-files GLOB` prints the same per-file report as a file list in `-file`: one OK, SKIP or FAIL line per file, then `multi -file replaceall: N/M file(s) succeeded`. An OK line reads `OK PATH replaced on N line(s); VERIFY: PASS`, a file without the text is a SKIP (`No lines contain: TEXT`) and is never modified. Exit code 0 if at least one file succeeded and none failed (SKIP files do not change that), 1 if none succeeded, 3 if any file is FAIL.
 
 ---
 
@@ -643,7 +644,7 @@ Most mappers detect **duplicates** (functions, tables, keys, header columns, blo
 | -texthex HEX | Hex-encoded UTF-8 content, bypasses shell quoting (v1.6.0) |
 | -matchhex HEX, -endmatchhex HEX | Hex-encoded -match and -endmatch anchors, for anchors that contain double quotes (v1.8.1) |
 | -match-regex P | replaceall: regex with capture groups ($1 $2) |
-| -files GLOB | replaceall across every file matching a glob (other ops take a comma list or glob in -file) |
+| -files GLOB | replaceall across every file matching a glob (other ops take a comma list or glob in -file); the report is the per-file list described under replaceall |
 | -stream | Large-file mode for replaceall and find (v1.4.0) |
 | -cleanfirst | Truncate the file before insert or write (v1.6.0) |
 | -raw | show: bare content, no line numbers or footer, for piping to fwencode (v1.7.0) |
