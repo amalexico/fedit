@@ -105,10 +105,13 @@ One call. Done. No line numbers needed.
     fedit_delete (match="## Section Header", endmatch="## Next Header")
 
     # Replace a plain-text block by content anchors
-    fedit_replace (match="Version 1.6", endmatch="Version 1.6", text="Version 1.7")
+    fedit_replace (match="Version 1.6", text="Version 1.7")      # the one matched line
+
+    # match with end=N runs from the matched line through line N
+    fedit_delete (match="## Section Header", end=40)
 
 Both anchor lines are included in the range. -nth applies to -match only.
-Requires either -endmatch or -end N as the end bound.
+fedit_delete and fedit_replace (and the CLI delete and replace) act on the single matched line when there is neither endmatch nor end (after v1.12.0; older versions need endmatch or end N). show, move and copy still require endmatch or end N as the end bound.
 
 ### Pass content with special characters (texthex -- preferred)
 
@@ -336,7 +339,7 @@ fedit can write an audit record per operation: a begin line and an end line that
 9. **Do not run line-number ops after insertions in the same sequence.** Insertions shift all subsequent line numbers. Always run delete/replace-by-line BEFORE insertafter/insertbefore in the same patch sequence.
 10. **Do not anchor insertbefore on headings or separators when content precedes them.** A `---` or `## N.` heading anchor places content after the separator, outside the intended section. Anchor on the last line of actual content with insertafter instead.
 11. **Do not combine -dest with a comma list or glob in -file, and do not expect -dest to carry imports.** Multi -file and -dest never combine; after a Go transfer add the missing import in the destination yourself (the hint tells you which).
-12. **Do not pass block, line, stream or files together with a comma list or glob in file.** They are rejected; use match (plus endmatch) so each file resolves its own anchor.
+12. **Do not pass block, line, end, stream or files together with a comma list or glob in file.** They are rejected; use match (plus endmatch) so each file resolves its own anchor.
 13. **Do not describe a result file you have not read.** With output_file only a one-line summary comes back; read the file (a ranged fedit_show) before you report what is in it, and do not point output_file at a file you are editing.
 
 ## Why this skill exists
@@ -391,7 +394,7 @@ Full results: https://amalexhandler.com/fedit#benchmark
   -files GLOB    apply replaceall to all files matching a glob (every other op takes a comma list or glob in -file)
   -line N:+M     lines N to N+M inclusive (N:+0 = N only); -N counts from end; -N: = last N lines; : = EOF/append
   -end -N        end line relative to EOF (-1 = last line, -5 = fifth from end)
-  -endmatch TEXT content-anchor end of range -- show, replace, delete, move, copy
+  -endmatch TEXT content-anchor end of range -- show, replace, delete, move, copy (optional for replace and delete: -match alone = the matched line, after v1.12.0)
   -quiet         suppress output on success, including the per-file batch report (skips and errors still print); exit code signals result (wins over -v)
   -outputresult FILE  write the operation report to FILE (UTF-8, no BOM), one summary line on the terminal; FILE may not be an edited file; nothing is written on a failed run
   -outappend     with -outputresult: append to FILE instead of overwriting it

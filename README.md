@@ -178,6 +178,12 @@ fedit -file package.json -op insertbefore -match "}" -nth -1 -textfile new-deps.
 # Replace a single line
 fedit -file config.ini -op replace -line 15 -end 15 -text "max_connections = 200" -v
 
+# Replace the one line that contains a text (no end bound needed; after v1.12.0)
+fedit -file config.ini -op replace -match "max_connections" -text "max_connections = 200" -v
+
+# Replace from a matched line through line 35 (-match with -end; after v1.12.0)
+fedit -file server.conf -op replace -match "[cache]" -end 35 -textfile patched-block.txt -v
+
 # Replace lines 30-35 with content from a patch file
 fedit -file server.conf -op replace -line 30 -end 35 -textfile patched-block.txt -v
 # Replace a section by content anchors (no line numbers needed)
@@ -322,8 +328,8 @@ fedit -file '*.md' -op delete -match '<!-- start -->' -endmatch '<!-- end -->'
 
 - A problem in one file (no match, unreadable, read-only, write failed) is reported as SKIP and never stops the batch. A skipped file is never modified.
 - The report lists OK, SKIP or FAIL per file, then `N/M file(s) succeeded`. A FAIL is a replaceall file that was written but did not pass the on-disk verification. Exit code 0 if at least one file succeeded and none failed, 1 if none succeeded, 3 if any file is FAIL (FAIL wins).
-- Only -match (plus -endmatch for delete and replace), -nth and -text/-textfile/-texthex are accepted, plus -sourcefile/-sourceblock/-lang on insertafter and insertbefore (since v1.11.0). -match-regex works with replaceall, and write needs no -match and writes the same content to every file. -block, -line, -cleanfirst, -stream and -files are rejected, and so are move and copy, all before any file is read.
-- MCP: fedit_replaceall, fedit_insertafter, fedit_insertbefore, fedit_delete and fedit_replace take a comma list or glob in file, with the same rules and a per-file report; block, line, stream and files are rejected. fedit_write always treats file as one path. fedit_show, fedit_find and fedit_map also take a list.
+- Only -match (plus -endmatch for delete and replace), -nth and -text/-textfile/-texthex are accepted, plus -sourcefile/-sourceblock/-lang on insertafter and insertbefore (since v1.11.0). -match-regex works with replaceall, and write needs no -match and writes the same content to every file. -block, -line, -end, -cleanfirst, -stream and -files are rejected (use -endmatch for a range), and so are move and copy, all before any file is read.
+- MCP: fedit_replaceall, fedit_insertafter, fedit_insertbefore, fedit_delete and fedit_replace take a comma list or glob in file, with the same rules and a per-file report; block, line, end, stream and files are rejected. fedit_write always treats file as one path. fedit_show, fedit_find and fedit_map also take a list.
 
 ### Cross-file copy, move and replace -- -dest (v1.9.0, MCP since v1.10.0)
 
@@ -541,6 +547,12 @@ fedit -file processor.py -op copy -match "class ModuleProcessor_15" -endmatch "c
 # Delete a single line
 fedit -file hosts -op delete -line 12 -end 12 -v
 
+# Delete the one line that contains a text (no end bound needed; after v1.12.0)
+fedit -file hosts -op delete -match "127.0.0.1 old-host" -v
+
+# Delete from a matched line through line 55 (-match with -end; after v1.12.0)
+fedit -file config.yaml -op delete -match "legacy:" -end 55 -v
+
 # Delete a block (lines 40-55)
 fedit -file config.yaml -op delete -line 40 -end 55 -v
 ```
@@ -619,7 +631,7 @@ Most mappers detect **duplicates** (functions, tables, keys, header columns, blo
 | -nth N | Which occurrence (default 1, -1 = last) |
 | -lang LANG | Language for map and for -block operations |
 | -v | Verify: show affected lines after edit (replaceall always verifies the written file; -v adds a window for every hit) |
-| -endmatch "s" | Content-anchor end of range (show/replace/delete/move/copy) |
+| -endmatch "s" | Content-anchor end of range (show/replace/delete/move/copy). With replace and delete the end bound is optional: -match alone acts on the single matched line and -match with -end N runs through line N (after v1.12.0); show, move and copy still need -end or -endmatch |
 | -quiet | Suppress output on success, including the per-file report of multi-file and -dest runs (skips and errors still print); exit code signals result (since v1.11.0) |
 | -outputresult FILE | Write the operation report to FILE (UTF-8, no BOM) and print one summary line on the terminal. FILE may not be any file being edited (-file, -files, -dest) and its directory must exist. On a non-zero exit nothing is written to FILE: the whole report goes to stderr with the same exit code |
 | -outappend | With -outputresult: append to FILE instead of overwriting it |
@@ -656,7 +668,9 @@ With `-block NAME` (and `-sourceblock`, `-destblock`, `-beforeblock`, `-afterblo
 - Rust char literals, lifetimes and loop labels.
 - Comments: `//` and `/* */` (nested in Rust), and `#` in PHP, HCL and Nix (in PHP, `#[` starts an attribute and is not a comment). Nix has no `//` comment, because `//` is its update operator.
 
-Known gaps: a JS regular expression with an unescaped `/*`, and a block comment that opens outside any block. For a block like that, check the range with `show` first and fall back to `-line`.
+JS and TS regular expression literals are recognised by a heuristic (after v1.12.0), so a regex literal that contains `/*` or braces no longer opens a comment or counts braces. A slash after `)`, `]`, an identifier or a number is taken as division, so a regex directly after `)` (`if (x) /re/.test(y)`) is not recognised, and a regex must close on the same line. Other languages are not affected.
+
+Known gaps: the regex limits above, and a block comment that opens outside any block. For a block like that, check the range with `show` first and fall back to `-line`.
 
 ### Audit log (since v1.12.0, off by default)
 

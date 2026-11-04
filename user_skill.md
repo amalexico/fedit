@@ -1,7 +1,7 @@
 # Amalex Brand -- Claude Working Preferences
 # Upload this file alongside the project status file at the start of every chat.
 # Applies to: fedit, amalex-handler, fwrite, website, and all Amalex Brand projects.
-# Last updated: November 2, 2026
+# Last updated: November 4, 2026
 
 ---
 
@@ -165,7 +165,8 @@ Patch file location & naming:
            Anchor replace:  -op replace -match "start" -endmatch "end" -textfile f.txt -v
            Anchor delete:   -op delete -match "start" -endmatch "end" -v
            Substring replace only: replaceall -match "old" -text "new"
-           Single-line match-delete: $n = [int](fedit -op find -match X -x) ; fedit -op delete -line $n -v
+           Single matched line (after v1.12.0): -op delete -match X -v ; -op replace -match X -text Y -v ; -match X -end N runs through line N
+           Older fedit: $n = [int](fedit -op find -match X -x) ; fedit -op delete -line $n -v
            PS -x CAST RULE: fedit -x returns STRING -- wrap in [int]() before arithmetic.
              WRONG:   $n = fedit ... -x  →  ($n+3) concatenates: "2443" not 247
    NOTE:    replaceall always verifies (since Oct 19, 2026): after the write fedit

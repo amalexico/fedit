@@ -154,8 +154,8 @@ Once connected, try these in Claude Desktop:
 |------|-------------|
 | `fedit_show` | Display file with line numbers (optional range); add `raw=true` for bare content output; comma list or glob in `file` |
 | `fedit_insert` | Insert content after line N |
-| `fedit_delete` | Delete a line or range (`line`/`end` or `match`/`endmatch`); comma list or glob in `file` with `match` |
-| `fedit_replace` | Replace a line range or named block (`block` + `lang`); comma list or glob in `file` with `match`; `dest` + `destblock` overwrite a named block in other files (`text` is still required, pass any placeholder) |
+| `fedit_delete` | Delete a line or range (`line`/`end`, `match` alone for the one matched line, `match` + `end`, or `match`/`endmatch`); comma list or glob in `file` with `match` (not `end`) |
+| `fedit_replace` | Replace a line range, the one matched line (`match` alone), `match` through `end`, or a named block (`block` + `lang`); comma list or glob in `file` with `match` (not `end`); `dest` + `destblock` overwrite a named block in other files (`text` is still required, pass any placeholder) |
 | `fedit_write` | Write or overwrite an entire file |
 | `fedit_writeraw` | Write or overwrite a file with no escape expansion |
 | `fedit_map` | Structural overview — 21 languages: go, html, sql, python, javascript, typescript, css, rust, java, csharp, yaml, toml, markdown, ruby, php, dockerfile, makefile, json, csv, hcl, nix (hcl and nix since v1.11.0); `lang` is detected from the extension when omitted; comma list or glob in `file` |
@@ -358,6 +358,7 @@ Restart the editor after saving.
 
 **A parameter is ignored or rejected**
 - `dest`, `destblock`, `sourcefile` and `sourceblock` need v1.10.0 or newer; `sourcefile` with a file list, map for hcl and nix, and `js`, `ts` and `cs` as `lang` need v1.11.0. Run `fedit` and compare the usage block with section 6.
+- `fedit_delete` and `fedit_replace` with `match` alone (the single matched line) or `match` + `end` need a version newer than v1.12.0; older versions answer `source -match requires an end bound`. Pass `endmatch` instead.
 - `dry_run` is accepted only by the ten changing tools, not by `fedit_show`, `fedit_find`, `fedit_map` or `fedit_fields`, and it needs v1.12.0 or newer. Run `fedit` and look for `-dry` in the usage block.
 - `output_file` and `output_append` are accepted by all 14 tools and need v1.12.0 or newer. If a call is refused, read the message: `output_append requires output_file`, `output_file: PATH is also an edited file (X); choose a different result file` or `output_file: directory D does not exist`. A relative path resolves against the working directory of the server, not the folder of your project.
 
