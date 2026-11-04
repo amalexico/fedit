@@ -429,7 +429,7 @@ func mcpDoDelete(file string, startLine, endLine, nth int, match, endmatch strin
 	}
 	if match != "" {
 		var mErr error
-		startLine, endLine, mErr = resolveSourceLines(lines, 0, 0, match, endmatch, nth)
+		startLine, endLine, mErr = resolveMatchRange(lines, match, endmatch, matchEndBound(startLine, endLine), nth)
 		if mErr != nil {
 			return mcpErrorResult(fmt.Sprintf("Error: %v", mErr))
 		}
@@ -464,7 +464,7 @@ func mcpDoReplace(file string, startLine, endLine, nth int, match, endmatch, blo
 	}
 	if match != "" {
 		var mErr error
-		startLine, endLine, mErr = resolveSourceLines(lines, 0, 0, match, endmatch, nth)
+		startLine, endLine, mErr = resolveMatchRange(lines, match, endmatch, endLine, nth)
 		if mErr != nil {
 			return mcpErrorResult(fmt.Sprintf("Error: %v", mErr))
 		}

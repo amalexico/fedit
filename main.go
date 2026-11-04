@@ -339,8 +339,8 @@ func main() {
 	if *file != "" && isMultiSpec(*file) {
 		switch *op {
 		case "replaceall", "insertafter", "insertbefore", "delete", "replace":
-			if *block != "" || *line != "" || *cleanfirst || *stream || *files != "" {
-				fmt.Fprintln(os.Stderr, "Error: multi -file mutation takes -match (plus -endmatch for delete) or -match-regex (replaceall only); -block, -line, -cleanfirst, -stream and -files are not supported with it")
+			if *block != "" || *line != "" || *endLine != "" || *cleanfirst || *stream || *files != "" {
+				fmt.Fprintln(os.Stderr, "Error: multi -file mutation takes -match (plus -endmatch for delete) or -match-regex (replaceall only); -block, -line, -end, -cleanfirst, -stream and -files are not supported with it")
 				exitNow(1)
 			}
 			if *matchRegex != "" && *op != "replaceall" {
@@ -476,7 +476,7 @@ func main() {
 		delStart, delEnd := lineN, endN
 		if *match != "" {
 			var mErr error
-			delStart, delEnd, mErr = resolveSourceLines(lines, 0, 0, *match, *endmatch, *nth)
+			delStart, delEnd, mErr = resolveMatchRange(lines, *match, *endmatch, cliEndBound(*endLine, endN), *nth)
 			if mErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", mErr)
 				exitNow(1)
@@ -503,7 +503,7 @@ func main() {
 			}
 		} else if *match != "" {
 			var mErr error
-			replStart, replEnd, mErr = resolveSourceLines(lines, 0, 0, *match, *endmatch, *nth)
+			replStart, replEnd, mErr = resolveMatchRange(lines, *match, *endmatch, cliEndBound(*endLine, endN), *nth)
 			if mErr != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", mErr)
 				exitNow(1)
