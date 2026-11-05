@@ -385,7 +385,7 @@ fedit -file b.go -op insertafter -match '// helpers' -sourcefile a.go -sourceblo
 
 ### guided -- Natural-order entry point (CLI, since v1.11.0)
 
-`fedit guided` takes the source, the verb and the destination in plain order and turns them into the explicit `-op` command, which it prints to stderr before running it. It is a CLI shortcut only: there is no MCP tool for it, and the engine and the explicit flags are unchanged.
+`fedit guided` takes the source, the verb and the destination in plain order and turns them into the explicit `-op` command, which it prints to stderr before running it. It is a CLI shortcut only, with no MCP tool, by design: it exists to guide a person typing at a terminal (it can ask which block you mean when a name is ambiguous), and an MCP client already passes the same information as explicit parameters. The engine and the explicit flags are unchanged.
 
 ```
 fedit guided SRCFILE SRCBLOCK copy|move DESTFILE [before TARGET | after TARGET | at-end] [silent|report-only] [dry]
@@ -632,7 +632,7 @@ Most mappers detect **duplicates** (functions, tables, keys, header columns, blo
 | -nth N | Which occurrence (default 1, -1 = last) |
 | -lang LANG | Language for map and for -block operations |
 | -v | Verify: show affected lines after edit (replaceall always verifies the written file; -v adds a window for every hit) |
-| -endmatch "s" | Content-anchor end of range (show/replace/delete/move/copy). With replace and delete the end bound is optional: -match alone acts on the single matched line and -match with -end N runs through line N (after v1.12.0); show, move and copy still need -end or -endmatch |
+| -endmatch "s" | Content-anchor end of range, plain text like -match and not a regex (show/replace/delete/move/copy). With replace and delete the end bound is optional: -match alone acts on the single matched line and -match with -end N runs through line N (after v1.12.0); show, move and copy still need -end or -endmatch |
 | -quiet | Suppress output on success, including the per-file report of multi-file and -dest runs (skips and errors still print); exit code signals result (since v1.11.0) |
 | -outputresult FILE | Write the operation report to FILE (UTF-8, no BOM) and print one summary line on the terminal. FILE may not be any file being edited (-file, -files, -dest) and its directory must exist. On a non-zero exit nothing is written to FILE: the whole report goes to stderr with the same exit code |
 | -outappend | With -outputresult: append to FILE instead of overwriting it |
@@ -672,6 +672,19 @@ With `-block NAME` (and `-sourceblock`, `-destblock`, `-beforeblock`, `-afterblo
 JS and TS regular expression literals are recognised by a heuristic (after v1.12.0), so a regex literal that contains `/*` or braces no longer opens a comment or counts braces. A slash after `)`, `]`, an identifier or a number is taken as division, so a regex directly after `)` (`if (x) /re/.test(y)`) is not recognised, and a regex must close on the same line. Other languages are not affected.
 
 Known gaps: the regex limits above, and a block comment that opens outside any block. For a block like that, check the range with `show` first and fall back to `-line`.
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | ok |
+| 1 | nothing done, refused or usage error |
+| 2 | guided plan error or panic |
+| 3 | verification failed (or the -outputresult file could not be written) |
+| 4 | strict logging refused the run |
+| 5 | strict end record failed |
+
+Since v1.12.0 a script that treats every non-zero exit alike may see 3, 4 or 5. The sections for multi-file runs, -dest, replaceall, -dry and the audit log give the details for each feature.
 
 ### Audit log (since v1.12.0, off by default)
 
