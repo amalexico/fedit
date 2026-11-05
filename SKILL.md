@@ -111,7 +111,7 @@ One call. Done. No line numbers needed.
     fedit_delete (match="## Section Header", end=40)
 
 Both anchor lines are included in the range. -nth applies to -match only.
-fedit_delete and fedit_replace (and the CLI delete and replace) act on the single matched line when there is neither endmatch nor end (after v1.12.0; older versions need endmatch or end N). show, move and copy still require endmatch or end N as the end bound.
+fedit_delete and fedit_replace (and the CLI delete and replace) act on the single matched line when there is neither endmatch nor end (after v1.12.0; older versions need endmatch or end N). show, move and copy still require endmatch or end N as the end bound. -match and -endmatch are plain text, not regular expressions; for a regex use match_regex on fedit_replaceall.
 
 ### Pass content with special characters (texthex -- preferred)
 
@@ -326,6 +326,12 @@ fedit can write an audit record per operation: a begin line and an end line that
 - A dry run (dry_run=true or -dry) is logged like any run: its end record carries dry=true, notes no replacements and no lines_changed, and the two hashes are equal.
 - A call with output_file is logged like any call: its begin record also carries output_file (an absolute path) and, when it is set, output_append=true.
 
+### Exit codes (CLI) and guided
+
+0 ok, 1 nothing done, refused or usage error, 2 guided plan error or panic, 3 verification failed (or the -outputresult file could not be written), 4 strict logging refused the run, 5 strict end record failed.
+
+`fedit guided` is a CLI shortcut for a person at a terminal and has no MCP tool. Over MCP use the explicit tools (fedit_copy, fedit_move, fedit_replace, fedit_insertafter, fedit_insertbefore).
+
 ## Anti-patterns (do not do these)
 
 1. **Do not output the whole file when a fedit_* tool is available.** That defeats the purpose.
@@ -394,7 +400,7 @@ Full results: https://amalexhandler.com/fedit#benchmark
   -files GLOB    apply replaceall to all files matching a glob (every other op takes a comma list or glob in -file)
   -line N:+M     lines N to N+M inclusive (N:+0 = N only); -N counts from end; -N: = last N lines; : = EOF/append
   -end -N        end line relative to EOF (-1 = last line, -5 = fifth from end)
-  -endmatch TEXT content-anchor end of range -- show, replace, delete, move, copy (optional for replace and delete: -match alone = the matched line, after v1.12.0)
+  -endmatch TEXT content-anchor end of range (plain text, not a regex) -- show, replace, delete, move, copy (optional for replace and delete: -match alone = the matched line, after v1.12.0)
   -quiet         suppress output on success, including the per-file batch report (skips and errors still print); exit code signals result (wins over -v)
   -outputresult FILE  write the operation report to FILE (UTF-8, no BOM), one summary line on the terminal; FILE may not be an edited file; nothing is written on a failed run
   -outappend     with -outputresult: append to FILE instead of overwriting it
